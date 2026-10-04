@@ -22,9 +22,10 @@ import {
 import { useAuth } from '@/contexts/AuthContext'
 import { academyService } from '@/services/academy'
 import type { PaymentRecord, StudentRecord } from '@/types/database'
+import { getStudentPhotoUrl } from '@/lib/studentPhoto'
 import { cn } from '@/lib/utils'
 import { Input } from '@/components/ui/input'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -350,23 +351,32 @@ export default function Layout() {
                   <p className="px-3 py-1 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
                     Alunos encontrados
                   </p>
-                  {filteredStudents.map((st) => (
-                    <button
-                      key={st.id}
-                      onClick={() => handleSelectStudent(st.id)}
-                      className="w-full text-left px-3 py-2 hover:bg-slate-50 flex items-center gap-2.5 transition"
-                    >
-                      <Avatar className="w-7 h-7">
-                        <AvatarFallback className="text-[10px] bg-[#0F1B3D] text-white">
-                          {st.name.slice(0, 2).toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="truncate">
-                        <p className="text-xs font-semibold text-[#1E2A3A] truncate">{st.name}</p>
-                        <p className="text-[11px] text-slate-500 truncate">{st.cpf || st.email}</p>
-                      </div>
-                    </button>
-                  ))}
+                  {filteredStudents.map((st) => {
+                    const photoUrl = getStudentPhotoUrl(st)
+
+                    return (
+                      <button
+                        key={st.id}
+                        onClick={() => handleSelectStudent(st.id)}
+                        className="w-full text-left px-3 py-2 hover:bg-slate-50 flex items-center gap-2.5 transition"
+                      >
+                        <Avatar className="w-7 h-7 bg-slate-100">
+                          {photoUrl ? (
+                            <AvatarImage src={photoUrl} alt={st.name} className="object-cover" />
+                          ) : null}
+                          <AvatarFallback className="text-[10px] bg-[#0F1B3D] text-white">
+                            {st.name.slice(0, 2).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="truncate">
+                          <p className="text-xs font-semibold text-[#1E2A3A] truncate">{st.name}</p>
+                          <p className="text-[11px] text-slate-500 truncate">
+                            {st.cpf || st.email}
+                          </p>
+                        </div>
+                      </button>
+                    )
+                  })}
                 </div>
               )}
             </div>

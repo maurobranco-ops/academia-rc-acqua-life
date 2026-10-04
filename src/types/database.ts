@@ -33,6 +33,7 @@ export interface StudentRecord extends RecordModel {
   status: 'ativo' | 'inativo'
   bubble_id?: string
   photo?: string
+  photo_file?: string
   guardian_name?: string
   guardian_cpf?: string
   guardian_email?: string

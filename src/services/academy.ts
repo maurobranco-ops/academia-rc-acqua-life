@@ -55,8 +55,21 @@ export const academyService = {
   async createStudent(data: Partial<StudentRecord>): Promise<StudentRecord> {
     return pb.collection('students').create<StudentRecord>(data)
   },
-  async updateStudent(id: string, data: Partial<StudentRecord>): Promise<StudentRecord> {
+  async updateStudent(id: string, data: Partial<StudentRecord> | FormData): Promise<StudentRecord> {
     return pb.collection('students').update<StudentRecord>(id, data)
+  },
+  async uploadStudentPhoto(
+    id: string,
+    file: File | Blob,
+    filename?: string,
+  ): Promise<StudentRecord> {
+    const formData = new FormData()
+    if (file instanceof File) {
+      formData.append('photo_file', file)
+    } else {
+      formData.append('photo_file', file, filename || 'photo.jpg')
+    }
+    return pb.collection('students').update<StudentRecord>(id, formData)
   },
   async deleteStudent(id: string): Promise<boolean> {
     return pb.collection('students').delete(id)

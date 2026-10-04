@@ -17,9 +17,10 @@ import {
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { academyService } from '@/services/academy'
 import { useRealtime } from '@/hooks/use-realtime'
+import { getStudentPhotoUrl } from '@/lib/studentPhoto'
 import type { PaymentRecord, StudentRecord, ClassRecord, TransactionRecord } from '@/types/database'
 import {
   AreaChart,
@@ -294,16 +295,22 @@ export default function Index() {
             <div className="flex items-center justify-between mt-2">
               <span className="text-xs text-[#6C757D]">de {students.length} cadastrados</span>
               <div className="flex -space-x-1.5 overflow-hidden">
-                {students.slice(0, 3).map((st) => (
-                  <Avatar
-                    key={st.id}
-                    className="inline-block h-5 w-5 rounded-full ring-2 ring-white"
-                  >
-                    <AvatarFallback className="text-[9px] bg-[#0F1B3D] text-white">
-                      {st.name.slice(0, 1)}
-                    </AvatarFallback>
-                  </Avatar>
-                ))}
+                {students.slice(0, 3).map((st) => {
+                  const photoUrl = getStudentPhotoUrl(st)
+                  return (
+                    <Avatar
+                      key={st.id}
+                      className="inline-block h-5 w-5 rounded-full ring-2 ring-white bg-slate-100"
+                    >
+                      {photoUrl ? (
+                        <AvatarImage src={photoUrl} alt={st.name} className="object-cover" />
+                      ) : null}
+                      <AvatarFallback className="text-[9px] bg-[#0F1B3D] text-white">
+                        {st.name.slice(0, 1)}
+                      </AvatarFallback>
+                    </Avatar>
+                  )
+                })}
               </div>
             </div>
           </CardContent>
@@ -467,6 +474,9 @@ export default function Index() {
                 <tbody className="divide-y divide-[#E0E4EA]">
                   {recentPayments.map((p) => {
                     const studentName = p.expand?.student_id?.name || 'Aluno Cadastrado'
+                    const studentObj = p.expand?.student_id
+                    const photoUrl = getStudentPhotoUrl(studentObj)
+
                     return (
                       <tr
                         key={p.id}
@@ -474,7 +484,14 @@ export default function Index() {
                         className="hover:bg-slate-50 cursor-pointer transition"
                       >
                         <td className="px-4 py-3 flex items-center gap-2">
-                          <Avatar className="w-6 h-6">
+                          <Avatar className="w-6 h-6 bg-slate-100">
+                            {photoUrl ? (
+                              <AvatarImage
+                                src={photoUrl}
+                                alt={studentName}
+                                className="object-cover"
+                              />
+                            ) : null}
                             <AvatarFallback className="text-[9px] bg-[#0F1B3D] text-white">
                               {studentName.slice(0, 2).toUpperCase()}
                             </AvatarFallback>

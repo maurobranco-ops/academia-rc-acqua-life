@@ -14,7 +14,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Card, CardContent } from '@/components/ui/card'
 import {
   Dialog,
@@ -34,6 +34,7 @@ import {
 } from '@/components/ui/select'
 import { academyService } from '@/services/academy'
 import { useRealtime } from '@/hooks/use-realtime'
+import { getStudentPhotoUrl } from '@/lib/studentPhoto'
 import type {
   StudentRecord,
   PlanRecord,
@@ -350,11 +351,20 @@ export default function Students() {
                     const studentClasses = studentEnrollmentsMap[st.id] || []
                     const lastPay = latestPaymentMap[st.id]
 
+                    const photoUrl = getStudentPhotoUrl(st)
+
                     return (
                       <tr key={st.id} className="hover:bg-slate-50 transition group">
                         <td className="px-5 py-3.5">
                           <div className="flex items-center gap-3">
-                            <Avatar className="w-8 h-8 border border-slate-200">
+                            <Avatar className="w-8 h-8 border border-slate-200 bg-slate-100">
+                              {photoUrl ? (
+                                <AvatarImage
+                                  src={photoUrl}
+                                  alt={st.name}
+                                  className="object-cover"
+                                />
+                              ) : null}
                               <AvatarFallback className="bg-[#0F1B3D] text-white font-bold text-xs">
                                 {st.name.slice(0, 2).toUpperCase()}
                               </AvatarFallback>

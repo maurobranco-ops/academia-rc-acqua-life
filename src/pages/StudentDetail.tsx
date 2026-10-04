@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft,
@@ -11,6 +11,8 @@ import {
   Loader2,
   AlertCircle,
   X,
+  Camera,
+  Upload,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -26,6 +28,7 @@ import type {
   ClassRecord,
 } from '@/types/database'
 import { useToast } from '@/hooks/use-toast'
+import { getStudentPhotoUrl } from '@/lib/studentPhoto'
 
 export default function StudentDetail() {
   const { id } = useParams<{ id: string }>()
@@ -38,6 +41,8 @@ export default function StudentDetail() {
   const [enrollments, setEnrollments] = useState<EnrollmentRecord[]>([])
   const [classes, setClasses] = useState<ClassRecord[]>([])
   const [loading, setLoading] = useState(true)
+  const [uploadingPhoto, setUploadingPhoto] = useState(false)
+  const photoInputRef = useRef<HTMLInputElement>(null)
 
   const loadData = async () => {
     if (!id) return
@@ -78,6 +83,39 @@ export default function StudentDetail() {
     } catch (err) {
       console.error(err)
       toast({ title: 'Falha ao desvincular da turma', variant: 'destructive' })
+    }
+  }
+
+  const handlePhotoUpload = async (file: File) => {
+    if (!student) return
+    if (!file.type.startsWith('image/')) {
+      toast({
+        title: 'Arquivo inválido',
+        description: 'Por favor, selecione um arquivo de imagem (.jpg, .jpeg, .png, .webp).',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    setUploadingPhoto(true)
+    try {
+      const updated = await academyService.uploadStudentPhoto(student.id, file, file.name)
+      setStudent(updated)
+      toast({
+        title: 'Foto atualizada!',
+        description: 'A nova foto do aluno foi salva com sucesso no armazenamento.',
+      })
+    } catch (err: any) {
+      toast({
+        title: 'Erro no envio da foto',
+        description: err?.message || 'Não foi possível atualizar a foto.',
+        variant: 'destructive',
+      })
+    } finally {
+      setUploadingPhoto(false)
+      if (photoInputRef.current) {
+        photoInputRef.current.value = ''
+      }
     }
   }
 
@@ -155,17 +193,64 @@ export default function StudentDetail() {
         <CardContent className="relative px-6 pb-6 pt-0">
           <div className="flex flex-col sm:flex-row items-start sm:items-end justify-between gap-4 -mt-12 mb-4">
             <div className="flex items-end gap-4">
-              <Avatar className="w-24 h-24 border-4 border-white shadow-lg">
-                {student.photo ? (
-                  <AvatarImage src={student.photo} alt={student.name} className="object-cover" />
-                ) : null}
-                <AvatarFallback className="bg-[#0F1B3D] text-[#D4AF37] text-2xl font-black">
-                  {student.name.slice(0, 2).toUpperCase()}
-                </AvatarFallback>
-              </Avatar>
+              <div className="relative group">
+                <Avatar className="w-24 h-24 border-4 border-white shadow-lg bg-slate-100">
+                  {getStudentPhotoUrl(student) ? (
+                    <AvatarImage
+                      src={getStudentPhotoUrl(student) || ''}
+                      alt={student.name}
+                      className="object-cover"
+                    />
+                  ) : null}
+                  <AvatarFallback className="bg-[#0F1B3D] text-[#D4AF37] text-2xl font-black">
+                    {student.name.slice(0, 2).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+
+                {/* Botão de Trocar Foto Sobreposto */}
+                <input
+                  type="file"
+                  ref={photoInputRef}
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  className="hidden"
+                  onChange={(e) => {
+                    if (e.target.files && e.target.files[0]) {
+                      handlePhotoUpload(e.target.files[0])
+                    }
+                  }}
+                />
+                <button
+                  onClick={() => photoInputRef.current?.click()}
+                  disabled={uploadingPhoto}
+                  className="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center text-white transition-opacity cursor-pointer border-4 border-transparent"
+                  title="Trocar foto do aluno"
+                >
+                  {uploadingPhoto ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <>
+                      <Camera className="w-5 h-5 mb-0.5" />
+                      <span className="text-[10px] font-bold">Trocar foto</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
               <div className="mb-1">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-3">
                   <h2 className="text-2xl font-bold text-[#0F1B3D]">{student.name}</h2>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => photoInputRef.current?.click()}
+                    disabled={uploadingPhoto}
+                    className="h-7 text-xs border-slate-300 text-slate-700 hover:bg-slate-50 flex items-center gap-1.5"
+                  >
+                    <Upload className="w-3.5 h-3.5 text-[#17A2B8]" />
+                    {uploadingPhoto ? 'Enviando...' : 'Trocar foto'}
+                  </Button>
+                </div>
+                <div className="flex items-center gap-2 mt-1">
                   <Badge
                     className={
                       student.status === 'ativo'
