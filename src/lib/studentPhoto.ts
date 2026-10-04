@@ -46,19 +46,47 @@ export interface StudentMatchCandidate {
   normalizedName: string
 }
 
-export type MatchStatus = 'matched' | 'ambiguous' | 'unmatched'
+/**
+ * Verifica se um aluno está inativo (trancado, atestado, ou status inativo).
+ * Alunos inativos devem ter suas fotos ignoradas sem gerar erro ou pendência.
+ */
+export function isStudentInactive(student?: Partial<StudentRecord> | null): boolean {
+  if (!student) return false
+  if (student.status === 'inativo') return true
+  const sit = (student.situation || '').toLowerCase().trim()
+  if (sit === 'trancado' || sit === 'atestado' || sit === 'inativo') return true
+  const rawSit = (student.raw_situation || '').toLowerCase().trim()
+  if (rawSit === 'tr' || rawSit === 'atestado' || rawSit === 'inativo') return true
+  return false
+}
+
+export type MatchStatus =
+  | 'matched'
+  | 'needs_confirmation'
+  | 'ambiguous'
+  | 'unmatched'
+  | 'ignored_inactive'
 
 export interface PhotoMatchResult {
   status: MatchStatus
   student?: StudentRecord
+  candidates?: StudentRecord[]
   candidateNames?: string[]
+  reason?: string
 }
 
 /**
  * Tenta casar o nome do arquivo com a lista de alunos:
- * 1. Match exato normalizado
- * 2. Match de contenção única (se o nome limpo do arquivo contém o nome do aluno ou vice-versa)
- * 3. Se houver mais de um candidato na contenção, marca como ambíguo para revisão do usuário
+ * 1. Separação de ativos e inativos: se o match (exato ou aproximado) for de um aluno inativo,
+ *    o resultado é marcado como 'ignored_inactive' (pulado silenciosamente sem contar como pendência/erro).
+ * 2. Match EXATO normalizado com aluno ativo:
+ *    -> status: 'matched' (seguro, vinculado automaticamente).
+ * 3. Match APROXIMADO / CONTENÇÃO / PARCIAL com único aluno ativo candidato:
+ *    -> status: 'needs_confirmation' (NÃO anexa automaticamente, exige aprovação na UI mostrando foto nova vs atual).
+ * 4. Múltiplos candidatos:
+ *    -> status: 'ambiguous' (ou 'needs_confirmation' com a lista de candidatos).
+ * 5. Nenhum candidato:
+ *    -> status: 'unmatched'.
  */
 export function matchPhotoNameToStudent(
   filename: string,
@@ -69,58 +97,116 @@ export function matchPhotoNameToStudent(
     return { status: 'unmatched' }
   }
 
-  const prepStudents: StudentMatchCandidate[] = students.map((s) => ({
-    student: s,
-    normalizedName: normalizeName(s.name),
-  }))
+  // Prepara candidatos ativos e inativos
+  const prepActive: StudentMatchCandidate[] = []
+  const prepInactive: StudentMatchCandidate[] = []
 
-  // 1. Tentativa de match exato
-  const exactMatches = prepStudents.filter((s) => s.normalizedName === fileClean)
-  if (exactMatches.length === 1) {
-    return { status: 'matched', student: exactMatches[0].student }
+  for (const s of students) {
+    const candidate: StudentMatchCandidate = {
+      student: s,
+      normalizedName: normalizeName(s.name),
+    }
+    if (isStudentInactive(s)) {
+      prepInactive.push(candidate)
+    } else {
+      prepActive.push(candidate)
+    }
   }
-  if (exactMatches.length > 1) {
+
+  // 1. Verifica primeiro match exato entre os ativos
+  const exactActiveMatches = prepActive.filter((s) => s.normalizedName === fileClean)
+  if (exactActiveMatches.length === 1) {
+    return {
+      status: 'matched',
+      student: exactActiveMatches[0].student,
+    }
+  }
+  if (exactActiveMatches.length > 1) {
     return {
       status: 'ambiguous',
-      candidateNames: exactMatches.map((m) => m.student.name),
+      candidates: exactActiveMatches.map((m) => m.student),
+      candidateNames: exactActiveMatches.map((m) => m.student.name),
+      reason: 'Mais de um aluno ativo com nome idêntico.',
     }
   }
 
-  // 2. Tentativa por palavras-chave ou contenção segura:
-  // Se o nome do arquivo contém o nome completo normalizado do aluno
-  // OU se o nome do aluno contém o nome do arquivo (ex.: arquivo só com primeiro+último nome)
-  // Só aceitamos se o nome tiver ao menos 4 caracteres para evitar falso-positivo em nomes muito curtos.
-  if (fileClean.length >= 4) {
-    const containmentMatches = prepStudents.filter((s) => {
-      if (s.normalizedName.length < 4) return false
-      // Se um contém o outro com fronteira de palavra
-      const fileWords = fileClean.split(' ')
-      const studentWords = s.normalizedName.split(' ')
-
-      // Caso A: Nome do arquivo é "Joao Silva Foto" e aluno é "Joao Silva"
-      if (fileClean.includes(s.normalizedName)) return true
-
-      // Caso B: Todas as palavras do nome do aluno estão no arquivo
-      if (studentWords.length >= 2 && studentWords.every((w) => fileWords.includes(w))) {
-        return true
-      }
-
-      // Caso C: Todas as palavras do arquivo estão no nome do aluno (ex: arquivo "Joao Silva" e aluno "Joao Silva de Oliveira")
-      if (fileWords.length >= 2 && fileWords.every((w) => studentWords.includes(w))) {
-        return true
-      }
-
-      return false
-    })
-
-    if (containmentMatches.length === 1) {
-      return { status: 'matched', student: containmentMatches[0].student }
+  // 2. Se não casou exatamente com ativo, verifica se casa exatamente com aluno inativo
+  const exactInactiveMatches = prepInactive.filter((s) => s.normalizedName === fileClean)
+  if (exactInactiveMatches.length >= 1) {
+    return {
+      status: 'ignored_inactive',
+      student: exactInactiveMatches[0].student,
+      reason: `Aluno inativo (${exactInactiveMatches[0].student.raw_situation || exactInactiveMatches[0].student.situation || 'inativo'}). Foto ignorada.`,
     }
-    if (containmentMatches.length > 1) {
-      // Se há exatamente 1 com mais palavras coincidentes
+  }
+
+  // 3. Tentativa por contenção ou correspondência parcial
+  if (fileClean.length >= 3) {
+    const fileWords = fileClean.split(' ').filter(Boolean)
+
+    const findCandidates = (list: StudentMatchCandidate[]) =>
+      list.filter((s) => {
+        if (s.normalizedName.length < 3) return false
+        const studentWords = s.normalizedName.split(' ').filter(Boolean)
+
+        // Caso A: Nome do arquivo contém o nome do aluno ou vice-versa
+        if (fileClean.includes(s.normalizedName) || s.normalizedName.includes(fileClean)) {
+          return true
+        }
+
+        // Caso B: Todas as palavras do aluno estão no arquivo (mínimo 2 palavras)
+        if (studentWords.length >= 2 && studentWords.every((w) => fileWords.includes(w))) {
+          return true
+        }
+
+        // Caso C: Todas as palavras do arquivo estão no nome do aluno (mínimo 2 palavras)
+        if (fileWords.length >= 2 && fileWords.every((w) => studentWords.includes(w))) {
+          return true
+        }
+
+        // Caso D: Primeiro nome idêntico + ao menos um sobrenome coincidente
+        if (
+          fileWords.length >= 2 &&
+          studentWords.length >= 2 &&
+          fileWords[0] === studentWords[0] &&
+          fileWords.slice(1).some((w) => studentWords.slice(1).includes(w))
+        ) {
+          return true
+        }
+
+        return false
+      })
+
+    const containmentActive = findCandidates(prepActive)
+
+    if (containmentActive.length === 1) {
+      // Correspondência aproximada / parcial: NÃO é match automático direto,
+      // exige confirmação prévia do usuário conforme regra 1
+      return {
+        status: 'needs_confirmation',
+        student: containmentActive[0].student,
+        candidates: [containmentActive[0].student],
+        candidateNames: [containmentActive[0].student.name],
+        reason: 'Correspondência aproximada/parcial. Confirmação necessária antes de anexar.',
+      }
+    }
+
+    if (containmentActive.length > 1) {
       return {
         status: 'ambiguous',
-        candidateNames: containmentMatches.map((m) => m.student.name),
+        candidates: containmentActive.map((m) => m.student),
+        candidateNames: containmentActive.map((m) => m.student.name),
+        reason: 'Múltiplos alunos ativos encontrados com nomes semelhantes.',
+      }
+    }
+
+    // Se não encontrou ativo, verifica se a contenção era de um aluno inativo
+    const containmentInactive = findCandidates(prepInactive)
+    if (containmentInactive.length >= 1) {
+      return {
+        status: 'ignored_inactive',
+        student: containmentInactive[0].student,
+        reason: `Aluno inativo (${containmentInactive[0].student.raw_situation || containmentInactive[0].student.situation || 'inativo'}). Foto ignorada.`,
       }
     }
   }

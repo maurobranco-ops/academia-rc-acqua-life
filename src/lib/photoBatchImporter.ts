@@ -11,8 +11,12 @@ export interface PhotoFileItem {
   previewUrl: string
   status: MatchStatus
   matchedStudent?: StudentRecord
+  candidates?: StudentRecord[]
   candidateNames?: string[]
-  uploadStatus?: 'pending' | 'uploading' | 'success' | 'error'
+  reason?: string
+  confirmedByUser?: boolean
+  manualOverride?: boolean
+  uploadStatus?: 'pending' | 'uploading' | 'success' | 'error' | 'skipped'
   errorMessage?: string
 }
 
@@ -21,10 +25,13 @@ export interface PhotoBatchReport {
   matchedCount: number
   unmatchedCount: number
   ambiguousCount: number
+  needsConfirmationCount: number
+  ignoredInactiveCount: number
   successCount: number
   errorCount: number
   errors: { filename: string; error: string }[]
   unmatchedFiles: string[]
+  ignoredInactiveFiles: { filename: string; studentName?: string; situation?: string }[]
 }
 
 const SUPPORTED_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp', '.gif']
@@ -96,7 +103,10 @@ export function buildPhotoItemsList(
       previewUrl,
       status: match.status,
       matchedStudent: match.student,
+      candidates: match.candidates,
       candidateNames: match.candidateNames,
+      reason: match.reason,
+      confirmedByUser: match.status === 'matched', // Somente match exato já vem aprovado
       uploadStatus: 'pending',
     }
   })
@@ -109,20 +119,48 @@ export async function uploadMatchedPhotos(
   items: PhotoFileItem[],
   onProgress?: (current: number, total: number, currentItem: PhotoFileItem) => void,
 ): Promise<PhotoBatchReport> {
+  const ignoredInactiveItems = items.filter((i) => i.status === 'ignored_inactive')
+
+  // Itens aprovados para envio:
+  // 1) Match exato seguro (status 'matched' e tem aluno)
+  // 2) Correspondência incerta ou reatribuição aprovada explicitamente pelo usuário (confirmedByUser && matchedStudent)
+  const itemsToUpload = items.filter(
+    (i) =>
+      i.matchedStudent &&
+      i.status !== 'ignored_inactive' &&
+      (i.confirmedByUser || i.status === 'matched'),
+  )
+
   const report: PhotoBatchReport = {
     totalFiles: items.length,
-    matchedCount: items.filter((i) => i.status === 'matched' && i.matchedStudent).length,
+    matchedCount: itemsToUpload.length,
     unmatchedCount: items.filter((i) => i.status === 'unmatched').length,
-    ambiguousCount: items.filter((i) => i.status === 'ambiguous').length,
+    ambiguousCount: items.filter((i) => i.status === 'ambiguous' && !i.confirmedByUser).length,
+    needsConfirmationCount: items.filter(
+      (i) => i.status === 'needs_confirmation' && !i.confirmedByUser,
+    ).length,
+    ignoredInactiveCount: ignoredInactiveItems.length,
     successCount: 0,
     errorCount: 0,
     errors: [],
+    // Arquivos não encontrados NÃO incluem alunos inativos ignorados:
     unmatchedFiles: items
-      .filter((i) => i.status !== 'matched' || !i.matchedStudent)
+      .filter(
+        (i) =>
+          i.status !== 'ignored_inactive' &&
+          !(i.matchedStudent && (i.confirmedByUser || i.status === 'matched')),
+      )
       .map((i) => i.name),
+    ignoredInactiveFiles: ignoredInactiveItems.map((i) => ({
+      filename: i.name,
+      studentName: i.matchedStudent?.name,
+      situation:
+        i.matchedStudent?.raw_situation ||
+        i.matchedStudent?.situation ||
+        (i.matchedStudent ? 'inativo' : undefined),
+    })),
   }
 
-  const itemsToUpload = items.filter((i) => i.status === 'matched' && i.matchedStudent)
   const total = itemsToUpload.length
 
   for (let idx = 0; idx < total; idx++) {
