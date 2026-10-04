@@ -239,7 +239,7 @@ export default function StudentDetail() {
 
               <div className="mb-1">
                 <div className="flex items-center gap-3">
-                  <h2 className="text-2xl font-bold text-[#0F1B3D]">{student.name}</h2>
+                  <h2 className="text-2xl font-bold text-[#ffffff]">{student.name}</h2>
                   <Button
                     variant="outline"
                     size="sm"
