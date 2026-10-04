@@ -50,6 +50,8 @@ import type {
   EnrollmentRecord,
 } from '@/types/database'
 import { useToast } from '@/hooks/use-toast'
+import { getStudentPhotoUrl } from '@/lib/studentPhoto'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 
 const DAYS_OF_WEEK = [
   { id: 'seg', label: 'Segunda' },
@@ -722,18 +724,33 @@ export default function Classes() {
               <div className="max-h-64 overflow-y-auto divide-y divide-[#E0E4EA] border border-[#E0E4EA] rounded-xl">
                 {selectedClassEnrollments.map((enr) => {
                   const student = enr.expand?.student_id
+                  const photoUrl = student ? getStudentPhotoUrl(student) : null
                   return (
                     <div
                       key={enr.id}
                       className="p-3 flex items-center justify-between hover:bg-slate-50 transition"
                     >
-                      <div>
-                        <p className="text-xs font-bold text-[#0F1B3D]">
-                          {student?.name || 'Aluno'}
-                        </p>
-                        <p className="text-[11px] text-[#6C757D]">
-                          {student?.phone || student?.email || 'Sem contato'}
-                        </p>
+                      <div className="flex items-center gap-2.5">
+                        <Avatar className="w-10 h-10 rounded-lg bg-slate-100 border border-slate-200 shrink-0">
+                          {photoUrl ? (
+                            <AvatarImage
+                              src={photoUrl}
+                              alt={student?.name || ''}
+                              className="object-cover rounded-lg"
+                            />
+                          ) : null}
+                          <AvatarFallback className="text-xs bg-[#0F1B3D] text-[#D4AF37] font-bold rounded-lg">
+                            {(student?.name || 'AL').slice(0, 2).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div>
+                          <p className="text-xs font-bold text-[#0F1B3D]">
+                            {student?.name || 'Aluno'}
+                          </p>
+                          <p className="text-[11px] text-[#6C757D]">
+                            {student?.phone || student?.email || 'Sem contato'}
+                          </p>
+                        </div>
                       </div>
                       <div className="flex items-center gap-2">
                         <Badge

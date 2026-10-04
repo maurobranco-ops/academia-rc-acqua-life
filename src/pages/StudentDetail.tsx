@@ -13,6 +13,7 @@ import {
   X,
   Camera,
   Upload,
+  Sparkles,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -401,12 +402,16 @@ export default function StudentDetail() {
                 </p>
               </div>
               {student.guardian_name && (
-                <div>
-                  <span className="text-[#6C757D] block mb-1">Responsável Legal</span>
-                  <p className="font-semibold text-[#1E2A3A]">{student.guardian_name}</p>
-                  {student.guardian_cpf && (
-                    <span className="text-[11px] text-slate-500">CPF: {student.guardian_cpf}</span>
-                  )}
+                <div className="bg-blue-50/60 p-2.5 rounded-lg border border-blue-100">
+                  <span className="text-[#6C757D] block mb-0.5 text-[11px] font-semibold">
+                    Responsável Legal (Agrupamento Família)
+                  </span>
+                  <p className="font-bold text-[#0F1B3D] text-xs">{student.guardian_name}</p>
+                  <div className="text-[10px] text-slate-600 mt-0.5 space-y-0.5">
+                    {student.guardian_cpf && <div>CPF: {student.guardian_cpf}</div>}
+                    {student.guardian_phone && <div>Tel: {student.guardian_phone}</div>}
+                    {student.guardian_email && <div>E-mail: {student.guardian_email}</div>}
+                  </div>
                 </div>
               )}
               {student.whatsapp && (
@@ -474,7 +479,15 @@ export default function StudentDetail() {
                           {new Date(p.due_date).toLocaleDateString('pt-BR')}
                         </td>
                         <td className="px-4 py-3.5 font-mono font-bold text-[#0F1B3D]">
-                          R$ {p.amount.toFixed(2)}
+                          <div>
+                            <span>R$ {p.amount.toFixed(2)}</span>
+                            {p.discount_amount && p.discount_amount > 0 ? (
+                              <Badge className="ml-2 bg-emerald-100 text-emerald-800 border-emerald-300 font-bold text-[9px] inline-flex items-center gap-0.5">
+                                <Sparkles className="w-2.5 h-2.5 text-emerald-700" />
+                                Desconto família -R$ {p.discount_amount.toFixed(2)}
+                              </Badge>
+                            ) : null}
+                          </div>
                         </td>
                         <td className="px-4 py-3.5 uppercase text-slate-500 font-semibold text-[10px]">
                           {p.payment_method || 'PIX'}

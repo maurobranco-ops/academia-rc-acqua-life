@@ -10,6 +10,9 @@ import {
   ChevronLeft,
   ChevronRight,
   Loader2,
+  Users,
+  List,
+  Sparkles,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -35,6 +38,7 @@ import {
 import { academyService } from '@/services/academy'
 import { useRealtime } from '@/hooks/use-realtime'
 import { getStudentPhotoUrl } from '@/lib/studentPhoto'
+import { groupStudentsByGuardian } from '@/lib/familyRules'
 import type {
   StudentRecord,
   PlanRecord,
@@ -59,6 +63,7 @@ export default function Students() {
   // Filters and Pagination
   const [searchTerm, setSearchTerm] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
+  const [viewMode, setViewMode] = useState<'lista' | 'familia'>('lista')
   const pageSize = 10
 
   // Modal states
@@ -76,6 +81,10 @@ export default function Students() {
   const [formAddress, setFormAddress] = useState('')
   const [formPlanId, setFormPlanId] = useState('')
   const [formClassId, setFormClassId] = useState('')
+  const [formGuardianName, setFormGuardianName] = useState('')
+  const [formGuardianCpf, setFormGuardianCpf] = useState('')
+  const [formGuardianPhone, setFormGuardianPhone] = useState('')
+  const [formGuardianEmail, setFormGuardianEmail] = useState('')
   const [formStatus, setFormStatus] = useState<'ativo' | 'inativo'>('ativo')
   const [submitting, setSubmitting] = useState(false)
 
@@ -123,6 +132,10 @@ export default function Students() {
     setFormAddress('')
     setFormPlanId(plans[0]?.id || '')
     setFormClassId('')
+    setFormGuardianName('')
+    setFormGuardianCpf('')
+    setFormGuardianPhone('')
+    setFormGuardianEmail('')
     setFormStatus('ativo')
     setStudentModalOpen(true)
   }
@@ -138,6 +151,10 @@ export default function Students() {
     setFormPlanId(st.plan_id || '')
     const enrolledClass = enrollments.find((e) => e.student_id === st.id)
     setFormClassId(enrolledClass ? enrolledClass.class_id : '')
+    setFormGuardianName(st.guardian_name || '')
+    setFormGuardianCpf(st.guardian_cpf || '')
+    setFormGuardianPhone(st.guardian_phone || '')
+    setFormGuardianEmail(st.guardian_email || '')
     setFormStatus(st.status || 'ativo')
     setStudentModalOpen(true)
   }
@@ -163,6 +180,10 @@ export default function Students() {
         birth_date: formBirthDate ? `${formBirthDate} 00:00:00.000Z` : undefined,
         address: formAddress,
         plan_id: formPlanId,
+        guardian_name: formGuardianName.trim() || undefined,
+        guardian_cpf: formGuardianCpf.trim() || undefined,
+        guardian_phone: formGuardianPhone.trim() || undefined,
+        guardian_email: formGuardianEmail.trim() || undefined,
         status: formStatus,
       }
 
@@ -233,7 +254,7 @@ export default function Students() {
     }
   }
 
-  // Filter students by name, email, or CPF
+  // Filter students by name, email, CPF or guardian info
   const filteredStudents = useMemo(() => {
     const q = searchTerm.toLowerCase().trim()
     if (!q) return students
@@ -242,9 +263,16 @@ export default function Students() {
       const nameMatch = s.name.toLowerCase().includes(q)
       const emailMatch = s.email && s.email.toLowerCase().includes(q)
       const cpfMatch = s.cpf && s.cpf.includes(q)
-      return nameMatch || emailMatch || cpfMatch
+      const guardianMatch = s.guardian_name && s.guardian_name.toLowerCase().includes(q)
+      const guardianCpfMatch = s.guardian_cpf && s.guardian_cpf.includes(q)
+      return nameMatch || emailMatch || cpfMatch || guardianMatch || guardianCpfMatch
     })
   }, [students, searchTerm])
+
+  // Family groups based on filtered students
+  const familyGroups = useMemo(() => {
+    return groupStudentsByGuardian(filteredStudents, plans)
+  }, [filteredStudents, plans])
 
   // Pagination
   const totalPages = Math.ceil(filteredStudents.length / pageSize) || 1
@@ -297,11 +325,39 @@ export default function Students() {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          {/* View Toggle: Lista vs Por Família */}
+          <div className="flex items-center p-1 bg-slate-100 rounded-xl border border-slate-200">
+            <button
+              type="button"
+              onClick={() => setViewMode('lista')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition ${
+                viewMode === 'lista'
+                  ? 'bg-white text-[#0F1B3D] shadow-xs'
+                  : 'text-[#6C757D] hover:text-[#0F1B3D]'
+              }`}
+            >
+              <List className="w-3.5 h-3.5" />
+              <span>Lista</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('familia')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition ${
+                viewMode === 'familia'
+                  ? 'bg-[#0F1B3D] text-white shadow-xs'
+                  : 'text-[#6C757D] hover:text-[#0F1B3D]'
+              }`}
+            >
+              <Users className="w-3.5 h-3.5" />
+              <span>Por Família / Responsável</span>
+            </button>
+          </div>
+
           <div className="relative w-64">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <Input
-              placeholder="Filtrar por nome, CPF..."
+              placeholder="Buscar por aluno, responsável, CPF..."
               value={searchTerm}
               onChange={(e) => {
                 setSearchTerm(e.target.value)
@@ -320,44 +376,106 @@ export default function Students() {
         </div>
       </div>
 
-      {/* ============================================================== */}
-      {/* Students Table */}
-      {/* ============================================================== */}
-      <Card className="bg-white border-[#E0E4EA] rounded-xl overflow-hidden shadow-xs">
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs text-left">
-              <thead className="bg-[#F5F7FA] text-[#6C757D] uppercase font-semibold text-[10px] border-b border-[#E0E4EA]">
-                <tr>
-                  <th className="px-5 py-3.5">Aluno</th>
-                  <th className="px-4 py-3.5">Plano</th>
-                  <th className="px-4 py-3.5">Turma(s)</th>
-                  <th className="px-3 py-3.5">Status</th>
-                  <th className="px-4 py-3.5">Mensalidade</th>
-                  <th className="px-4 py-3.5">Último Pagamento</th>
-                  <th className="px-4 py-3.5 text-right">Ações</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#E0E4EA]">
-                {paginatedStudents.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="text-center py-10 text-[#6C757D]">
-                      Nenhum aluno encontrado para os critérios de busca.
-                    </td>
-                  </tr>
-                ) : (
-                  paginatedStudents.map((st) => {
-                    const plan = plans.find((p) => p.id === st.plan_id)
-                    const studentClasses = studentEnrollmentsMap[st.id] || []
-                    const lastPay = latestPaymentMap[st.id]
+      {viewMode === 'familia' ? (
+        /* ============================================================== */
+        /* FAMILY VIEW (Agrupamento por Responsável)                      */
+        /* ============================================================== */
+        <div className="space-y-4">
+          <div className="flex items-center justify-between bg-blue-50/70 border border-blue-200/80 rounded-xl p-3.5 text-xs text-[#0F1B3D]">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-[#D4AF37]" />
+              <span>
+                <strong>Regra Plano Família:</strong> R$ 100,00 por aluno com{' '}
+                <strong>desconto de R$ 10,00 por aluno</strong> quando a mensalidade é paga até o
+                vencimento (líquido: R$ 90,00/aluno).
+              </span>
+            </div>
+            <span className="font-semibold text-slate-600">
+              {familyGroups.length}{' '}
+              {familyGroups.length === 1 ? 'família/responsável' : 'famílias/responsáveis'}
+            </span>
+          </div>
 
-                    const photoUrl = getStudentPhotoUrl(st)
+          {familyGroups.length === 0 ? (
+            <Card className="bg-white border-[#E0E4EA] rounded-xl p-10 text-center text-[#6C757D]">
+              Nenhum grupo familiar encontrado para a busca.
+            </Card>
+          ) : (
+            familyGroups.map((group, groupIdx) => {
+              const isMulti = group.students.length > 1
 
-                    return (
-                      <tr key={st.id} className="hover:bg-slate-50 transition group">
-                        <td className="px-5 py-3.5">
+              return (
+                <Card
+                  key={groupIdx}
+                  className="bg-white border-[#E0E4EA] hover:border-slate-300 transition-all rounded-xl overflow-hidden shadow-xs"
+                >
+                  {/* Family Header */}
+                  <div className="p-4 bg-[#F8FAFC] border-b border-[#E0E4EA] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-[#0F1B3D] text-[#D4AF37] flex items-center justify-center font-bold text-sm shadow-xs">
+                        <Users className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-bold text-[#0F1B3D] text-sm sm:text-base">
+                            {group.guardianName}
+                          </h3>
+                          {isMulti && (
+                            <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px] font-bold">
+                              Família ({group.students.length} alunos)
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-[#6C757D]">
+                          {group.guardianCpf ? `CPF: ${group.guardianCpf}` : ''}
+                          {group.guardianCpf && group.guardianPhone ? ' • ' : ''}
+                          {group.guardianPhone ? `Tel: ${group.guardianPhone}` : ''}
+                          {(group.guardianCpf || group.guardianPhone) && group.guardianEmail
+                            ? ' • '
+                            : ''}
+                          {group.guardianEmail ? group.guardianEmail : ''}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-4 bg-white px-3.5 py-2 rounded-xl border border-[#E0E4EA] text-xs">
+                      <div>
+                        <span className="text-[10px] uppercase font-semibold text-[#6C757D] block">
+                          Total Família (Cheio)
+                        </span>
+                        <span className="font-bold font-mono text-[#0F1B3D] text-sm">
+                          R$ {group.totalMonthlyFee.toFixed(2)}
+                        </span>
+                      </div>
+                      {group.hasFamilyDiscount && (
+                        <div className="pl-3 border-l border-slate-200">
+                          <span className="text-[10px] uppercase font-semibold text-emerald-700 block">
+                            Até Vencimento (-R$ {(group.students.length * 10).toFixed(2)})
+                          </span>
+                          <span className="font-bold font-mono text-emerald-700 text-sm">
+                            R$ {group.totalDiscountedFeeOnTime.toFixed(2)}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Family Students List */}
+                  <div className="divide-y divide-[#E0E4EA]">
+                    {group.students.map((st) => {
+                      const plan = plans.find((p) => p.id === st.plan_id)
+                      const studentClasses = studentEnrollmentsMap[st.id] || []
+                      const lastPay = latestPaymentMap[st.id]
+                      const photoUrl = getStudentPhotoUrl(st)
+                      const isFam = (plan && plan.name.toLowerCase().includes('fam')) || isMulti
+
+                      return (
+                        <div
+                          key={st.id}
+                          className="p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 hover:bg-slate-50/80 transition"
+                        >
                           <div className="flex items-center gap-3">
-                            <Avatar className="w-8 h-8 border border-slate-200 bg-slate-100">
+                            <Avatar className="w-16 h-16 border-2 border-slate-200 bg-slate-100 shadow-xs">
                               {photoUrl ? (
                                 <AvatarImage
                                   src={photoUrl}
@@ -365,7 +483,7 @@ export default function Students() {
                                   className="object-cover"
                                 />
                               ) : null}
-                              <AvatarFallback className="bg-[#0F1B3D] text-white font-bold text-xs">
+                              <AvatarFallback className="bg-[#0F1B3D] text-white font-bold text-base">
                                 {st.name.slice(0, 2).toUpperCase()}
                               </AvatarFallback>
                             </Avatar>
@@ -376,122 +494,278 @@ export default function Students() {
                               >
                                 {st.name}
                               </p>
-                              <p className="text-[11px] text-[#6C757D]">
-                                {st.cpf || st.email || 'Sem contato cadastrado'}
-                              </p>
+                              <div className="flex flex-wrap items-center gap-2 mt-0.5">
+                                <Badge className="bg-[#0F1B3D]/5 text-[#0F1B3D] border-[#0F1B3D]/20 text-[10px]">
+                                  {plan?.name || (isFam ? 'Plano Família' : 'Plano Integral')}
+                                </Badge>
+                                <Badge
+                                  className={
+                                    st.status === 'ativo'
+                                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px]'
+                                      : 'bg-red-50 text-red-600 border-red-200 text-[10px]'
+                                  }
+                                >
+                                  {st.status === 'ativo' ? 'Ativo' : 'Inativo'}
+                                </Badge>
+                                {studentClasses.length > 0 && (
+                                  <span className="text-[11px] text-[#6C757D]">
+                                    Turma: <strong>{studentClasses.join(', ')}</strong>
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           </div>
-                        </td>
 
-                        <td className="px-4 py-3.5">
-                          <Badge className="bg-[#0F1B3D]/5 text-[#0F1B3D] border-[#0F1B3D]/20 font-semibold">
-                            {plan?.name || 'Plano Padrão'}
-                          </Badge>
-                        </td>
+                          <div className="flex items-center justify-between md:justify-end gap-6 pt-2 md:pt-0 border-t md:border-t-0 border-slate-100">
+                            <div className="text-left md:text-right text-xs">
+                              <span className="text-[10px] text-[#6C757D] uppercase block">
+                                Mensalidade
+                              </span>
+                              <span className="font-bold font-mono text-[#0F1B3D]">
+                                R${' '}
+                                {(
+                                  st.monthly_fee ||
+                                  plan?.monthly_price ||
+                                  (isFam ? 100 : 110)
+                                ).toFixed(2)}
+                              </span>
+                              {isFam && (
+                                <span className="block text-[10px] text-emerald-600 font-semibold">
+                                  R$ 90,00 em dia (-R$ 10)
+                                </span>
+                              )}
+                            </div>
 
-                        <td className="px-4 py-3.5">
-                          {studentClasses.length > 0 ? (
-                            <span className="text-[#1E2A3A] font-medium truncate max-w-[150px] block">
-                              {studentClasses.join(', ')}
-                            </span>
-                          ) : (
-                            <span className="text-slate-400 italic">Sem turma</span>
-                          )}
-                        </td>
+                            <div className="text-left md:text-right text-xs">
+                              <span className="text-[10px] text-[#6C757D] uppercase block">
+                                Último Pagto
+                              </span>
+                              <span className="text-[#6C757D]">
+                                {lastPay ? new Date(lastPay).toLocaleDateString('pt-BR') : '—'}
+                              </span>
+                            </div>
 
-                        <td className="px-3 py-3.5">
-                          <Badge
-                            className={
-                              st.status === 'ativo'
-                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200 font-bold'
-                                : 'bg-red-50 text-red-600 border-red-200'
-                            }
-                          >
-                            {st.status === 'ativo' ? 'Ativo' : 'Inativo'}
-                          </Badge>
-                        </td>
-
-                        <td className="px-4 py-3.5 font-mono font-bold text-[#0F1B3D]">
-                          R$ {(plan?.monthly_price || 160).toFixed(2)}
-                        </td>
-
-                        <td className="px-4 py-3.5 text-[#6C757D]">
-                          {lastPay ? new Date(lastPay).toLocaleDateString('pt-BR') : '—'}
-                        </td>
-
-                        <td className="px-4 py-3.5 text-right">
-                          <div className="flex items-center justify-end gap-1">
-                            <button
-                              onClick={() => navigate(`/alunos/${st.id}`)}
-                              className="p-1.5 rounded-lg text-slate-500 hover:text-[#0F1B3D] hover:bg-slate-100 transition"
-                              title="Visualizar detalhes"
-                            >
-                              <Eye className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => navigate(`/cobrancas?aluno=${st.id}`)}
-                              className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 transition"
-                              title="Registrar pagamento / cobrança"
-                            >
-                              <DollarSign className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleOpenEditModal(st)}
-                              className="p-1.5 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-slate-100 transition"
-                              title="Editar aluno"
-                            >
-                              <Edit2 className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleRequestDelete(st)}
-                              className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition"
-                              title="Remover aluno"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => navigate(`/alunos/${st.id}`)}
+                                className="p-1.5 rounded-lg text-slate-500 hover:text-[#0F1B3D] hover:bg-slate-100 transition"
+                                title="Visualizar detalhes"
+                              >
+                                <Eye className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => navigate(`/cobrancas?aluno=${st.id}`)}
+                                className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 transition"
+                                title="Registrar pagamento / cobrança"
+                              >
+                                <DollarSign className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => handleOpenEditModal(st)}
+                                className="p-1.5 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-slate-100 transition"
+                                title="Editar aluno"
+                              >
+                                <Edit2 className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => handleRequestDelete(st)}
+                                className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition"
+                                title="Remover aluno"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
                           </div>
-                        </td>
-                      </tr>
-                    )
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </Card>
+              )
+            })
+          )}
+        </div>
+      ) : (
+        /* ============================================================== */
+        /* STANDARD LIST VIEW (com avatares 2x maiores)                   */
+        /* ============================================================== */
+        <Card className="bg-white border-[#E0E4EA] rounded-xl overflow-hidden shadow-xs">
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs text-left">
+                <thead className="bg-[#F5F7FA] text-[#6C757D] uppercase font-semibold text-[10px] border-b border-[#E0E4EA]">
+                  <tr>
+                    <th className="px-5 py-3.5">Aluno</th>
+                    <th className="px-4 py-3.5">Plano</th>
+                    <th className="px-4 py-3.5">Turma(s)</th>
+                    <th className="px-3 py-3.5">Status</th>
+                    <th className="px-4 py-3.5">Mensalidade</th>
+                    <th className="px-4 py-3.5">Último Pagamento</th>
+                    <th className="px-4 py-3.5 text-right">Ações</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#E0E4EA]">
+                  {paginatedStudents.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="text-center py-10 text-[#6C757D]">
+                        Nenhum aluno encontrado para os critérios de busca.
+                      </td>
+                    </tr>
+                  ) : (
+                    paginatedStudents.map((st) => {
+                      const plan = plans.find((p) => p.id === st.plan_id)
+                      const studentClasses = studentEnrollmentsMap[st.id] || []
+                      const lastPay = latestPaymentMap[st.id]
 
-          {/* Pagination Controls */}
-          <div className="flex items-center justify-between px-5 py-3 border-t border-[#E0E4EA] text-xs text-[#6C757D]">
-            <span>
-              Mostrando {filteredStudents.length === 0 ? 0 : (currentPage - 1) * pageSize + 1} a{' '}
-              {Math.min(currentPage * pageSize, filteredStudents.length)} de{' '}
-              {filteredStudents.length} alunos
-            </span>
-            <div className="flex items-center gap-1">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={currentPage <= 1}
-                onClick={() => setCurrentPage((p) => p - 1)}
-                className="h-8 w-8 p-0"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </Button>
-              <span className="px-2 font-bold text-[#0F1B3D]">
-                {currentPage} / {totalPages}
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={currentPage >= totalPages}
-                onClick={() => setCurrentPage((p) => p + 1)}
-                className="h-8 w-8 p-0"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </Button>
+                      const photoUrl = getStudentPhotoUrl(st)
+
+                      return (
+                        <tr key={st.id} className="hover:bg-slate-50 transition group">
+                          <td className="px-5 py-3.5">
+                            <div className="flex items-center gap-3.5">
+                              {/* Avatar com o DOBRO do tamanho atual (era w-8 h-8 = 32px, agora w-16 h-16 = 64px) */}
+                              <Avatar className="w-16 h-16 rounded-xl border-2 border-slate-200 bg-slate-100 shrink-0 shadow-xs">
+                                {photoUrl ? (
+                                  <AvatarImage
+                                    src={photoUrl}
+                                    alt={st.name}
+                                    className="object-cover rounded-xl"
+                                  />
+                                ) : null}
+                                <AvatarFallback className="bg-[#0F1B3D] text-[#D4AF37] font-bold text-base rounded-xl">
+                                  {st.name.slice(0, 2).toUpperCase()}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div className="min-w-0">
+                                <p
+                                  onClick={() => navigate(`/alunos/${st.id}`)}
+                                  className="font-bold text-[#1E2A3A] hover:text-[#17A2B8] cursor-pointer transition text-sm truncate"
+                                >
+                                  {st.name}
+                                </p>
+                                <p className="text-[11px] text-[#6C757D] truncate">
+                                  {st.cpf || st.email || 'Sem contato cadastrado'}
+                                </p>
+                                {st.guardian_name && (
+                                  <p className="text-[10px] text-slate-500 font-medium truncate flex items-center gap-1 mt-0.5">
+                                    <Users className="w-3 h-3 text-[#17A2B8]" />
+                                    <span>Resp: {st.guardian_name}</span>
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+
+                          <td className="px-4 py-3.5">
+                            <Badge className="bg-[#0F1B3D]/5 text-[#0F1B3D] border-[#0F1B3D]/20 font-semibold">
+                              {plan?.name || 'Plano Padrão'}
+                            </Badge>
+                          </td>
+
+                          <td className="px-4 py-3.5">
+                            {studentClasses.length > 0 ? (
+                              <span className="text-[#1E2A3A] font-medium truncate max-w-[150px] block">
+                                {studentClasses.join(', ')}
+                              </span>
+                            ) : (
+                              <span className="text-slate-400 italic">Sem turma</span>
+                            )}
+                          </td>
+
+                          <td className="px-3 py-3.5">
+                            <Badge
+                              className={
+                                st.status === 'ativo'
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200 font-bold'
+                                  : 'bg-red-50 text-red-600 border-red-200'
+                              }
+                            >
+                              {st.status === 'ativo' ? 'Ativo' : 'Inativo'}
+                            </Badge>
+                          </td>
+
+                          <td className="px-4 py-3.5 font-mono font-bold text-[#0F1B3D]">
+                            R$ {(plan?.monthly_price || 160).toFixed(2)}
+                          </td>
+
+                          <td className="px-4 py-3.5 text-[#6C757D]">
+                            {lastPay ? new Date(lastPay).toLocaleDateString('pt-BR') : '—'}
+                          </td>
+
+                          <td className="px-4 py-3.5 text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              <button
+                                onClick={() => navigate(`/alunos/${st.id}`)}
+                                className="p-1.5 rounded-lg text-slate-500 hover:text-[#0F1B3D] hover:bg-slate-100 transition"
+                                title="Visualizar detalhes"
+                              >
+                                <Eye className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => navigate(`/cobrancas?aluno=${st.id}`)}
+                                className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 transition"
+                                title="Registrar pagamento / cobrança"
+                              >
+                                <DollarSign className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => handleOpenEditModal(st)}
+                                className="p-1.5 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-slate-100 transition"
+                                title="Editar aluno"
+                              >
+                                <Edit2 className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => handleRequestDelete(st)}
+                                className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition"
+                                title="Remover aluno"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })
+                  )}
+                </tbody>
+              </table>
             </div>
-          </div>
-        </CardContent>
-      </Card>
+
+            {/* Pagination Controls */}
+            <div className="flex items-center justify-between px-5 py-3 border-t border-[#E0E4EA] text-xs text-[#6C757D]">
+              <span>
+                Mostrando {filteredStudents.length === 0 ? 0 : (currentPage - 1) * pageSize + 1} a{' '}
+                {Math.min(currentPage * pageSize, filteredStudents.length)} de{' '}
+                {filteredStudents.length} alunos
+              </span>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={currentPage <= 1}
+                  onClick={() => setCurrentPage((p) => p - 1)}
+                  className="h-8 w-8 p-0"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </Button>
+                <span className="px-2 font-bold text-[#0F1B3D]">
+                  {currentPage} / {totalPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={currentPage >= totalPages}
+                  onClick={() => setCurrentPage((p) => p + 1)}
+                  className="h-8 w-8 p-0"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* ============================================================== */}
       {/* New / Edit Student Modal */}
@@ -518,6 +792,63 @@ export default function Students() {
                   onChange={(e) => setFormName(e.target.value)}
                   className="focus-visible:ring-[#D4AF37]"
                 />
+              </div>
+
+              {/* Informações do Responsável (para Plano Família e Agrupamento) */}
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-[#0F1B3D]">
+                  <Users className="w-3.5 h-3.5 text-[#D4AF37]" />
+                  <span>Dados do Responsável (Agrupamento Família)</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div className="space-y-1">
+                    <Label className="font-semibold text-[11px] text-[#1E2A3A]">
+                      Nome do Responsável
+                    </Label>
+                    <Input
+                      placeholder="Ex: Maria Oliveira"
+                      value={formGuardianName}
+                      onChange={(e) => setFormGuardianName(e.target.value)}
+                      className="h-8 text-xs focus-visible:ring-[#D4AF37]"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="font-semibold text-[11px] text-[#1E2A3A]">
+                      CPF do Responsável
+                    </Label>
+                    <Input
+                      placeholder="000.000.000-00"
+                      value={formGuardianCpf}
+                      onChange={(e) => setFormGuardianCpf(e.target.value)}
+                      className="h-8 text-xs focus-visible:ring-[#D4AF37]"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div className="space-y-1">
+                    <Label className="font-semibold text-[11px] text-[#1E2A3A]">
+                      Celular / WhatsApp do Resp.
+                    </Label>
+                    <Input
+                      placeholder="(83) 9 9999-9999"
+                      value={formGuardianPhone}
+                      onChange={(e) => setFormGuardianPhone(e.target.value)}
+                      className="h-8 text-xs focus-visible:ring-[#D4AF37]"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="font-semibold text-[11px] text-[#1E2A3A]">
+                      E-mail do Responsável
+                    </Label>
+                    <Input
+                      type="email"
+                      placeholder="responsavel@email.com"
+                      value={formGuardianEmail}
+                      onChange={(e) => setFormGuardianEmail(e.target.value)}
+                      className="h-8 text-xs focus-visible:ring-[#D4AF37]"
+                    />
+                  </div>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">

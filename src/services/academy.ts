@@ -131,6 +131,7 @@ export const academyService = {
     student_id: string
     description: string
     amount: number
+    discount_amount?: number
     due_date: string
     status?: 'em_aberto' | 'paga' | 'vencida' | 'cancelada'
     payment_method?: 'pix' | 'cartao' | 'boleto' | 'dinheiro' | 'transferencia'
@@ -143,6 +144,7 @@ export const academyService = {
       student_id: data.student_id,
       description: data.description,
       amount: data.amount,
+      discount_amount: data.discount_amount || 0,
       due_date: data.due_date,
       status: data.status || 'em_aberto',
       payment_method: data.payment_method || 'pix',
@@ -155,6 +157,7 @@ export const academyService = {
       student_id: data.student_id,
       charge_id: record.id,
       amount: data.amount,
+      discount_amount: data.discount_amount || 0,
       due_date: data.due_date,
       status: data.status === 'paga' ? 'pago' : 'pendente',
       payment_method: data.payment_method || 'pix',
@@ -167,8 +170,39 @@ export const academyService = {
   async updateChargeStatus(
     id: string,
     status: 'em_aberto' | 'paga' | 'vencida' | 'cancelada',
+    paidDate?: string,
   ): Promise<ChargeRecord> {
-    const updated = await pb.collection('charges').update<ChargeRecord>(id, { status })
+    const existingCharge = await pb.collection('charges').getOne<ChargeRecord>(id, {
+      expand: 'student_id',
+    })
+
+    // Se estiver marcando como paga, calcula se foi pago até o vencimento ou após
+    let effectiveAmount = existingCharge.amount
+    let appliedDiscount = existingCharge.discount_amount || 0
+
+    const paymentDateIso = paidDate || new Date().toISOString()
+
+    if (status === 'paga') {
+      const paidDay = new Date(paymentDateIso).setHours(0, 0, 0, 0)
+      const dueDay = new Date(existingCharge.due_date).setHours(23, 59, 59, 999)
+      const isOnTime = paidDay <= dueDay
+
+      // Se pago em dia e houver desconto família registrado ou aplicável
+      if (isOnTime && appliedDiscount > 0) {
+        // o valor pago já reflete ou mantém o desconto
+      } else if (!isOnTime && appliedDiscount > 0) {
+        // Se pago após a data de vencimento, o desconto de família de R$ 10 não se aplica (valor cheio)
+        effectiveAmount = existingCharge.amount + appliedDiscount
+        appliedDiscount = 0
+      }
+    }
+
+    const updated = await pb.collection('charges').update<ChargeRecord>(id, {
+      status,
+      amount: effectiveAmount,
+      discount_amount: appliedDiscount,
+    })
+
     // If set to paga, also find and update payment
     if (status === 'paga') {
       try {
@@ -178,18 +212,20 @@ export const academyService = {
         if (payments.items.length > 0) {
           await pb.collection('payments').update(payments.items[0].id, {
             status: 'pago',
-            paid_date: new Date().toISOString(),
+            amount: effectiveAmount,
+            discount_amount: appliedDiscount,
+            paid_date: paymentDateIso,
           })
           // Also create income transaction
           await pb.collection('transactions').create<TransactionRecord>({
             type: 'receita',
             description: updated.description,
             category: 'mensalidade',
-            amount: updated.amount,
-            date: new Date().toISOString(),
+            amount: effectiveAmount,
+            date: paymentDateIso,
             payment_method: updated.payment_method || 'pix',
             status: 'confirmado',
-            notes: `Pagamento de cobrança #${id}`,
+            notes: `Pagamento de cobrança #${id}${appliedDiscount > 0 ? ' (Desconto Família R$ 10,00 aplicado)' : ''}`,
           })
         }
       } catch (err) {

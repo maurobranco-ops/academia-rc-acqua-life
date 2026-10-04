@@ -81,6 +81,7 @@ export interface ChargeRecord extends RecordModel {
   student_id: string
   description: string
   amount: number
+  discount_amount?: number
   due_date: string
   status: 'em_aberto' | 'paga' | 'vencida' | 'cancelada'
   payment_method?: 'pix' | 'cartao' | 'boleto' | 'dinheiro' | 'transferencia'
@@ -96,6 +97,7 @@ export interface PaymentRecord extends RecordModel {
   charge_id?: string
   plan_id?: string
   amount: number
+  discount_amount?: number
   due_date: string
   paid_date?: string
   status: 'pendente' | 'pago' | 'vencido' | 'cancelado' | 'reembolsado'

@@ -11,6 +11,9 @@ import {
   Share2,
   Loader2,
   ExternalLink,
+  Users,
+  Sparkles,
+  Calendar,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -42,6 +45,7 @@ import { academyService } from '@/services/academy'
 import { useRealtime } from '@/hooks/use-realtime'
 import type { ChargeRecord, StudentRecord, PlanRecord } from '@/types/database'
 import { useToast } from '@/hooks/use-toast'
+import { calculateStudentCharge, getFamilyStudents } from '@/lib/familyRules'
 
 export default function Charges() {
   const [searchParams] = useSearchParams()
@@ -63,17 +67,25 @@ export default function Charges() {
   // Modal State
   const [newModalOpen, setNewModalOpen] = useState(false)
   const [formStudentId, setFormStudentId] = useState('')
-  const [formDescription, setFormDescription] = useState('Mensalidade de Natação / Hidroginástica')
-  const [formAmount, setFormAmount] = useState('160')
+  const [formDescription, setFormDescription] = useState('Mensalidade de Natação')
+  const [formAmount, setFormAmount] = useState('110')
+  const [formDiscountAmount, setFormDiscountAmount] = useState('0')
   const [formDueDate, setFormDueDate] = useState(() => {
     const d = new Date()
     d.setDate(d.getDate() + 5)
     return d.toISOString().substring(0, 10)
   })
   const [formMethod, setFormMethod] = useState<'pix' | 'cartao' | 'boleto'>('pix')
+  const [isFamilyCharge, setIsFamilyCharge] = useState(false)
   const [generateInfinitepayLink, setGenerateInfinitepayLink] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [copiedId, setCopiedId] = useState<string | null>(null)
+
+  // Liquidate modal state (para escolher data de pagamento e checar desconto em dia)
+  const [payModalOpen, setPayModalOpen] = useState(false)
+  const [selectedChargeToPay, setSelectedChargeToPay] = useState<ChargeRecord | null>(null)
+  const [payDate, setPayDate] = useState(() => new Date().toISOString().substring(0, 10))
+  const [liquidating, setLiquidating] = useState(false)
 
   const loadData = async () => {
     try {
@@ -129,11 +141,14 @@ export default function Charges() {
     setFormStudentId(stId)
     const st = students.find((s) => s.id === stId)
     if (st) {
+      const calc = calculateStudentCharge(st, plans, students)
       const pl = plans.find((p) => p.id === st.plan_id)
-      if (pl) {
-        setFormAmount(String(pl.monthly_price))
-        setFormDescription(`Mensalidade — ${pl.name}`)
-      }
+      setFormAmount(String(calc.baseAmount))
+      setFormDiscountAmount(String(calc.discountAmount))
+      setIsFamilyCharge(calc.isFamilyPlan)
+      setFormDescription(
+        `Mensalidade — ${pl?.name || (calc.isFamilyPlan ? 'Família' : 'Integral')}`,
+      )
     }
   }
 
@@ -154,6 +169,7 @@ export default function Charges() {
         student_id: formStudentId,
         description: formDescription,
         amount: Number(formAmount),
+        discount_amount: Number(formDiscountAmount) || 0,
         due_date: `${formDueDate} 00:00:00.000Z`,
         status: 'em_aberto',
         payment_method: formMethod,
@@ -174,7 +190,40 @@ export default function Charges() {
     }
   }
 
+  const handleOpenPayModal = (charge: ChargeRecord) => {
+    setSelectedChargeToPay(charge)
+    setPayDate(new Date().toISOString().substring(0, 10))
+    setPayModalOpen(true)
+  }
+
+  const handleConfirmPayment = async () => {
+    if (!selectedChargeToPay) return
+    setLiquidating(true)
+    try {
+      const isoPaidDate = `${payDate}T12:00:00.000Z`
+      await academyService.updateChargeStatus(selectedChargeToPay.id, 'paga', isoPaidDate)
+      triggerConfetti()
+      toast({
+        title: 'Cobrança Liquidada!',
+        description: 'Pagamento confirmado e registrado no histórico.',
+      })
+      setPayModalOpen(false)
+      setSelectedChargeToPay(null)
+      loadData()
+    } catch (err) {
+      console.error(err)
+      toast({ title: 'Erro ao liquidar cobrança', variant: 'destructive' })
+    } finally {
+      setLiquidating(false)
+    }
+  }
+
   const handleMarkAsPaid = async (chargeId: string) => {
+    const ch = charges.find((c) => c.id === chargeId)
+    if (ch) {
+      handleOpenPayModal(ch)
+      return
+    }
     try {
       await academyService.updateChargeStatus(chargeId, 'paga')
       triggerConfetti()
@@ -398,7 +447,7 @@ export default function Charges() {
                 <CardContent className="p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
                   {/* Left Info */}
                   <div className="space-y-1">
-                    <div className="flex items-center gap-2.5">
+                    <div className="flex items-center gap-2.5 flex-wrap">
                       <span className="font-bold text-[#0F1B3D] text-base">
                         {student?.name || 'Aluno'}
                       </span>
@@ -418,6 +467,12 @@ export default function Charges() {
                       <Badge variant="outline" className="text-[10px] uppercase text-slate-500">
                         {charge.payment_method || 'PIX'}
                       </Badge>
+                      {charge.discount_amount && charge.discount_amount > 0 ? (
+                        <Badge className="bg-emerald-100 text-emerald-800 border-emerald-300 font-bold text-[10px] flex items-center gap-1">
+                          <Sparkles className="w-3 h-3 text-emerald-700" />
+                          Desconto Família -R$ {charge.discount_amount.toFixed(2)}
+                        </Badge>
+                      ) : null}
                     </div>
 
                     <p className="text-xs text-[#1E2A3A] font-medium">{charge.description}</p>
@@ -427,6 +482,11 @@ export default function Charges() {
                       <code className="bg-slate-100 px-1 py-0.5 rounded text-[10px]">
                         {charge.infinipay_payment_id || 'inf_demo'}
                       </code>
+                      {student?.guardian_name && (
+                        <span className="ml-2 inline-flex items-center gap-1 text-slate-600">
+                          <Users className="w-3 h-3 text-[#17A2B8]" /> Resp: {student.guardian_name}
+                        </span>
+                      )}
                     </p>
                   </div>
 
@@ -438,6 +498,12 @@ export default function Charges() {
                     <span className="text-xl font-black font-mono text-[#0F1B3D]">
                       R$ {charge.amount.toFixed(2)}
                     </span>
+                    {charge.discount_amount && charge.discount_amount > 0 ? (
+                      <span className="text-[10px] text-emerald-600 font-semibold block">
+                        R$ {(charge.amount - charge.discount_amount).toFixed(2)} se pago até o
+                        vencimento
+                      </span>
+                    ) : null}
                   </div>
 
                   {/* Right: Actions */}
@@ -562,7 +628,7 @@ export default function Charges() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <Label className="font-semibold text-[#1E2A3A]">Valor (R$)</Label>
+                  <Label className="font-semibold text-[#1E2A3A]">Valor Cheio (R$)</Label>
                   <Input
                     required
                     type="number"
@@ -582,6 +648,43 @@ export default function Charges() {
                     onChange={(e) => setFormDueDate(e.target.value)}
                     className="focus-visible:ring-[#D4AF37]"
                   />
+                </div>
+              </div>
+
+              {/* Desconto Família */}
+              <div className="p-3 bg-amber-50/70 border border-amber-200/80 rounded-xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-[#0F1B3D]">
+                    <Sparkles className="w-3.5 h-3.5 text-[#D4AF37]" />
+                    <span>Desconto Família (R$ 10,00 por aluno até o vencimento)</span>
+                  </div>
+                  {isFamilyCharge && (
+                    <Badge className="bg-emerald-600 text-white text-[10px]">Identificado</Badge>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label className="font-semibold text-[11px] text-[#1E2A3A]">
+                      Desconto em Dia (R$)
+                    </Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={formDiscountAmount}
+                      onChange={(e) => setFormDiscountAmount(e.target.value)}
+                      className="h-8 text-xs focus-visible:ring-[#D4AF37]"
+                    />
+                  </div>
+                  <div className="flex flex-col justify-end text-xs">
+                    <span className="text-[10px] text-slate-500">Valor com desconto em dia:</span>
+                    <span className="font-bold font-mono text-emerald-700 text-sm">
+                      R${' '}
+                      {Math.max(
+                        0,
+                        (Number(formAmount) || 0) - (Number(formDiscountAmount) || 0),
+                      ).toFixed(2)}
+                    </span>
+                  </div>
                 </div>
               </div>
 
@@ -634,6 +737,114 @@ export default function Charges() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* ============================================================== */}
+      {/* Liquidate / Pay Modal (Verifica se pago até o vencimento)      */}
+      {/* ============================================================== */}
+      <Dialog open={payModalOpen} onOpenChange={setPayModalOpen}>
+        <DialogContent className="sm:max-w-[440px] bg-white rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-[#0F1B3D]">
+              Liquidar Cobrança
+            </DialogTitle>
+            <DialogDescription className="text-xs text-[#6C757D]">
+              Confirme a data de pagamento para verificação das regras de desconto pontual.
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedChargeToPay &&
+            (() => {
+              const dueDay = new Date(selectedChargeToPay.due_date).setHours(23, 59, 59, 999)
+              const paidDay = new Date(payDate).setHours(0, 0, 0, 0)
+              const isOnTime = paidDay <= dueDay
+              const discount = selectedChargeToPay.discount_amount || 0
+              const finalPayAmount =
+                isOnTime && discount > 0
+                  ? Math.max(0, selectedChargeToPay.amount - discount)
+                  : selectedChargeToPay.amount
+
+              return (
+                <div className="space-y-3 py-2 text-xs">
+                  <div className="p-3 bg-slate-50 rounded-xl space-y-1 border border-slate-200">
+                    <p className="font-bold text-[#0F1B3D] text-sm">
+                      {selectedChargeToPay.description}
+                    </p>
+                    <p className="text-slate-600">
+                      Vencimento:{' '}
+                      <strong>
+                        {new Date(selectedChargeToPay.due_date).toLocaleDateString('pt-BR')}
+                      </strong>
+                    </p>
+                    <p className="text-slate-600 font-mono">
+                      Valor nominal: <strong>R$ {selectedChargeToPay.amount.toFixed(2)}</strong>
+                    </p>
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label className="font-semibold text-[#1E2A3A]">Data do Pagamento</Label>
+                    <Input
+                      type="date"
+                      value={payDate}
+                      onChange={(e) => setPayDate(e.target.value)}
+                      className="focus-visible:ring-[#D4AF37]"
+                    />
+                  </div>
+
+                  {discount > 0 && (
+                    <div
+                      className={`p-3 rounded-xl border text-xs ${
+                        isOnTime
+                          ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                          : 'bg-amber-50 border-amber-200 text-amber-800'
+                      }`}
+                    >
+                      {isOnTime ? (
+                        <p className="flex items-center gap-1.5 font-semibold">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                          <span>
+                            Pago até o vencimento: Desconto Família de -R$ {discount.toFixed(2)}{' '}
+                            aplicado!
+                          </span>
+                        </p>
+                      ) : (
+                        <p className="flex items-center gap-1.5 font-semibold">
+                          <Sparkles className="w-4 h-4 text-amber-600 shrink-0" />
+                          <span>
+                            Pago após o vencimento: Desconto pontual não aplicável (valor cheio
+                            cobrado).
+                          </span>
+                        </p>
+                      )}
+                      <p className="mt-1 font-mono font-bold text-sm">
+                        Valor a liquidar: R$ {finalPayAmount.toFixed(2)}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
+
+          <DialogFooter className="gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setPayModalOpen(false)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              disabled={liquidating}
+              onClick={handleConfirmPayment}
+              className="bg-[#17A2B8] hover:bg-[#138496] text-white font-bold"
+            >
+              {liquidating ? 'Confirmando...' : 'Confirmar Liquidação'}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

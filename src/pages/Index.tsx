@@ -483,16 +483,16 @@ export default function Index() {
                         onClick={() => navigate('/cobrancas')}
                         className="hover:bg-slate-50 cursor-pointer transition"
                       >
-                        <td className="px-4 py-3 flex items-center gap-2">
-                          <Avatar className="w-6 h-6 bg-slate-100">
+                        <td className="px-4 py-3 flex items-center gap-2.5">
+                          <Avatar className="w-10 h-10 rounded-lg bg-slate-100 border border-slate-200 shrink-0">
                             {photoUrl ? (
                               <AvatarImage
                                 src={photoUrl}
                                 alt={studentName}
-                                className="object-cover"
+                                className="object-cover rounded-lg"
                               />
                             ) : null}
-                            <AvatarFallback className="text-[9px] bg-[#0F1B3D] text-white">
+                            <AvatarFallback className="text-xs bg-[#0F1B3D] text-[#D4AF37] font-bold rounded-lg">
                               {studentName.slice(0, 2).toUpperCase()}
                             </AvatarFallback>
                           </Avatar>
