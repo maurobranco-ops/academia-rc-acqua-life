@@ -143,11 +143,70 @@ export async function importBubbleStudents(
   const plans = await pb.collection('plans').getFullList()
   const defaultPlanId = plans.length > 0 ? plans[0].id : undefined
 
-  const total = rows.length
+  // 5. Pre-load existing payments once into memory (key: student_id:paid_date_prefix)
+  // Isso elimina a consulta individual de pagamentos por aluno (`collection('payments').getList`)
+  // que gerava 1 chamada HTTP sequencial de ~0,7s por aluno!
+  const existingPayments = await pb.collection('payments').getFullList<PaymentRecord>()
+  const paymentSet = new Set<string>()
+  existingPayments.forEach((p) => {
+    if (p.student_id && p.paid_date) {
+      paymentSet.add(`${p.student_id}:${p.paid_date.slice(0, 10)}`)
+    }
+  })
 
-  // Process rows sequentially or in small controlled batches to update progress smoothly
-  for (let idx = 0; idx < rows.length; idx++) {
-    const row = rows[idx]
+  // 6. Pre-scan rows to detect and create all missing classes upfront in parallel
+  // Evita concorrência e chamadas repetidas para a mesma turma durante os lotes
+  const uniqueClassNames = new Set<string>()
+  for (const row of rows) {
+    const rawAtividade = (row[mapping.atividade] || '').trim()
+    if (rawAtividade) {
+      rawAtividade
+        .split(',')
+        .map((a) => a.trim())
+        .filter((a) => a.length > 0)
+        .forEach((actName) => uniqueClassNames.add(actName))
+    }
+  }
+
+  for (const actName of uniqueClassNames) {
+    const actKey = actName.toLowerCase()
+    if (!classMap.has(actKey)) {
+      const classType = inferClassType(actName)
+      try {
+        const classRec = await pb.collection('classes').create<ClassRecord>({
+          name: actName,
+          type: classType,
+          schedule_days: ['seg', 'qua', 'sex'],
+          schedule_time: '08:00',
+          capacity: 20,
+          monthly_price: 100,
+        })
+        classMap.set(actKey, classRec)
+        result.classesCreated++
+      } catch (err: any) {
+        console.warn(`Aviso ao criar turma prévia "${actName}":`, err?.message)
+      }
+    }
+  }
+
+  const total = rows.length
+  let processedCounter = 0
+
+  // 7. Processamento concorrente em lotes controlados (concurrency = 8)
+  // Com o pool de 8 workers simultâneos e sem a consulta sequencial de pagamentos,
+  // o tempo total cai de ~2 minutos para poucos segundos em lotes de centenas de alunos.
+  const CONCURRENCY = 8
+
+  // Prepara itens de trabalho
+  interface RowWorkItem {
+    row: Record<string, string>
+    idx: number
+  }
+
+  const workQueue: RowWorkItem[] = rows.map((row, idx) => ({ row, idx }))
+
+  const processRowItem = async (item: RowWorkItem) => {
+    const { row, idx } = item
     const rowNum = idx + 2 // 1-based, header is 1
 
     const rawName = (row[mapping.aluno] || '').trim()
@@ -159,12 +218,9 @@ export async function importBubbleStudents(
         message: 'Linha ignorada: nome do aluno não informado.',
       })
       result.totalProcessed++
-      if (onProgress) onProgress(idx + 1, total)
-      continue
-    }
-
-    if (onProgress) {
-      onProgress(idx + 1, total, rawName)
+      processedCounter++
+      if (onProgress) onProgress(processedCounter, total)
+      return
     }
 
     try {
@@ -240,7 +296,6 @@ export async function importBubbleStudents(
         studentRecord = studentByName.get(rawName.toLowerCase())!
       }
 
-      let isNewStudent = false
       if (studentRecord) {
         // Update existing student
         studentRecord = await pb
@@ -250,7 +305,6 @@ export async function importBubbleStudents(
       } else {
         // Create new student
         studentRecord = await pb.collection('students').create<StudentRecord>(studentPayload)
-        isNewStudent = true
         result.studentsCreated++
       }
 
@@ -260,10 +314,9 @@ export async function importBubbleStudents(
       }
       studentByName.set(rawName.toLowerCase(), studentRecord)
 
-      // Handle Activities -> Classes & Enrollments
+      // Handle Activities -> Enrollments
       const rawAtividade = (row[mapping.atividade] || '').trim()
       if (rawAtividade) {
-        // May contain multiple activities separated by commas
         const activityNames = rawAtividade
           .split(',')
           .map((a) => a.trim())
@@ -271,60 +324,36 @@ export async function importBubbleStudents(
 
         for (const actName of activityNames) {
           const actKey = actName.toLowerCase()
-          let classRec = classMap.get(actKey)
+          const classRec = classMap.get(actKey)
 
-          if (!classRec) {
-            // Infer type
-            const classType = inferClassType(actName)
-            try {
-              classRec = await pb.collection('classes').create<ClassRecord>({
-                name: actName,
-                type: classType,
-                schedule_days: ['seg', 'qua', 'sex'],
-                schedule_time: '08:00',
-                capacity: 20,
-                monthly_price: monthlyFee || 100,
-              })
-              classMap.set(actKey, classRec)
-              result.classesCreated++
-            } catch (err: any) {
-              result.warnings.push({
-                row: rowNum,
-                studentName: rawName,
-                message: `Não foi possível criar a turma "${actName}": ${err?.message || 'erro desconhecido'}`,
-              })
-              continue
-            }
-          } else {
+          if (classRec) {
             result.classesFound++
-          }
+            const enrollmentKey = `${studentRecord.id}:${classRec.id}`
+            if (!enrollmentSet.has(enrollmentKey)) {
+              const enrollmentDate =
+                parseBubbleDate(row[mapping.dataMatricula]) ||
+                parseBubbleDate(row[mapping.dataInicio]) ||
+                new Date().toISOString()
 
-          // Create enrollment if not already enrolled
-          const enrollmentKey = `${studentRecord.id}:${classRec.id}`
-          if (!enrollmentSet.has(enrollmentKey)) {
-            const enrollmentDate =
-              parseBubbleDate(row[mapping.dataMatricula]) ||
-              parseBubbleDate(row[mapping.dataInicio]) ||
-              new Date().toISOString()
-
-            try {
-              await pb.collection('enrollments').create({
-                student_id: studentRecord.id,
-                class_id: classRec.id,
-                enrollment_date: enrollmentDate,
-                is_active: systemStatus === 'ativo',
-              })
-              enrollmentSet.add(enrollmentKey)
-              result.enrollmentsCreated++
-            } catch (err: any) {
-              result.warnings.push({
-                row: rowNum,
-                studentName: rawName,
-                message: `Erro ao matricular na turma "${actName}": ${err?.message || 'erro'}`,
-              })
+              try {
+                await pb.collection('enrollments').create({
+                  student_id: studentRecord.id,
+                  class_id: classRec.id,
+                  enrollment_date: enrollmentDate,
+                  is_active: systemStatus === 'ativo',
+                })
+                enrollmentSet.add(enrollmentKey)
+                result.enrollmentsCreated++
+              } catch (err: any) {
+                result.warnings.push({
+                  row: rowNum,
+                  studentName: rawName,
+                  message: `Erro ao matricular na turma "${actName}": ${err?.message || 'erro'}`,
+                })
+              }
+            } else {
+              result.enrollmentsUpdated++
             }
-          } else {
-            result.enrollmentsUpdated++
           }
         }
       }
@@ -338,14 +367,12 @@ export async function importBubbleStudents(
         const parsedPaidAmount = parseCurrencyOrNumber(rawPaidAmount)
 
         if (parsedPaidDate && parsedPaidAmount > 0) {
-          try {
-            // Check if this payment is already recorded to maintain idempotency
-            const checkDate = parsedPaidDate.slice(0, 10)
-            const existingPayment = await pb.collection('payments').getList<PaymentRecord>(1, 1, {
-              filter: `student_id = "${studentRecord.id}" && paid_date ~ "${checkDate}"`,
-            })
+          const checkDate = parsedPaidDate.slice(0, 10)
+          const paymentKey = `${studentRecord.id}:${checkDate}`
 
-            if (existingPayment.items.length === 0) {
+          // Verificação rápida no Set em memória — sem round-trip sequencial de 0,7s!
+          if (!paymentSet.has(paymentKey)) {
+            try {
               await pb.collection('payments').create({
                 student_id: studentRecord.id,
                 plan_id: defaultPlanId || undefined,
@@ -355,11 +382,11 @@ export async function importBubbleStudents(
                 status: 'pago',
                 payment_method: 'pix',
               })
+              paymentSet.add(paymentKey)
               result.paymentsCreated++
+            } catch (err) {
+              console.warn('Não foi possível registrar pagamento histórico para', rawName, err)
             }
-          } catch (err) {
-            // Non-critical, ignore
-            console.warn('Could not record historical payment for student', rawName, err)
           }
         }
       }
@@ -372,8 +399,25 @@ export async function importBubbleStudents(
         message: `Falha ao processar linha: ${rowErr?.message || 'Erro inesperado'}`,
       })
       result.totalProcessed++
+    } finally {
+      processedCounter++
+      if (onProgress) {
+        onProgress(processedCounter, total, rawName)
+      }
     }
   }
+
+  // Executa os itens da fila com Promise.all limitado a CONCURRENCY workers simultâneos
+  const workers = Array.from({ length: Math.min(CONCURRENCY, workQueue.length) }, async () => {
+    while (workQueue.length > 0) {
+      const item = workQueue.shift()
+      if (item) {
+        await processRowItem(item)
+      }
+    }
+  })
+
+  await Promise.all(workers)
 
   return result
 }

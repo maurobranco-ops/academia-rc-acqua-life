@@ -2,6 +2,7 @@ import { unzipSync } from 'fflate'
 import { academyService } from '@/services/academy'
 import type { StudentRecord } from '@/types/database'
 import { matchPhotoNameToStudent, type MatchStatus } from './studentPhoto'
+import { compressImage } from './imageCompression'
 
 export interface PhotoFileItem {
   id: string
@@ -162,20 +163,41 @@ export async function uploadMatchedPhotos(
   }
 
   const total = itemsToUpload.length
+  let processedCount = 0
 
-  for (let idx = 0; idx < total; idx++) {
-    const item = itemsToUpload[idx]
+  // Pool de concorrência controlada (6 uploads em paralelo para minimizar latência)
+  const CONCURRENCY = 6
+
+  const processItem = async (item: PhotoFileItem) => {
+    item.uploadStatus = 'uploading'
     if (onProgress) {
-      onProgress(idx + 1, total, item)
+      onProgress(processedCount, total, item)
     }
 
     try {
-      item.uploadStatus = 'uploading'
       if (!item.matchedStudent) {
         throw new Error('Nenhum aluno vinculado')
       }
 
-      await academyService.uploadStudentPhoto(item.matchedStudent.id, item.file, item.name)
+      // 1. Comprime a foto no navegador antes do upload para reduzir payload e tempo de transferência
+      const { file: fileToSend, compressedSize } = await compressImage(item.file, item.name, {
+        maxWidth: 1600,
+        maxHeight: 1600,
+        quality: 0.82,
+        mimeType: 'image/jpeg',
+      })
+
+      // 2. Envia para o PocketBase
+      const updated = await academyService.uploadStudentPhoto(
+        item.matchedStudent.id,
+        fileToSend,
+        item.name,
+      )
+
+      // Atualiza o registro em memória do aluno vinculado com o novo photo_file
+      if (updated && updated.photo_file) {
+        item.matchedStudent.photo_file = updated.photo_file
+      }
 
       item.uploadStatus = 'success'
       report.successCount++
@@ -185,8 +207,26 @@ export async function uploadMatchedPhotos(
       item.errorMessage = errMsg
       report.errorCount++
       report.errors.push({ filename: item.name, error: errMsg })
+    } finally {
+      processedCount++
+      if (onProgress) {
+        onProgress(processedCount, total, item)
+      }
     }
   }
+
+  // Executa itens em lotes com Promise.all limitado pelo número de workers concorrentes
+  const queue = [...itemsToUpload]
+  const workers = Array.from({ length: Math.min(CONCURRENCY, queue.length) }, async () => {
+    while (queue.length > 0) {
+      const nextItem = queue.shift()
+      if (nextItem) {
+        await processItem(nextItem)
+      }
+    }
+  })
+
+  await Promise.all(workers)
 
   return report
 }

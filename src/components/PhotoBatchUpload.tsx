@@ -70,10 +70,11 @@ export function PhotoBatchUpload() {
   const [isDragging, setIsDragging] = useState(false)
 
   // Carrega lista de alunos para o matching
-  const loadStudents = async () => {
-    setLoadingStudents(true)
+  // Otimização: carrega sem expand desnecessário de relacionamentos (plan_id, etc.) para acelerar o payload
+  const loadStudents = async (showLoadingState = true) => {
+    if (showLoadingState) setLoadingStudents(true)
     try {
-      const data = await academyService.getStudents()
+      const data = await academyService.getStudents({ expand: '' })
       setStudents(data)
     } catch (err: any) {
       toast({
@@ -82,7 +83,7 @@ export function PhotoBatchUpload() {
         variant: 'destructive',
       })
     } finally {
-      setLoadingStudents(false)
+      if (showLoadingState) setLoadingStudents(false)
     }
   }
 
@@ -344,8 +345,8 @@ export function PhotoBatchUpload() {
         description: `${rep.successCount} foto(s) vinculada(s) com sucesso. ${rep.errorCount} erro(s).`,
       })
 
-      // Recarrega alunos para atualizar fotos na base
-      await loadStudents()
+      // Recarregamento em background sem travar a interface do usuário
+      loadStudents(false).catch(() => {})
     } catch (err: any) {
       toast({
         title: 'Falha durante o upload',
@@ -1012,10 +1013,11 @@ export function PhotoBatchUpload() {
                                 ) : null}
 
                                 <button
+                                  type="button"
                                   onClick={() => handleRemoveItem(item.id)}
                                   disabled={isUploading}
-                                  className="p-1 rounded-md text-slate-400 hover:text-red-600 hover:bg-red-50 transition"
-                                  title="Remover da lista"
+                                  className="p-1.5 rounded-md text-slate-400 hover:text-red-600 hover:bg-red-50 transition cursor-pointer"
+                                  title="Excluir / remover da lista"
                                 >
                                   <Trash2 className="w-4 h-4" />
                                 </button>

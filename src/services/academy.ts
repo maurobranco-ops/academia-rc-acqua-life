@@ -41,10 +41,11 @@ export const academyService = {
   },
 
   // Students
-  async getStudents(): Promise<StudentRecord[]> {
+  async getStudents(options?: { expand?: string; fields?: string }): Promise<StudentRecord[]> {
     return pb.collection('students').getFullList<StudentRecord>({
       sort: 'name',
-      expand: 'plan_id',
+      expand: options?.expand !== undefined ? options.expand : 'plan_id',
+      fields: options?.fields,
     })
   },
   async getStudent(id: string): Promise<StudentRecord> {
