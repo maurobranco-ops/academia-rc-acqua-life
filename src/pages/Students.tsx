@@ -13,6 +13,10 @@ import {
   Users,
   List,
   Sparkles,
+  Layers,
+  GraduationCap,
+  Clock,
+  Calendar as CalendarIcon,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -63,7 +67,8 @@ export default function Students() {
   // Filters and Pagination
   const [searchTerm, setSearchTerm] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
-  const [viewMode, setViewMode] = useState<'lista' | 'familia'>('lista')
+  const [viewMode, setViewMode] = useState<'lista' | 'familia' | 'turma'>('lista')
+  const [statusFilter, setStatusFilter] = useState<'todos' | 'ativo' | 'inativo'>('ativo')
   const pageSize = 10
 
   // Modal states
@@ -71,6 +76,7 @@ export default function Students() {
   const [selectedStudent, setSelectedStudent] = useState<StudentRecord | null>(null)
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const [deleteBlockedReason, setDeleteBlockedReason] = useState<string | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   // Form states
   const [formName, setFormName] = useState('')
@@ -224,15 +230,15 @@ export default function Students() {
 
   const handleRequestDelete = (st: StudentRecord) => {
     setSelectedStudent(st)
-    // Check if student has outstanding / overdue payments
+    // Check if student has outstanding / overdue payments or open/overdue charges
     const studentPayments = payments.filter((p) => p.student_id === st.id)
-    const hasPending = studentPayments.some(
+    const pendingPayments = studentPayments.filter(
       (p) => p.status === 'pendente' || p.status === 'vencido',
     )
 
-    if (hasPending) {
+    if (pendingPayments.length > 0) {
       setDeleteBlockedReason(
-        'Não é possível remover este aluno: existem pagamentos pendentes ou vencidos.',
+        `Não é possível remover este aluno: existem ${pendingPayments.length} mensalidade(s)/pagamento(s) pendente(s) ou vencido(s). Regularize ou cancele essas cobranças antes de excluir.`,
       )
     } else {
       setDeleteBlockedReason(null)
@@ -241,25 +247,41 @@ export default function Students() {
   }
 
   const handleConfirmDelete = async () => {
-    if (!selectedStudent || deleteBlockedReason) return
+    if (!selectedStudent || deleteBlockedReason || isDeleting) return
+    setIsDeleting(true)
     try {
       await academyService.deleteStudent(selectedStudent.id)
-      toast({ title: 'Aluno removido com sucesso' })
+      toast({
+        title: 'Aluno removido com sucesso',
+        description: `O registro de ${selectedStudent.name} foi excluído permanentemente.`,
+      })
       setDeleteConfirmOpen(false)
       setSelectedStudent(null)
-      loadData()
-    } catch (err) {
+      await loadData()
+    } catch (err: unknown) {
       console.error(err)
-      toast({ title: 'Erro ao remover aluno', variant: 'destructive' })
+      const msg = err instanceof Error ? err.message : 'Falha ao remover aluno'
+      toast({
+        title: 'Erro ao remover aluno',
+        description: msg,
+        variant: 'destructive',
+      })
+    } finally {
+      setIsDeleting(false)
     }
   }
 
-  // Filter students by name, email, CPF or guardian info
+  // Filter students by status and by search term (name, email, CPF or guardian info)
   const filteredStudents = useMemo(() => {
     const q = searchTerm.toLowerCase().trim()
-    if (!q) return students
 
     return students.filter((s) => {
+      // Status filter
+      if (statusFilter === 'ativo' && s.status !== 'ativo') return false
+      if (statusFilter === 'inativo' && s.status === 'ativo') return false
+
+      if (!q) return true
+
       const nameMatch = s.name.toLowerCase().includes(q)
       const emailMatch = s.email && s.email.toLowerCase().includes(q)
       const cpfMatch = s.cpf && s.cpf.includes(q)
@@ -267,12 +289,46 @@ export default function Students() {
       const guardianCpfMatch = s.guardian_cpf && s.guardian_cpf.includes(q)
       return nameMatch || emailMatch || cpfMatch || guardianMatch || guardianCpfMatch
     })
-  }, [students, searchTerm])
+  }, [students, searchTerm, statusFilter])
 
   // Family groups based on filtered students
   const familyGroups = useMemo(() => {
     return groupStudentsByGuardian(filteredStudents, plans)
   }, [filteredStudents, plans])
+
+  // Class groups based on filtered students and enrollments
+  const classGroups = useMemo(() => {
+    const studentMap = new Map<string, StudentRecord>()
+    filteredStudents.forEach((s) => studentMap.set(s.id, s))
+
+    // Map each class to its enrolled students (from the filtered pool)
+    const grouped: {
+      cls: ClassRecord
+      students: StudentRecord[]
+    }[] = classes.map((c) => {
+      const classEnrollments = enrollments.filter(
+        (e) => e.class_id === c.id && studentMap.has(e.student_id),
+      )
+      const classStudents = classEnrollments
+        .map((e) => studentMap.get(e.student_id)!)
+        // remove potential duplicates if a student has double enrollment in same class
+        .filter((st, idx, arr) => arr.findIndex((x) => x.id === st.id) === idx)
+
+      return {
+        cls: c,
+        students: classStudents,
+      }
+    })
+
+    // Also collect students without any class enrollment
+    const enrolledStudentIds = new Set(enrollments.map((e) => e.student_id))
+    const unassignedStudents = filteredStudents.filter((s) => !enrolledStudentIds.has(s.id))
+
+    return {
+      classes: grouped,
+      unassigned: unassignedStudents,
+    }
+  }, [filteredStudents, classes, enrollments])
 
   // Pagination
   const totalPages = Math.ceil(filteredStudents.length / pageSize) || 1
@@ -326,7 +382,7 @@ export default function Students() {
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          {/* View Toggle: Lista vs Por Família */}
+          {/* View Toggle: Lista vs Por Família vs Por Turma */}
           <div className="flex items-center p-1 bg-slate-100 rounded-xl border border-slate-200">
             <button
               type="button"
@@ -350,7 +406,74 @@ export default function Students() {
               }`}
             >
               <Users className="w-3.5 h-3.5" />
-              <span>Por Família / Responsável</span>
+              <span>Por Família</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('turma')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition ${
+                viewMode === 'turma'
+                  ? 'bg-[#0F1B3D] text-white shadow-xs'
+                  : 'text-[#6C757D] hover:text-[#0F1B3D]'
+              }`}
+            >
+              <Layers className="w-3.5 h-3.5" />
+              <span>Por Turma</span>
+            </button>
+          </div>
+
+          {/* Status Filter Toggle: Ativos vs Inativos vs Todos */}
+          <div className="flex items-center p-1 bg-slate-100 rounded-xl border border-slate-200">
+            <button
+              type="button"
+              onClick={() => {
+                setStatusFilter('ativo')
+                setCurrentPage(1)
+              }}
+              className={`flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg transition ${
+                statusFilter === 'ativo'
+                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-xs'
+                  : 'text-[#6C757D] hover:text-[#0F1B3D]'
+              }`}
+            >
+              <span>Ativos</span>
+              <span className="text-[10px] px-1 py-0.2 rounded-full bg-emerald-100/70 text-emerald-800">
+                {students.filter((s) => s.status === 'ativo').length}
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setStatusFilter('inativo')
+                setCurrentPage(1)
+              }}
+              className={`flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg transition ${
+                statusFilter === 'inativo'
+                  ? 'bg-red-50 text-red-600 border border-red-200 shadow-xs'
+                  : 'text-[#6C757D] hover:text-[#0F1B3D]'
+              }`}
+            >
+              <span>Inativos</span>
+              <span className="text-[10px] px-1 py-0.2 rounded-full bg-red-100/70 text-red-700">
+                {students.filter((s) => s.status !== 'ativo').length}
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setStatusFilter('todos')
+                setCurrentPage(1)
+              }}
+              className={`flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg transition ${
+                statusFilter === 'todos'
+                  ? 'bg-white text-[#0F1B3D] shadow-xs'
+                  : 'text-[#6C757D] hover:text-[#0F1B3D]'
+              }`}
+            >
+              <span>Todos</span>
+              <span className="text-[10px] px-1 py-0.2 rounded-full bg-slate-200 text-slate-700">
+                {students.length}
+              </span>
             </button>
           </div>
 
@@ -376,7 +499,7 @@ export default function Students() {
         </div>
       </div>
 
-      {viewMode === 'familia' ? (
+      {viewMode === 'familia' && (
         /* ============================================================== */
         /* FAMILY VIEW (Agrupamento por Responsável)                      */
         /* ============================================================== */
@@ -585,7 +708,9 @@ export default function Students() {
             })
           )}
         </div>
-      ) : (
+      )}
+
+      {viewMode === 'lista' && (
         /* ============================================================== */
         /* STANDARD LIST VIEW (com avatares 2x maiores)                   */
         /* ============================================================== */
@@ -765,6 +890,321 @@ export default function Students() {
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {viewMode === 'turma' && (
+        /* ============================================================== */
+        /* CLASS VIEW (Agrupamento por Turma)                             */
+        /* ============================================================== */
+        <div className="space-y-4">
+          <div className="flex items-center justify-between bg-blue-50/70 border border-blue-200/80 rounded-xl p-3.5 text-xs text-[#0F1B3D]">
+            <div className="flex items-center gap-2">
+              <GraduationCap className="w-4 h-4 text-[#17A2B8]" />
+              <span>
+                <strong>Quadro de Alunos por Turma:</strong> agrupamento dos alunos com base em suas
+                matrículas ativas.
+              </span>
+            </div>
+            <span className="font-semibold text-slate-600">
+              {classes.length} {classes.length === 1 ? 'turma cadastrada' : 'turmas cadastradas'}
+            </span>
+          </div>
+
+          {classGroups.classes.map(({ cls, students: classStudents }) => {
+            return (
+              <Card
+                key={cls.id}
+                className="bg-white border-[#E0E4EA] hover:border-slate-300 transition-all rounded-xl overflow-hidden shadow-xs"
+              >
+                {/* Class Header */}
+                <div className="p-4 bg-[#F8FAFC] border-b border-[#E0E4EA] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm shadow-xs ${
+                        cls.type === 'natacao'
+                          ? 'bg-[#0F1B3D] text-[#D4AF37]'
+                          : 'bg-[#17A2B8] text-white'
+                      }`}
+                    >
+                      {cls.type === 'natacao' ? 'NAT' : 'HID'}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-bold text-[#0F1B3D] text-sm sm:text-base">
+                          {cls.name}
+                        </h3>
+                        <Badge
+                          className={`text-[10px] font-bold ${
+                            classStudents.length > 0
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                              : 'bg-slate-100 text-slate-500 border-slate-200'
+                          }`}
+                        >
+                          {classStudents.length}{' '}
+                          {classStudents.length === 1 ? 'aluno matriculado' : 'alunos matriculados'}
+                        </Badge>
+                      </div>
+                      <p className="text-[11px] text-[#6C757D] flex flex-wrap items-center gap-3 mt-0.5">
+                        <span className="flex items-center gap-1">
+                          <Clock className="w-3 h-3 text-[#17A2B8]" />
+                          {cls.schedule_time || 'Horário a definir'}
+                        </span>
+                        {cls.schedule_days && cls.schedule_days.length > 0 && (
+                          <span className="flex items-center gap-1">
+                            <CalendarIcon className="w-3 h-3 text-[#17A2B8]" />
+                            {cls.schedule_days.join(', ')}
+                          </span>
+                        )}
+                        {cls.capacity ? (
+                          <span>
+                            Capacidade: <strong>{cls.capacity}</strong> vagas
+                          </span>
+                        ) : null}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => navigate('/turmas')}
+                      className="text-xs h-8 border-slate-300 text-slate-700 hover:bg-slate-50"
+                    >
+                      Gerenciar Turma
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Class Students List */}
+                <div className="divide-y divide-[#E0E4EA]">
+                  {classStudents.length === 0 ? (
+                    <div className="p-6 text-center text-[#6C757D] text-xs">
+                      Nenhum aluno matriculado nesta turma correspondente ao filtro.
+                    </div>
+                  ) : (
+                    classStudents.map((st) => {
+                      const plan = plans.find((p) => p.id === st.plan_id)
+                      const lastPay = latestPaymentMap[st.id]
+                      const photoUrl = getStudentPhotoUrl(st)
+
+                      return (
+                        <div
+                          key={st.id}
+                          className="p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 hover:bg-slate-50/80 transition"
+                        >
+                          <div className="flex items-center gap-3">
+                            <Avatar className="w-16 h-16 border-2 border-slate-200 bg-slate-100 shadow-xs">
+                              {photoUrl ? (
+                                <AvatarImage
+                                  src={photoUrl}
+                                  alt={st.name}
+                                  className="object-cover"
+                                />
+                              ) : null}
+                              <AvatarFallback className="bg-[#0F1B3D] text-white font-bold text-base">
+                                {st.name.slice(0, 2).toUpperCase()}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div>
+                              <p
+                                onClick={() => navigate(`/alunos/${st.id}`)}
+                                className="font-bold text-[#1E2A3A] hover:text-[#17A2B8] cursor-pointer transition text-sm"
+                              >
+                                {st.name}
+                              </p>
+                              <div className="flex flex-wrap items-center gap-2 mt-0.5">
+                                <Badge className="bg-[#0F1B3D]/5 text-[#0F1B3D] border-[#0F1B3D]/20 text-[10px]">
+                                  {plan?.name || 'Plano Padrão'}
+                                </Badge>
+                                <Badge
+                                  className={
+                                    st.status === 'ativo'
+                                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px]'
+                                      : 'bg-red-50 text-red-600 border-red-200 text-[10px]'
+                                  }
+                                >
+                                  {st.status === 'ativo' ? 'Ativo' : 'Inativo'}
+                                </Badge>
+                                {st.guardian_name && (
+                                  <span className="text-[11px] text-[#6C757D]">
+                                    Resp: <strong>{st.guardian_name}</strong>
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-between md:justify-end gap-6 pt-2 md:pt-0 border-t md:border-t-0 border-slate-100">
+                            <div className="text-left md:text-right text-xs">
+                              <span className="text-[10px] text-[#6C757D] uppercase block">
+                                Mensalidade
+                              </span>
+                              <span className="font-bold font-mono text-[#0F1B3D]">
+                                R$ {(st.monthly_fee || plan?.monthly_price || 110).toFixed(2)}
+                              </span>
+                            </div>
+
+                            <div className="text-left md:text-right text-xs">
+                              <span className="text-[10px] text-[#6C757D] uppercase block">
+                                Último Pagto
+                              </span>
+                              <span className="text-[#6C757D]">
+                                {lastPay ? new Date(lastPay).toLocaleDateString('pt-BR') : '—'}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => navigate(`/alunos/${st.id}`)}
+                                className="p-1.5 rounded-lg text-slate-500 hover:text-[#0F1B3D] hover:bg-slate-100 transition"
+                                title="Visualizar detalhes"
+                              >
+                                <Eye className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => navigate(`/cobrancas?aluno=${st.id}`)}
+                                className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 transition"
+                                title="Registrar pagamento / cobrança"
+                              >
+                                <DollarSign className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => handleOpenEditModal(st)}
+                                className="p-1.5 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-slate-100 transition"
+                                title="Editar aluno"
+                              >
+                                <Edit2 className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => handleRequestDelete(st)}
+                                className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition"
+                                title="Remover aluno"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })
+                  )}
+                </div>
+              </Card>
+            )
+          })}
+
+          {/* Unassigned Students Section */}
+          {classGroups.unassigned.length > 0 && (
+            <Card className="bg-white border-amber-200 rounded-xl overflow-hidden shadow-xs">
+              <div className="p-4 bg-amber-50/70 border-b border-amber-200 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Badge className="bg-amber-100 text-amber-800 border-amber-300 font-bold text-xs">
+                    Sem Turma ({classGroups.unassigned.length})
+                  </Badge>
+                  <span className="text-xs text-amber-900 font-medium">
+                    Alunos cadastrados mas ainda não vinculados a nenhuma turma
+                  </span>
+                </div>
+              </div>
+
+              <div className="divide-y divide-[#E0E4EA]">
+                {classGroups.unassigned.map((st) => {
+                  const plan = plans.find((p) => p.id === st.plan_id)
+                  const lastPay = latestPaymentMap[st.id]
+                  const photoUrl = getStudentPhotoUrl(st)
+
+                  return (
+                    <div
+                      key={st.id}
+                      className="p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 hover:bg-slate-50/80 transition"
+                    >
+                      <div className="flex items-center gap-3">
+                        <Avatar className="w-16 h-16 border-2 border-slate-200 bg-slate-100 shadow-xs">
+                          {photoUrl ? (
+                            <AvatarImage src={photoUrl} alt={st.name} className="object-cover" />
+                          ) : null}
+                          <AvatarFallback className="bg-[#0F1B3D] text-white font-bold text-base">
+                            {st.name.slice(0, 2).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div>
+                          <p
+                            onClick={() => navigate(`/alunos/${st.id}`)}
+                            className="font-bold text-[#1E2A3A] hover:text-[#17A2B8] cursor-pointer transition text-sm"
+                          >
+                            {st.name}
+                          </p>
+                          <div className="flex flex-wrap items-center gap-2 mt-0.5">
+                            <Badge className="bg-[#0F1B3D]/5 text-[#0F1B3D] border-[#0F1B3D]/20 text-[10px]">
+                              {plan?.name || 'Plano Padrão'}
+                            </Badge>
+                            <Badge
+                              className={
+                                st.status === 'ativo'
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px]'
+                                  : 'bg-red-50 text-red-600 border-red-200 text-[10px]'
+                              }
+                            >
+                              {st.status === 'ativo' ? 'Ativo' : 'Inativo'}
+                            </Badge>
+                            <span className="text-[11px] text-amber-700 font-medium italic">
+                              Não matriculado em turma
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between md:justify-end gap-6 pt-2 md:pt-0 border-t md:border-t-0 border-slate-100">
+                        <div className="text-left md:text-right text-xs">
+                          <span className="text-[10px] text-[#6C757D] uppercase block">
+                            Mensalidade
+                          </span>
+                          <span className="font-bold font-mono text-[#0F1B3D]">
+                            R$ {(st.monthly_fee || plan?.monthly_price || 110).toFixed(2)}
+                          </span>
+                        </div>
+
+                        <div className="text-left md:text-right text-xs">
+                          <span className="text-[10px] text-[#6C757D] uppercase block">
+                            Último Pagto
+                          </span>
+                          <span className="text-[#6C757D]">
+                            {lastPay ? new Date(lastPay).toLocaleDateString('pt-BR') : '—'}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => navigate(`/alunos/${st.id}`)}
+                            className="p-1.5 rounded-lg text-slate-500 hover:text-[#0F1B3D] hover:bg-slate-100 transition"
+                            title="Visualizar detalhes"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleOpenEditModal(st)}
+                            className="p-1.5 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-slate-100 transition"
+                            title="Matricular em turma / Editar"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleRequestDelete(st)}
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition"
+                            title="Remover aluno"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </Card>
+          )}
+        </div>
       )}
 
       {/* ============================================================== */}
@@ -994,17 +1434,30 @@ export default function Students() {
           </DialogHeader>
 
           <DialogFooter className="gap-2">
-            <Button variant="outline" size="sm" onClick={() => setDeleteConfirmOpen(false)}>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={isDeleting}
+              onClick={() => setDeleteConfirmOpen(false)}
+            >
               Fechar
             </Button>
             {!deleteBlockedReason && (
               <Button
                 variant="destructive"
                 size="sm"
+                disabled={isDeleting}
                 onClick={handleConfirmDelete}
-                className="font-bold"
+                className="font-bold flex items-center gap-1.5"
               >
-                Confirmar Exclusão
+                {isDeleting ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    Excluindo...
+                  </>
+                ) : (
+                  'Confirmar Exclusão'
+                )}
               </Button>
             )}
           </DialogFooter>

@@ -73,6 +73,21 @@ export const academyService = {
     return pb.collection('students').update<StudentRecord>(id, formData)
   },
   async deleteStudent(id: string): Promise<boolean> {
+    // Exclui matrículas vinculadas primeiro se houver
+    try {
+      const enrollments = await pb.collection('enrollments').getFullList<EnrollmentRecord>({
+        filter: `student_id = "${id}"`,
+      })
+      for (const enr of enrollments) {
+        await pb
+          .collection('enrollments')
+          .delete(enr.id)
+          .catch(() => {})
+      }
+    } catch {
+      /* intentionally ignored */
+    }
+
     return pb.collection('students').delete(id)
   },
 
