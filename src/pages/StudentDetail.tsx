@@ -15,7 +15,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { academyService } from '@/services/academy'
 import type {
@@ -156,6 +156,9 @@ export default function StudentDetail() {
           <div className="flex flex-col sm:flex-row items-start sm:items-end justify-between gap-4 -mt-12 mb-4">
             <div className="flex items-end gap-4">
               <Avatar className="w-24 h-24 border-4 border-white shadow-lg">
+                {student.photo ? (
+                  <AvatarImage src={student.photo} alt={student.name} className="object-cover" />
+                ) : null}
                 <AvatarFallback className="bg-[#0F1B3D] text-[#D4AF37] text-2xl font-black">
                   {student.name.slice(0, 2).toUpperCase()}
                 </AvatarFallback>
@@ -172,11 +175,44 @@ export default function StudentDetail() {
                   >
                     {student.status === 'ativo' ? 'Ativo' : 'Inativo'}
                   </Badge>
+                  {student.raw_situation && (
+                    <Badge
+                      variant="outline"
+                      className="text-[10px] bg-slate-50 text-slate-700 border-slate-300"
+                    >
+                      Situação: {student.raw_situation}
+                    </Badge>
+                  )}
+                  {student.fee_suspended && (
+                    <Badge
+                      variant="outline"
+                      className="text-[10px] bg-amber-50 text-amber-700 border-amber-300"
+                    >
+                      Mensalidade Trancada
+                    </Badge>
+                  )}
                 </div>
                 <p className="text-xs text-[#6C757D] font-medium mt-0.5">
-                  Plano Vigente:{' '}
-                  <strong className="text-[#0F1B3D]">{plan?.name || 'Padrão'}</strong> (R${' '}
-                  {(plan?.monthly_price || 160).toFixed(2)}/mês)
+                  {student.discounted_fee ? (
+                    <>
+                      Mensalidade com Desconto:{' '}
+                      <strong className="text-emerald-700 font-bold">
+                        R$ {student.discounted_fee.toFixed(2)}
+                      </strong>{' '}
+                      {student.monthly_fee && student.monthly_fee > student.discounted_fee && (
+                        <span className="line-through text-slate-400 text-[11px] ml-1">
+                          (R$ {student.monthly_fee.toFixed(2)})
+                        </span>
+                      )}
+                      {student.due_day ? ` • Vencimento dia ${student.due_day}` : ''}
+                    </>
+                  ) : (
+                    <>
+                      Plano Vigente:{' '}
+                      <strong className="text-[#0F1B3D]">{plan?.name || 'Padrão'}</strong> (R${' '}
+                      {(plan?.monthly_price || 160).toFixed(2)}/mês)
+                    </>
+                  )}
                 </p>
               </div>
             </div>
@@ -185,15 +221,17 @@ export default function StudentDetail() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 border-t border-slate-100 text-xs text-[#6C757D]">
             <div className="flex items-center gap-2">
               <Mail className="w-4 h-4 text-[#17A2B8]" />
-              <span>{student.email || 'E-mail não cadastrado'}</span>
+              <span>{student.email || student.guardian_email || 'E-mail não cadastrado'}</span>
             </div>
             <div className="flex items-center gap-2">
               <Phone className="w-4 h-4 text-[#17A2B8]" />
-              <span>{student.phone || 'Sem telefone'}</span>
+              <span>
+                {student.whatsapp || student.phone || student.guardian_phone || 'Sem telefone'}
+              </span>
             </div>
             <div className="flex items-center gap-2">
               <FileText className="w-4 h-4 text-[#17A2B8]" />
-              <span>CPF: {student.cpf || 'Não informado'}</span>
+              <span>CPF: {student.cpf || student.guardian_cpf || 'Não informado'}</span>
             </div>
           </div>
         </CardContent>
@@ -259,8 +297,10 @@ export default function StudentDetail() {
           </div>
 
           <Card className="bg-white border-[#E0E4EA] rounded-xl p-6 shadow-xs">
-            <h3 className="text-sm font-bold text-[#0F1B3D] mb-4">Informações Complementares</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+            <h3 className="text-sm font-bold text-[#0F1B3D] mb-4">
+              Informações Complementares &amp; Responsável
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-xs">
               <div>
                 <span className="text-[#6C757D] block mb-1">Data de Nascimento</span>
                 <p className="font-semibold text-[#1E2A3A]">
@@ -275,6 +315,45 @@ export default function StudentDetail() {
                   {student.address || 'Não cadastrado'}
                 </p>
               </div>
+              {student.guardian_name && (
+                <div>
+                  <span className="text-[#6C757D] block mb-1">Responsável Legal</span>
+                  <p className="font-semibold text-[#1E2A3A]">{student.guardian_name}</p>
+                  {student.guardian_cpf && (
+                    <span className="text-[11px] text-slate-500">CPF: {student.guardian_cpf}</span>
+                  )}
+                </div>
+              )}
+              {student.whatsapp && (
+                <div>
+                  <span className="text-[#6C757D] block mb-1">WhatsApp</span>
+                  <p className="font-semibold text-[#1E2A3A]">{student.whatsapp}</p>
+                </div>
+              )}
+              {student.atestado_validade && (
+                <div>
+                  <span className="text-[#6C757D] block mb-1">Validade do Atestado</span>
+                  <p className="font-semibold text-[#1E2A3A]">
+                    {new Date(student.atestado_validade).toLocaleDateString('pt-BR')}
+                  </p>
+                </div>
+              )}
+              {student.trancamento_validade && (
+                <div>
+                  <span className="text-[#6C757D] block mb-1">Validade do Trancamento</span>
+                  <p className="font-semibold text-[#1E2A3A]">
+                    {new Date(student.trancamento_validade).toLocaleDateString('pt-BR')}
+                  </p>
+                </div>
+              )}
+              {student.bubble_id && (
+                <div>
+                  <span className="text-[#6C757D] block mb-1">Bubble ID</span>
+                  <p className="font-mono text-[11px] text-slate-500 truncate">
+                    {student.bubble_id}
+                  </p>
+                </div>
+              )}
             </div>
           </Card>
         </TabsContent>

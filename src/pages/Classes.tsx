@@ -84,7 +84,7 @@ export default function Classes() {
 
   // Form state
   const [formName, setFormName] = useState('')
-  const [formType, setFormType] = useState<'natacao' | 'hidroginastica'>('natacao')
+  const [formType, setFormType] = useState<'natacao' | 'hidroginastica' | 'funcional'>('natacao')
   const [formInstructorId, setFormInstructorId] = useState('')
   const [formScheduleDays, setFormScheduleDays] = useState<string[]>(['seg', 'qua', 'sex'])
   const [formScheduleTime, setFormScheduleTime] = useState('08:00')

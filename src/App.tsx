@@ -13,6 +13,7 @@ import Finance from '@/pages/Finance'
 import Charges from '@/pages/Charges'
 import Reports from '@/pages/Reports'
 import Settings from '@/pages/Settings'
+import Import from '@/pages/Import'
 
 // Auth Pages
 import Login from '@/pages/auth/Login'
@@ -52,6 +53,7 @@ export default function App() {
             <Route path="/financeiro" element={<Finance />} />
             <Route path="/cobrancas" element={<Charges />} />
             <Route path="/relatorios" element={<Reports />} />
+            <Route path="/importar" element={<Import />} />
             <Route path="/configuracoes" element={<Settings />} />
           </Route>
 

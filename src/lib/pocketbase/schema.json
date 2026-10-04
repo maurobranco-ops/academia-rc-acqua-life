@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-04T00:56:12.594Z",
+  "generatedAt": "2026-10-04T01:42:09.495Z",
   "collections": [
     {
       "name": "users",
@@ -205,7 +205,7 @@
         {
           "name": "plan_id",
           "type": "relation",
-          "required": true,
+          "required": false,
           "system": false,
           "collectionRef": "plans"
         },
@@ -229,9 +229,102 @@
           "required": false,
           "system": false,
           "autodateTriggers": ["onCreate", "onUpdate"]
+        },
+        {
+          "name": "bubble_id",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "photo",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "guardian_name",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "guardian_cpf",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "guardian_email",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "guardian_phone",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "whatsapp",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "monthly_fee",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "discounted_fee",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "due_day",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "situation",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "atestado_validade",
+          "type": "date",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "trancamento_validade",
+          "type": "date",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "fee_suspended",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "raw_situation",
+          "type": "text",
+          "required": false,
+          "system": false
         }
       ],
-      "indexes": ["CREATE UNIQUE INDEX idx_students_cpf ON students (cpf) WHERE cpf != ''"]
+      "indexes": [
+        "CREATE UNIQUE INDEX idx_students_cpf ON students (cpf) WHERE cpf != ''",
+        "CREATE UNIQUE INDEX `idx_students_bubble_id` ON `students` (bubble_id) WHERE bubble_id != ''"
+      ]
     },
     {
       "name": "classes",
@@ -255,7 +348,7 @@
           "type": "select",
           "required": true,
           "system": false,
-          "selectValues": ["natacao", "hidroginastica"]
+          "selectValues": ["natacao", "hidroginastica", "funcional"]
         },
         {
           "name": "instructor_id",

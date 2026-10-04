@@ -29,8 +29,23 @@ export interface StudentRecord extends RecordModel {
   cpf?: string
   birth_date?: string
   address?: string
-  plan_id: string
+  plan_id?: string
   status: 'ativo' | 'inativo'
+  bubble_id?: string
+  photo?: string
+  guardian_name?: string
+  guardian_cpf?: string
+  guardian_email?: string
+  guardian_phone?: string
+  whatsapp?: string
+  monthly_fee?: number
+  discounted_fee?: number
+  due_day?: number
+  situation?: string
+  atestado_validade?: string
+  trancamento_validade?: string
+  fee_suspended?: boolean
+  raw_situation?: string
   expand?: {
     plan_id?: PlanRecord
   }
@@ -38,7 +53,7 @@ export interface StudentRecord extends RecordModel {
 
 export interface ClassRecord extends RecordModel {
   name: string
-  type: 'natacao' | 'hidroginastica'
+  type: 'natacao' | 'hidroginastica' | 'funcional'
   instructor_id?: string
   schedule_days: string[]
   schedule_time: string

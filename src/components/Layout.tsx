@@ -8,6 +8,7 @@ import {
   CreditCard,
   FileBarChart2,
   Settings as SettingsIcon,
+  UploadCloud,
   LogOut,
   Waves,
   Menu,
@@ -41,6 +42,7 @@ const navItems = [
   { label: 'Financeiro', icon: DollarSign, path: '/financeiro' },
   { label: 'Cobranças', icon: CreditCard, path: '/cobrancas' },
   { label: 'Relatórios', icon: FileBarChart2, path: '/relatorios' },
+  { label: 'Importar', icon: UploadCloud, path: '/importar' },
   { label: 'Configurações', icon: SettingsIcon, path: '/configuracoes' },
 ]
 

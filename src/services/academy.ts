@@ -90,11 +90,15 @@ export const academyService = {
       expand: 'student_id,class_id,class_id.instructor_id,student_id.plan_id',
     })
   },
-  async createEnrollment(studentId: string, classId: string): Promise<EnrollmentRecord> {
+  async createEnrollment(
+    studentId: string,
+    classId: string,
+    enrollmentDate?: string,
+  ): Promise<EnrollmentRecord> {
     return pb.collection('enrollments').create<EnrollmentRecord>({
       student_id: studentId,
       class_id: classId,
-      enrollment_date: new Date().toISOString(),
+      enrollment_date: enrollmentDate || new Date().toISOString(),
       is_active: true,
     })
   },
