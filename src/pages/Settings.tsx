@@ -166,7 +166,7 @@ export default function Settings() {
 
   const handleSavePlan = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!planName || !planPrice) return
+    if (!planName.trim()) return
 
     try {
       if (editingPlan) {
@@ -707,13 +707,17 @@ export default function Settings() {
               <div className="space-y-1">
                 <Label className="font-semibold text-[#1E2A3A]">Valor Mensal (R$)</Label>
                 <Input
-                  required
                   type="number"
                   step="0.01"
+                  min="0"
+                  placeholder="0.00 para plano Isento"
                   value={planPrice}
                   onChange={(e) => setPlanPrice(e.target.value)}
                 />
-              </div>
+                <p className="text-[11px] text-[#6C757D]">
+                  Para plano Isento (sem cobrança), informe 0.
+                </p>
+              </div>{' '}
               <div className="space-y-1">
                 <Label className="font-semibold text-[#1E2A3A]">Descrição</Label>
                 <Input

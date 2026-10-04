@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-04T19:33:42.632Z",
+  "generatedAt": "2026-10-04T20:14:43.017Z",
   "collections": [
     {
       "name": "users",
@@ -64,7 +64,7 @@
         {
           "name": "monthly_price",
           "type": "number",
-          "required": true,
+          "required": false,
           "system": false
         },
         {

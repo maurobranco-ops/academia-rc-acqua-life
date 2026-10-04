@@ -125,8 +125,16 @@ export default function Students() {
   useEffect(() => {
     if (searchParams.get('novo') === '1') {
       handleOpenCreateModal()
+    } else {
+      const editId = searchParams.get('editar')
+      if (editId && students.length > 0) {
+        const target = students.find((s) => s.id === editId)
+        if (target) {
+          handleOpenEditModal(target)
+        }
+      }
     }
-  }, [searchParams, plans])
+  }, [searchParams, plans, students])
 
   const handleOpenCreateModal = () => {
     setSelectedStudent(null)
@@ -215,7 +223,13 @@ export default function Students() {
       }
 
       setStudentModalOpen(false)
-      loadData()
+      await loadData()
+
+      const editId = searchParams.get('editar')
+      const origem = searchParams.get('origem')
+      if (origem === 'detalhe' && (editId || selectedStudent?.id)) {
+        navigate(`/alunos/${editId || selectedStudent?.id}`)
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Falha ao salvar aluno'
       toast({
@@ -1210,7 +1224,19 @@ export default function Students() {
       {/* ============================================================== */}
       {/* New / Edit Student Modal */}
       {/* ============================================================== */}
-      <Dialog open={studentModalOpen} onOpenChange={setStudentModalOpen}>
+      <Dialog
+        open={studentModalOpen}
+        onOpenChange={(open) => {
+          setStudentModalOpen(open)
+          if (!open) {
+            const editId = searchParams.get('editar')
+            const origem = searchParams.get('origem')
+            if (origem === 'detalhe' && (editId || selectedStudent?.id)) {
+              navigate(`/alunos/${editId || selectedStudent?.id}`)
+            }
+          }
+        }}
+      >
         <DialogContent className="sm:max-w-[550px] bg-white rounded-2xl">
           <form onSubmit={handleSaveStudent}>
             <DialogHeader>
@@ -1352,11 +1378,16 @@ export default function Students() {
                       <SelectValue placeholder="Selecione um plano" />
                     </SelectTrigger>
                     <SelectContent>
-                      {plans.map((p) => (
-                        <SelectItem key={p.id} value={p.id}>
-                          {p.name} (R$ {p.monthly_price.toFixed(2)})
-                        </SelectItem>
-                      ))}
+                      {plans
+                        .filter((p) => p.is_active !== false)
+                        .map((p) => (
+                          <SelectItem key={p.id} value={p.id}>
+                            {p.name}{' '}
+                            {p.monthly_price === 0
+                              ? '(Sem custo)'
+                              : `(R$ ${p.monthly_price.toFixed(2)})`}
+                          </SelectItem>
+                        ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -1396,7 +1427,18 @@ export default function Students() {
             </div>
 
             <DialogFooter className="gap-2">
-              <Button type="button" variant="outline" onClick={() => setStudentModalOpen(false)}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setStudentModalOpen(false)
+                  const editId = searchParams.get('editar')
+                  const origem = searchParams.get('origem')
+                  if (origem === 'detalhe' && (editId || selectedStudent?.id)) {
+                    navigate(`/alunos/${editId || selectedStudent?.id}`)
+                  }
+                }}
+              >
                 Cancelar
               </Button>
               <Button

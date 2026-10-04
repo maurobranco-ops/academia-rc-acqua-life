@@ -100,6 +100,14 @@ export function groupStudentsByGuardian(
 
     for (const st of group.students) {
       const plan = st.plan_id ? planMap.get(st.plan_id) : undefined
+      const isIsento =
+        (plan && (plan.monthly_price === 0 || plan.name.toLowerCase().includes('isento'))) ||
+        st.situation === 'isento'
+
+      if (isIsento) {
+        continue
+      }
+
       const isFamilyPlan =
         (plan && plan.name.toLowerCase().includes('fam')) ||
         st.monthly_fee === 100 ||
@@ -107,9 +115,13 @@ export function groupStudentsByGuardian(
 
       // Valor cheio do plano
       const baseFee =
-        st.monthly_fee && st.monthly_fee > 0
+        typeof st.monthly_fee === 'number' && st.monthly_fee > 0
           ? st.monthly_fee
-          : plan?.monthly_price || (isFamilyPlan ? 100 : 110)
+          : typeof plan?.monthly_price === 'number'
+            ? plan.monthly_price
+            : isFamilyPlan
+              ? 100
+              : 110
 
       totalFull += baseFee
 
@@ -164,11 +176,30 @@ export function calculateStudentCharge(
     familyMembers.length > 1 ||
     student.monthly_fee === 100
 
+  // Se for plano Isento (monthly_price = 0 ou nome Isento), mensalidade é 0
+  const isIsento =
+    (plan && (plan.monthly_price === 0 || plan.name.toLowerCase().includes('isento'))) ||
+    student.situation === 'isento'
+
+  if (isIsento) {
+    return {
+      baseAmount: 0,
+      discountAmount: 0,
+      finalAmount: 0,
+      isFamilyPlan: false,
+      paidOnTime: true,
+    }
+  }
+
   // Valor cheio
   const baseAmount =
-    student.monthly_fee && student.monthly_fee > 0
+    typeof student.monthly_fee === 'number' && student.monthly_fee > 0
       ? student.monthly_fee
-      : plan?.monthly_price || (isFamily ? 100 : 110)
+      : typeof plan?.monthly_price === 'number'
+        ? plan.monthly_price
+        : isFamily
+          ? 100
+          : 110
 
   // Desconto família de R$ 10,00 por aluno
   const discountAmount = isFamily ? 10 : 0

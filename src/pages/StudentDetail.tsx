@@ -14,6 +14,7 @@ import {
   Camera,
   Upload,
   Sparkles,
+  Edit,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -178,14 +179,25 @@ export default function StudentDetail() {
           <ArrowLeft className="w-4 h-4 mr-1.5" /> Voltar para Alunos
         </Button>
 
-        <Button
-          onClick={() =>
-            navigate(`/cobrancas?novo=1&aluno=${student.id}&valor=${plan?.monthly_price || 160}`)
-          }
-          className="bg-[#D4AF37] hover:bg-[#B8953A] text-[#0F1B3D] font-bold text-xs h-9 rounded-xl flex items-center gap-1.5 shadow-sm"
-        >
-          <CreditCard className="w-4 h-4" /> Emitir Cobrança Infinitepay
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => navigate(`/alunos?editar=${student.id}&origem=detalhe`)}
+            className="border-[#0F1B3D] text-[#0F1B3D] hover:bg-slate-100 font-bold text-xs h-9 rounded-xl flex items-center gap-1.5 shadow-xs"
+          >
+            <Edit className="w-4 h-4 text-[#0F1B3D]" /> Editar Aluno
+          </Button>
+
+          <Button
+            onClick={() =>
+              navigate(`/cobrancas?novo=1&aluno=${student.id}&valor=${plan?.monthly_price || 0}`)
+            }
+            className="bg-[#D4AF37] hover:bg-[#B8953A] text-[#0F1B3D] font-bold text-xs h-9 rounded-xl flex items-center gap-1.5 shadow-sm"
+          >
+            <CreditCard className="w-4 h-4" /> Emitir Cobrança Infinitepay
+          </Button>
+        </div>
       </div>
 
       {/* Header Profile Card */}
@@ -295,8 +307,14 @@ export default function StudentDetail() {
                   ) : (
                     <>
                       Plano Vigente:{' '}
-                      <strong className="text-[#0F1B3D]">{plan?.name || 'Padrão'}</strong> (R${' '}
-                      {(plan?.monthly_price || 160).toFixed(2)}/mês)
+                      <strong className="text-[#0F1B3D]">{plan?.name || 'Padrão'}</strong>
+                      {plan?.monthly_price === 0 ? (
+                        <span className="text-emerald-700 font-bold ml-1">
+                          (Isento de mensalidade)
+                        </span>
+                      ) : (
+                        ` (R$ ${(plan?.monthly_price ?? 110).toFixed(2)}/mês)`
+                      )}
                     </>
                   )}
                 </p>
