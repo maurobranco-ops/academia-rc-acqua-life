@@ -404,7 +404,7 @@ export default function Students() {
                             className={
                               st.status === 'ativo'
                                 ? 'bg-emerald-50 text-emerald-700 border-emerald-200 font-bold'
-                                : 'bg-slate-100 text-slate-500 border-slate-200'
+                                : 'bg-red-50 text-red-600 border-red-200'
                             }
                           >
                             {st.status === 'ativo' ? 'Ativo' : 'Inativo'}
