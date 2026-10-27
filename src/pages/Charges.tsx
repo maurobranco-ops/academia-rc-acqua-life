@@ -165,7 +165,7 @@ export default function Charges() {
 
     setSubmitting(true)
     try {
-      await academyService.createCharge({
+      const created = await academyService.createCharge({
         student_id: formStudentId,
         description: formDescription,
         amount: Number(formAmount),
@@ -177,14 +177,20 @@ export default function Charges() {
       })
 
       toast({
-        title: 'Cobrança Gerada!',
-        description: 'Link Infinitepay criado com sucesso.',
+        title: 'Cobrança Gerada com Sucesso!',
+        description: generateInfinitepayLink
+          ? `Link InfinitePay integrado pronto para pagamento (${created.infinipay_payment_id || 'ativo'}).`
+          : 'Cobrança cadastrada com sucesso.',
       })
       setNewModalOpen(false)
       loadData()
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Falha ao emitir cobrança'
-      toast({ title: 'Erro ao emitir cobrança', description: msg, variant: 'destructive' })
+      toast({
+        title: 'Erro ao emitir cobrança',
+        description: msg,
+        variant: 'destructive',
+      })
     } finally {
       setSubmitting(false)
     }

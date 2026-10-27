@@ -118,6 +118,15 @@ export default function Settings() {
   const handleSaveInfinitepay = async () => {
     try {
       await academyService.updateSetting('infinitepay_api_key', settings.infinitepay_api_key || '')
+      await academyService.updateSetting('infinitepay_handle', settings.infinitepay_handle || '')
+      await academyService.updateSetting(
+        'infinitepay_api_url',
+        settings.infinitepay_api_url || 'https://api.checkout.infinitepay.io',
+      )
+      await academyService.updateSetting(
+        'infinitepay_webhook_secret',
+        settings.infinitepay_webhook_secret || '',
+      )
       await academyService.updateSetting(
         'infinitepay_auto_send_link',
         settings.infinitepay_auto_send_link || 'false',
@@ -129,23 +138,30 @@ export default function Settings() {
     }
   }
 
-  const handleTestInfinitepayConnection = () => {
+  const handleTestInfinitepayConnection = async () => {
     setTestingConnection(true)
     setConnectionStatus('idle')
-    setTimeout(() => {
+    try {
+      const res = await academyService.testInfinitepayConnection({
+        apiKey: settings.infinitepay_api_key,
+        handle: settings.infinitepay_handle,
+      })
+      setConnectionStatus('success')
+      toast({
+        title: 'Conexão com InfinitePay validada!',
+        description: res.message || 'Servidor da InfinitePay respondeu com sucesso.',
+      })
+    } catch (err: unknown) {
+      setConnectionStatus('failed')
+      const msg = err instanceof Error ? err.message : 'Falha na conexão com a API da InfinitePay'
+      toast({
+        title: 'Falha na conexão',
+        description: msg,
+        variant: 'destructive',
+      })
+    } finally {
       setTestingConnection(false)
-      if (settings.infinitepay_api_key && settings.infinitepay_api_key.length > 5) {
-        setConnectionStatus('success')
-        toast({ title: 'Conexão com Infinitepay validada com sucesso!' })
-      } else {
-        setConnectionStatus('failed')
-        toast({
-          title: 'Falha na conexão',
-          description: 'Chave de API inválida ou não preenchida.',
-          variant: 'destructive',
-        })
-      }
-    }, 1200)
+    }
   }
 
   // Plan Management
@@ -273,7 +289,8 @@ export default function Settings() {
     )
   }
 
-  const webhookEndpoint = `${window.location.origin}/backend/v1/infinitepay/webhook`
+  const backendBase = import.meta.env.VITE_POCKETBASE_URL || window.location.origin
+  const webhookEndpoint = `${backendBase.replace(/\/+$/, '')}/backend/v1/infinitepay/webhook`
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -484,26 +501,82 @@ export default function Settings() {
               </div>
             </CardHeader>
             <CardContent className="space-y-4 text-xs">
-              <div className="space-y-1">
-                <Label className="font-semibold text-[#1E2A3A]">API Secret Key (Infinitepay)</Label>
-                <Input
-                  type="password"
-                  value={settings.infinitepay_api_key || ''}
-                  onChange={(e) => handleUpdateSetting('infinitepay_api_key', e.target.value)}
-                  placeholder="inf_live_..."
-                  className="font-mono focus-visible:ring-[#D4AF37]"
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <Label className="font-semibold text-[#1E2A3A]">
+                    API Secret Key (Infinitepay)
+                  </Label>
+                  <Input
+                    type="password"
+                    value={settings.infinitepay_api_key || ''}
+                    onChange={(e) => handleUpdateSetting('infinitepay_api_key', e.target.value)}
+                    placeholder="inchk_... ou inf_live_..."
+                    className="font-mono focus-visible:ring-[#D4AF37]"
+                  />
+                  <p className="text-[10px] text-slate-500">
+                    A chave fica armazenada no servidor e é enviada no header <code>X-Api-Key</code>
+                    .
+                  </p>
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="font-semibold text-[#1E2A3A]">
+                    InfiniteTag / Handle (Identificador da Conta)
+                  </Label>
+                  <Input
+                    value={settings.infinitepay_handle || ''}
+                    onChange={(e) => handleUpdateSetting('infinitepay_handle', e.target.value)}
+                    placeholder="sua_infinitetag (sem $)"
+                    className="font-mono focus-visible:ring-[#D4AF37]"
+                  />
+                  <p className="text-[10px] text-slate-500">
+                    Identificador da conta Infinitepay para direcionamento das faturas.
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <Label className="font-semibold text-[#1E2A3A]">Endpoint da API (Checkout)</Label>
+                  <Input
+                    value={settings.infinitepay_api_url || 'https://api.checkout.infinitepay.io'}
+                    onChange={(e) => handleUpdateSetting('infinitepay_api_url', e.target.value)}
+                    placeholder="https://api.checkout.infinitepay.io"
+                    className="font-mono text-xs focus-visible:ring-[#D4AF37]"
+                  />
+                  <p className="text-[10px] text-slate-500">
+                    URL base configurável da API de Checkout Integrado InfinitePay.
+                  </p>
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="font-semibold text-[#1E2A3A]">
+                    Segredo / Token do Webhook (Opcional)
+                  </Label>
+                  <Input
+                    type="password"
+                    value={settings.infinitepay_webhook_secret || ''}
+                    onChange={(e) =>
+                      handleUpdateSetting('infinitepay_webhook_secret', e.target.value)
+                    }
+                    placeholder="Token ou assinatura HMAC"
+                    className="font-mono focus-visible:ring-[#D4AF37]"
+                  />
+                  <p className="text-[10px] text-slate-500">
+                    Quando informado, o webhook valida autenticidade via header ou token.
+                  </p>
+                </div>
               </div>
 
               <div className="space-y-1">
                 <Label className="font-semibold text-[#1E2A3A]">
-                  Webhook URL (Somente Leitura)
+                  Webhook URL (Endereço para cadastrar na InfinitePay)
                 </Label>
                 <div className="flex items-center gap-2">
                   <Input
                     readOnly
                     value={webhookEndpoint}
-                    className="bg-slate-50 font-mono text-slate-600"
+                    className="bg-slate-50 font-mono text-slate-700 font-semibold"
                   />
                   <Button
                     variant="outline"
@@ -517,8 +590,9 @@ export default function Settings() {
                   </Button>
                 </div>
                 <p className="text-[11px] text-[#6C757D]">
-                  Cadastre este endereço no painel de desenvolvedor da Infinitepay para receber
-                  confirmações instantâneas de pagamento.
+                  Cadastre este endereço HTTPS no painel de desenvolvedor da Infinitepay para
+                  receber baixas automáticas instantâneas com atualização de fluxo de caixa e
+                  respeito ao desconto família.
                 </p>
               </div>
 

@@ -142,6 +142,25 @@ export const academyService = {
       expand: 'student_id',
     })
   },
+  async testInfinitepayConnection(credentials?: {
+    apiKey?: string
+    handle?: string
+  }): Promise<{ success: boolean; message: string }> {
+    const response = await fetch(`${pb.baseUrl}/backend/v1/infinitepay/test-connection`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(credentials || {}),
+    })
+
+    const data = await response.json().catch(() => ({}))
+    if (!response.ok) {
+      throw new Error(data.message || `Erro HTTP ${response.status} ao testar conexão`)
+    }
+    return data
+  },
+
   async createCharge(data: {
     student_id: string
     description: string
@@ -152,6 +171,32 @@ export const academyService = {
     payment_method?: 'pix' | 'cartao' | 'boleto' | 'dinheiro' | 'transferencia'
     generateInfinitepay?: boolean
   }): Promise<ChargeRecord> {
+    // Quando solicitado checkout InfinitePay, chama o hook seguro no backend PocketBase
+    if (data.generateInfinitepay) {
+      const response = await fetch(`${pb.baseUrl}/backend/v1/infinitepay/create-charge`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
+      })
+
+      const resJson = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(
+          resJson.message || `Falha ao emitir cobrança via backend (HTTP ${response.status})`,
+        )
+      }
+
+      if (resJson.charge && resJson.charge.id) {
+        // Retorna o registro completo atualizado
+        return pb.collection('charges').getOne<ChargeRecord>(resJson.charge.id, {
+          expand: 'student_id',
+        })
+      }
+    }
+
+    // Fluxo manual tradicional (sem API externa ou gerado diretamente)
     const infinipayId = 'inf_' + Math.random().toString(36).substring(2, 10)
     const paymentLink = `https://pay.infinitepay.io/link/${infinipayId}`
 
