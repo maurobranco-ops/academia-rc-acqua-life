@@ -10,6 +10,11 @@ import {
   Trash2,
   CheckCircle2,
   Loader2,
+  AlertTriangle,
+  Play,
+  RotateCw,
+  Power,
+  Info,
   XCircle,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -49,6 +54,10 @@ export default function Settings() {
   // Infinitepay Connection Testing State
   const [testingConnection, setTestingConnection] = useState(false)
   const [connectionStatus, setConnectionStatus] = useState<'idle' | 'success' | 'failed'>('idle')
+
+  // Recurring Billing Automation State
+  const [runningRecurring, setRunningRecurring] = useState(false)
+  const [savingRecurring, setSavingRecurring] = useState(false)
 
   // Modals
   const [planModalOpen, setPlanModalOpen] = useState(false)
@@ -135,6 +144,53 @@ export default function Settings() {
     } catch (err) {
       console.error(err)
       toast({ title: 'Erro ao salvar', variant: 'destructive' })
+    }
+  }
+
+  const handleSaveRecurringBillingSettings = async () => {
+    setSavingRecurring(true)
+    try {
+      await academyService.updateSetting(
+        'recurring_billing_active',
+        settings.recurring_billing_active || 'false',
+      )
+      await academyService.updateSetting(
+        'recurring_billing_days_before',
+        settings.recurring_billing_days_before || '7',
+      )
+      toast({
+        title: 'Configurações de Cobrança Automática salvas!',
+        description:
+          settings.recurring_billing_active === 'true'
+            ? 'Automação ATIVADA. Cobranças serão geradas 7 dias antes do vencimento de cada aluno.'
+            : 'Automação DESLIGADA. Nenhuma cobrança automática será gerada.',
+      })
+    } catch (err) {
+      console.error(err)
+      toast({ title: 'Erro ao salvar automação', variant: 'destructive' })
+    } finally {
+      setSavingRecurring(false)
+    }
+  }
+
+  const handleRunRecurringNow = async (force: boolean) => {
+    setRunningRecurring(true)
+    try {
+      const res = await academyService.runRecurringBillingNow(force)
+      toast({
+        title: 'Rotina de cobrança executada!',
+        description: res.summary || `${res.createdCount || 0} cobranças geradas com sucesso.`,
+      })
+      await loadData()
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Falha ao executar rotina'
+      toast({
+        title: 'Aviso da rotina',
+        description: msg,
+        variant: 'destructive',
+      })
+    } finally {
+      setRunningRecurring(false)
     }
   }
 
@@ -321,6 +377,12 @@ export default function Settings() {
             className="data-[state=active]:bg-[#0F1B3D] data-[state=active]:text-white text-xs font-semibold rounded-lg px-4"
           >
             <CreditCard className="w-3.5 h-3.5 mr-1.5" /> Integração Infinitepay
+          </TabsTrigger>
+          <TabsTrigger
+            value="cobranca_automatica"
+            className="data-[state=active]:bg-[#0F1B3D] data-[state=active]:text-white text-xs font-semibold rounded-lg px-4"
+          >
+            <RotateCw className="w-3.5 h-3.5 mr-1.5" /> Cobrança Automática
           </TabsTrigger>
           <TabsTrigger
             value="instrutores"
@@ -638,7 +700,190 @@ export default function Settings() {
         </TabsContent>
 
         {/* ============================================================ */}
-        {/* TAB 4: INSTRUCTORS */}
+        {/* TAB 4: COBRANÇA AUTOMÁTICA RECORRENTE */}
+        {/* ============================================================ */}
+        <TabsContent value="cobranca_automatica">
+          <div className="space-y-4">
+            <Card className="bg-white border-[#E0E4EA] rounded-xl shadow-xs">
+              <CardHeader>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                  <div>
+                    <CardTitle className="text-base font-bold text-[#0F1B3D] flex items-center gap-2">
+                      <RotateCw className="w-4 h-4 text-[#D4AF37]" />
+                      Rotina de Cobrança Recorrente Mensal Automática
+                    </CardTitle>
+                    <CardDescription className="text-xs text-[#6C757D]">
+                      Geração automatizada de links de checkout InfinitePay avulsos para cada aluno
+                      ativo, respeitando seu dia de vencimento individual.
+                    </CardDescription>
+                  </div>
+                  {settings.recurring_billing_active === 'true' ? (
+                    <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 flex items-center gap-1.5 w-fit">
+                      <Power className="w-3.5 h-3.5 text-emerald-600" /> Automação ATIVA
+                    </Badge>
+                  ) : (
+                    <Badge className="bg-amber-50 text-amber-700 border-amber-200 flex items-center gap-1.5 w-fit">
+                      <Power className="w-3.5 h-3.5 text-amber-600" /> DESLIGADA por Padrão
+                    </Badge>
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-5 text-xs">
+                {/* Alerta de Segurança e Orientação */}
+                <div className="p-3.5 rounded-lg border border-amber-200 bg-amber-50/70 text-amber-900 space-y-1.5">
+                  <div className="flex items-center gap-2 font-bold text-xs text-amber-900">
+                    <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0" />
+                    Controle de Ativação das Novas Cobranças
+                  </div>
+                  <p className="text-[11px] leading-relaxed text-amber-800">
+                    Esta rotina vem <strong>desligada por padrão</strong> para garantir que nenhuma
+                    cobrança duplicada seja enviada a alunos que já possuam faturas ativas na
+                    plataforma da InfinitePay. Ao ligar o interruptor abaixo, a rotina diária no
+                    backend (às 06:00) verificará os alunos ativos e emitirá a mensalidade
+                    exatamente <strong>7 dias antes da data de vencimento</strong> individual de
+                    cada um (definida no cadastro ou importada do Bubble).
+                  </p>
+                </div>
+
+                {/* Interruptor Mestre */}
+                <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/70 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label
+                        htmlFor="masterBillingSwitch"
+                        className="text-sm font-bold text-[#0F1B3D] cursor-pointer"
+                      >
+                        Interruptor Mestre: Geração Automática Diária
+                      </Label>
+                      <p className="text-[11px] text-[#6C757D]">
+                        Quando desativado, o agendamento diário é ignorado e nenhuma cobrança nova é
+                        criada.
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        id="masterBillingSwitch"
+                        checked={settings.recurring_billing_active === 'true'}
+                        onChange={(e) =>
+                          handleUpdateSetting(
+                            'recurring_billing_active',
+                            e.target.checked ? 'true' : 'false',
+                          )
+                        }
+                        className="w-5 h-5 rounded text-[#0F1B3D] focus:ring-[#D4AF37] cursor-pointer"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-3 border-t border-slate-200">
+                    <div className="space-y-1">
+                      <Label className="font-semibold text-[#1E2A3A]">
+                        Dias de antecedência para emissão
+                      </Label>
+                      <Input
+                        type="number"
+                        min="1"
+                        max="30"
+                        value={settings.recurring_billing_days_before || '7'}
+                        onChange={(e) =>
+                          handleUpdateSetting('recurring_billing_days_before', e.target.value)
+                        }
+                        className="w-32 font-bold focus-visible:ring-[#D4AF37]"
+                      />
+                      <p className="text-[10px] text-slate-500">
+                        Configurado para <strong>7 dias antes</strong> da data de vencimento do
+                        aluno.
+                      </p>
+                    </div>
+
+                    <div className="space-y-1">
+                      <Label className="font-semibold text-[#1E2A3A]">
+                        Regras de Isenção e Desconto
+                      </Label>
+                      <ul className="text-[11px] text-[#6C757D] list-disc list-inside space-y-0.5">
+                        <li>
+                          Alunos no <strong>Plano Isento (R$ 0,00) ficam FORA</strong> da geração.
+                        </li>
+                        <li>
+                          Alunos com <strong>mensalidade suspensa</strong> não são cobrados.
+                        </li>
+                        <li>
+                          <strong>Desconto família (R$ 10,00)</strong> é calculado automaticamente
+                          pelo responsável.
+                        </li>
+                        <li>
+                          <strong>Anti-duplicação:</strong> não repete cobrança já emitida para o
+                          mesmo mês/ciclo.
+                        </li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Status da Última Execução */}
+                <div className="p-3.5 rounded-lg border border-slate-200 bg-white space-y-1">
+                  <div className="flex items-center gap-1.5 font-bold text-xs text-[#0F1B3D]">
+                    <Info className="w-3.5 h-3.5 text-[#0F1B3D]" /> Status do Diagnóstico /
+                    Execuções
+                  </div>
+                  <p className="text-[11px] text-slate-700">
+                    <strong>Última execução:</strong>{' '}
+                    {settings.recurring_billing_last_run
+                      ? new Date(settings.recurring_billing_last_run).toLocaleString('pt-BR')
+                      : 'Nenhuma execução registrada ainda'}
+                  </p>
+                  <p className="text-[11px] text-slate-600 font-mono bg-slate-50 p-2 rounded border border-slate-100">
+                    {settings.recurring_billing_last_status ||
+                      'Aguardando primeira ativação da rotina.'}
+                  </p>
+                </div>
+
+                {/* Botões de Ação */}
+                <div className="flex flex-wrap items-center gap-3 pt-2">
+                  <Button
+                    onClick={handleSaveRecurringBillingSettings}
+                    disabled={savingRecurring}
+                    className="bg-[#D4AF37] hover:bg-[#B8953A] text-[#0F1B3D] font-bold text-xs h-9 flex items-center gap-2"
+                  >
+                    <Save className="w-4 h-4" />
+                    {savingRecurring ? 'Salvando...' : 'Salvar Configurações de Cobrança'}
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    onClick={() => handleRunRecurringNow(false)}
+                    disabled={runningRecurring || settings.recurring_billing_active !== 'true'}
+                    className="text-xs h-9 flex items-center gap-2"
+                  >
+                    <Play className="w-3.5 h-3.5 text-emerald-600" />
+                    {runningRecurring ? 'Processando...' : 'Executar Agora (Se Ativo)'}
+                  </Button>
+
+                  <Button
+                    variant="ghost"
+                    onClick={() => {
+                      if (
+                        window.confirm(
+                          'Deseja forçar a execução pontual da rotina para o dia de hoje (7 dias antes do vencimento correspondente)?',
+                        )
+                      ) {
+                        handleRunRecurringNow(true)
+                      }
+                    }}
+                    disabled={runningRecurring}
+                    className="text-xs h-9 text-slate-600 hover:text-slate-900 flex items-center gap-1.5"
+                  >
+                    <RotateCw className="w-3.5 h-3.5" /> Forçar Teste Pontual
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        {/* ============================================================ */}
+        {/* TAB 5: INSTRUCTORS */}
         {/* ============================================================ */}
         <TabsContent value="instrutores" className="space-y-4">
           <div className="flex justify-between items-center">

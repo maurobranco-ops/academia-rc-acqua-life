@@ -527,7 +527,9 @@ export default function Charges() {
                       Vencimento: <strong>{dueDate.toLocaleDateString('pt-BR')}</strong> • ID
                       Infinitepay:{' '}
                       <code className="bg-slate-100 px-1 py-0.5 rounded text-[10px]">
-                        {charge.infinipay_payment_id || 'inf_demo'}
+                        {charge.order_nsu
+                          ? `NSU: ${charge.order_nsu}`
+                          : charge.infinipay_payment_id || 'inf_demo'}
                       </code>
                       {student?.guardian_name && (
                         <span className="ml-2 inline-flex items-center gap-1 text-slate-600">

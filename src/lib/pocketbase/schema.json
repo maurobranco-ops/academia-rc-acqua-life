@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-27T20:45:26.760Z",
+  "generatedAt": "2026-10-27T21:11:21.904Z",
   "collections": [
     {
       "name": "users",
@@ -549,11 +549,25 @@
           "type": "number",
           "required": false,
           "system": false
+        },
+        {
+          "name": "order_nsu",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "invoice_slug",
+          "type": "text",
+          "required": false,
+          "system": false
         }
       ],
       "indexes": [
         "CREATE INDEX idx_charges_student_id ON charges (student_id)",
-        "CREATE INDEX idx_charges_status ON charges (status)"
+        "CREATE INDEX idx_charges_status ON charges (status)",
+        "CREATE INDEX `idx_charges_order_nsu` ON `charges` (order_nsu)",
+        "CREATE INDEX `idx_charges_infinipay_payment_id` ON `charges` (infinipay_payment_id)"
       ]
     },
     {
@@ -651,12 +665,26 @@
           "type": "number",
           "required": false,
           "system": false
+        },
+        {
+          "name": "order_nsu",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "invoice_slug",
+          "type": "text",
+          "required": false,
+          "system": false
         }
       ],
       "indexes": [
         "CREATE INDEX idx_payments_student_id ON payments (student_id)",
         "CREATE INDEX idx_payments_charge_id ON payments (charge_id)",
-        "CREATE INDEX idx_payments_status ON payments (status)"
+        "CREATE INDEX idx_payments_status ON payments (status)",
+        "CREATE INDEX `idx_payments_order_nsu` ON `payments` (order_nsu)",
+        "CREATE INDEX `idx_payments_infinipay_trans` ON `payments` (infinipay_transaction_id)"
       ]
     },
     {
@@ -788,6 +816,85 @@
         }
       ],
       "indexes": ["CREATE UNIQUE INDEX idx_settings_key ON settings (key)"]
+    },
+    {
+      "name": "webhook_events",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.id != ''",
+        "update": "@request.auth.id != ''",
+        "delete": "@request.auth.id != ''"
+      },
+      "fields": [
+        {
+          "name": "event_key",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "event_type",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "order_nsu",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "transaction_nsu",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "invoice_slug",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "charge_id",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "payload",
+          "type": "json",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE UNIQUE INDEX idx_webhook_events_key ON webhook_events (event_key)",
+        "CREATE INDEX idx_webhook_events_order_nsu ON webhook_events (order_nsu)"
+      ]
     }
   ]
 }

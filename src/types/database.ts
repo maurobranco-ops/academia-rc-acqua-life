@@ -87,6 +87,8 @@ export interface ChargeRecord extends RecordModel {
   payment_method?: 'pix' | 'cartao' | 'boleto' | 'dinheiro' | 'transferencia'
   infinipay_payment_id?: string
   payment_link?: string
+  order_nsu?: string
+  invoice_slug?: string
   expand?: {
     student_id?: StudentRecord
   }
@@ -104,6 +106,8 @@ export interface PaymentRecord extends RecordModel {
   payment_method?: 'pix' | 'cartao' | 'boleto' | 'dinheiro' | 'transferencia'
   payment_link?: string
   infinipay_transaction_id?: string
+  order_nsu?: string
+  invoice_slug?: string
   expand?: {
     student_id?: StudentRecord
     plan_id?: PlanRecord

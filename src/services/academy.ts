@@ -161,6 +161,32 @@ export const academyService = {
     return data
   },
 
+  async runRecurringBillingNow(force = false): Promise<{
+    success: boolean
+    summary?: string
+    message?: string
+    targetDueDate?: string
+    processedCount?: number
+    createdCount?: number
+    alreadyIssuedCount?: number
+    skippedIsentoCount?: number
+    errors?: Array<{ studentId: string; studentName: string; error: string }>
+  }> {
+    const response = await fetch(`${pb.baseUrl}/backend/v1/recurring-billing/run-now`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ force }),
+    })
+
+    const data = await response.json().catch(() => ({}))
+    if (!response.ok) {
+      throw new Error(data.message || `Erro HTTP ${response.status} na rotina de cobrança`)
+    }
+    return data
+  },
+
   async createCharge(data: {
     student_id: string
     description: string

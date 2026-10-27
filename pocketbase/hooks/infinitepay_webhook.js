@@ -1,27 +1,25 @@
 // pocketbase/hooks/infinitepay_webhook.js
-// Handles:
-// 1. POST /backend/v1/infinitepay/test-connection: Tests credentials against InfinitePay API
-// 2. POST /backend/v1/infinitepay/create-charge: Creates real charge via InfinitePay Checkout API & saves to DB
-// 3. POST /backend/v1/infinitepay/webhook: Webhook handler for automated payment confirmation with security validation
+// RC Acqua Life — Integração InfinitePay e Cobrança Recorrente
+// PocketBase JSVM requirement: All functions and variables must be declared INLINE inside each callback.
 
 // -------------------------------------------------------------
 // 1. Test Connection Route
 // -------------------------------------------------------------
 routerAdd('POST', '/backend/v1/infinitepay/test-connection', (e) => {
-  const readSetting = function (k) {
+  const readSetting = (k, fallback = '') => {
     try {
       const records = $app.findRecordsByFilter('settings', `key = '${k}'`, '-created', 1, 0)
       if (records && records.length > 0) {
-        return (records[0].getString('value') || '').trim()
+        const val = records[0].getString('value')
+        return val !== undefined && val !== null ? val.trim() : fallback
       }
     } catch (_) {}
-    return ''
+    return fallback
   }
 
   const info = e.requestInfo()
   const body = info.body || {}
 
-  // Allow testing either newly entered credentials in body OR stored settings
   const apiKey = (
     body.apiKey !== undefined ? body.apiKey : readSetting('infinitepay_api_key')
   ).trim()
@@ -37,10 +35,13 @@ routerAdd('POST', '/backend/v1/infinitepay/test-connection', (e) => {
     })
   }
 
-  // Attempt a validation call to InfinitePay API
-  const baseUrl = (
+  // Base URL: sempre a nova URL oficial
+  let baseUrl = (
     readSetting('infinitepay_api_url') || 'https://api.checkout.infinitepay.io'
   ).replace(/\/+$/, '')
+  if (baseUrl.includes('api.infinitepay.io/invoices/public/checkout')) {
+    baseUrl = 'https://api.checkout.infinitepay.io'
+  }
 
   try {
     const headers = {
@@ -56,7 +57,7 @@ routerAdd('POST', '/backend/v1/infinitepay/test-connection', (e) => {
       items: [
         {
           quantity: 1,
-          price: 100, // R$ 1,00 in cents
+          price: 100, // R$ 1,00 em centavos
           description: 'Teste de Conexao',
         },
       ],
@@ -132,17 +133,18 @@ routerAdd('POST', '/backend/v1/infinitepay/test-connection', (e) => {
 })
 
 // -------------------------------------------------------------
-// 2. Create Charge Route (Called from frontend to create in PB + InfinitePay)
+// 2. Create Charge Route (Chamada manual pelo frontend)
 // -------------------------------------------------------------
 routerAdd('POST', '/backend/v1/infinitepay/create-charge', (e) => {
-  const readSetting = function (k) {
+  const readSetting = (k, fallback = '') => {
     try {
       const records = $app.findRecordsByFilter('settings', `key = '${k}'`, '-created', 1, 0)
       if (records && records.length > 0) {
-        return (records[0].getString('value') || '').trim()
+        const val = records[0].getString('value')
+        return val !== undefined && val !== null ? val.trim() : fallback
       }
     } catch (_) {}
-    return ''
+    return fallback
   }
 
   const info = e.requestInfo()
@@ -155,6 +157,7 @@ routerAdd('POST', '/backend/v1/infinitepay/create-charge', (e) => {
   const dueDate = body.due_date
   const paymentMethod = body.payment_method || 'pix'
   const generateInfinitepay = body.generateInfinitepay !== false
+  const customOrderNsu = body.order_nsu || null
 
   if (!studentId || !description || amount <= 0 || !dueDate) {
     return e.json(400, {
@@ -163,7 +166,6 @@ routerAdd('POST', '/backend/v1/infinitepay/create-charge', (e) => {
     })
   }
 
-  // Load student info
   let student = null
   try {
     student = $app.findRecordById('students', studentId)
@@ -176,13 +178,21 @@ routerAdd('POST', '/backend/v1/infinitepay/create-charge', (e) => {
 
   const apiKey = readSetting('infinitepay_api_key')
   const handle = readSetting('infinitepay_handle').replace(/^@/, '').replace(/^\$/, '')
-  const apiUrl = (
+  let apiUrl = (
     readSetting('infinitepay_api_url') || 'https://api.checkout.infinitepay.io'
   ).replace(/\/+$/, '')
+  if (apiUrl.includes('api.infinitepay.io/invoices/public/checkout')) {
+    apiUrl = 'https://api.checkout.infinitepay.io'
+  }
 
   let infinitepayPaymentId = ''
   let paymentLink = ''
+  let invoiceSlug = ''
   let apiWarning = ''
+
+  const orderNsu =
+    customOrderNsu ||
+    `rc_${studentId.substring(0, 5)}_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`
 
   if (generateInfinitepay) {
     if (!apiKey && !handle) {
@@ -190,15 +200,12 @@ routerAdd('POST', '/backend/v1/infinitepay/create-charge', (e) => {
         success: false,
         code: 'MISSING_CREDENTIALS',
         message:
-          'Credenciais InfinitePay não configuradas. Acesse Configurações → Integração Infinitepay para cadastrar sua Chave de API ou InfiniteTag.',
+          'Credenciais InfinitePay não configuradas. Acesse Configurações → Integração Infinitepay.',
       })
     }
 
-    const orderNsu = 'rc_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7)
-    // Price in cents
     const priceCents = Math.round(amount * 100)
 
-    // Build customer payload
     const customerPayload = {
       name: student.getString('name') || 'Aluno',
     }
@@ -215,7 +222,6 @@ routerAdd('POST', '/backend/v1/infinitepay/create-charge', (e) => {
         : '+55' + cleanPhone
     }
 
-    // Webhook URL: use current site or environment setting
     const pbUrl = $os.getenv('PB_INSTANCE_URL') || readSetting('site_url') || ''
     const webhookUrl = pbUrl ? `${pbUrl.replace(/\/+$/, '')}/backend/v1/infinitepay/webhook` : ''
 
@@ -261,16 +267,13 @@ routerAdd('POST', '/backend/v1/infinitepay/create-charge', (e) => {
           respData = JSON.parse(res.raw)
         } catch (_) {}
 
-        if (respData && (respData.url || respData.link || respData.checkout_url)) {
-          paymentLink = respData.url || respData.link || respData.checkout_url
-          infinitepayPaymentId =
-            respData.invoice_slug || respData.slug || respData.order_nsu || orderNsu
-        } else if (respData && respData.id) {
-          infinitepayPaymentId = String(respData.id)
-          paymentLink = `https://pay.infinitepay.io/link/${infinitepayPaymentId}`
+        if (respData) {
+          paymentLink = respData.url || respData.link || respData.checkout_url || ''
+          invoiceSlug = respData.invoice_slug || respData.slug || ''
+          infinitepayPaymentId = invoiceSlug || respData.order_nsu || orderNsu
         }
       } else {
-        console.log('InfinitePay API error status:', res.statusCode, 'body:', res.raw)
+        console.log('[InfinitePay API] Erro status:', res.statusCode, 'body:', res.raw)
         let errJson = null
         try {
           errJson = JSON.parse(res.raw)
@@ -279,20 +282,19 @@ routerAdd('POST', '/backend/v1/infinitepay/create-charge', (e) => {
         apiWarning = `Aviso da InfinitePay (${res.statusCode}): ${errorDetail}`
       }
     } catch (httpErr) {
-      console.log('HTTP request to InfinitePay failed:', httpErr)
+      console.log('[InfinitePay API] Falha HTTP:', httpErr)
       apiWarning = 'Falha ao contatar API InfinitePay: ' + (httpErr.message || String(httpErr))
     }
   }
 
-  // Fallback if API was not requested or failed gracefully
   if (!infinitepayPaymentId) {
-    infinitepayPaymentId = 'inf_' + Math.random().toString(36).substring(2, 11)
+    infinitepayPaymentId = orderNsu
   }
   if (!paymentLink) {
     paymentLink = `https://pay.infinitepay.io/link/${infinitepayPaymentId}`
   }
 
-  // Save charge record to PocketBase
+  // Persistir em `charges`
   let chargeRecord = null
   try {
     const chargesCol = $app.findCollectionByNameOrId('charges')
@@ -306,9 +308,13 @@ routerAdd('POST', '/backend/v1/infinitepay/create-charge', (e) => {
     chargeRecord.set('payment_method', paymentMethod)
     chargeRecord.set('infinipay_payment_id', infinitepayPaymentId)
     chargeRecord.set('payment_link', paymentLink)
+    chargeRecord.set('order_nsu', orderNsu)
+    if (invoiceSlug) {
+      chargeRecord.set('invoice_slug', invoiceSlug)
+    }
     $app.save(chargeRecord)
 
-    // Save corresponding payment record
+    // Persistir em `payments`
     const paymentsCol = $app.findCollectionByNameOrId('payments')
     const paymentRecord = new Record(paymentsCol)
     paymentRecord.set('student_id', studentId)
@@ -320,9 +326,13 @@ routerAdd('POST', '/backend/v1/infinitepay/create-charge', (e) => {
     paymentRecord.set('payment_method', paymentMethod)
     paymentRecord.set('payment_link', paymentLink)
     paymentRecord.set('infinipay_transaction_id', infinitepayPaymentId)
+    paymentRecord.set('order_nsu', orderNsu)
+    if (invoiceSlug) {
+      paymentRecord.set('invoice_slug', invoiceSlug)
+    }
     $app.save(paymentRecord)
   } catch (dbErr) {
-    console.log('Database error creating charge:', dbErr)
+    console.log('[Create Charge] Erro ao salvar no banco:', dbErr)
     return e.json(500, {
       success: false,
       message: 'Erro ao salvar cobrança no banco de dados: ' + (dbErr.message || String(dbErr)),
@@ -342,31 +352,33 @@ routerAdd('POST', '/backend/v1/infinitepay/create-charge', (e) => {
       payment_method: paymentMethod,
       infinipay_payment_id: infinitepayPaymentId,
       payment_link: paymentLink,
+      order_nsu: orderNsu,
+      invoice_slug: invoiceSlug,
     },
     warning: apiWarning || null,
   })
 })
 
 // -------------------------------------------------------------
-// 3. Webhook Route (Receives InfinitePay Payment Notifications)
+// 3. Webhook Route (Oficial InfinitePay com idempotência e /payment_check)
 // -------------------------------------------------------------
 routerAdd('POST', '/backend/v1/infinitepay/webhook', (e) => {
-  const readSetting = function (k) {
+  const readSetting = (k, fallback = '') => {
     try {
       const records = $app.findRecordsByFilter('settings', `key = '${k}'`, '-created', 1, 0)
       if (records && records.length > 0) {
-        return (records[0].getString('value') || '').trim()
+        const val = records[0].getString('value')
+        return val !== undefined && val !== null ? val.trim() : fallback
       }
     } catch (_) {}
-    return ''
+    return fallback
   }
 
   const info = e.requestInfo()
   const body = info.body || {}
   const headers = info.headers || {}
 
-  // Security Validation:
-  // If a webhook secret is configured (in settings or env), validate signature/token header
+  // 3.1 Validação de segurança/assinatura
   let configuredSecret = readSetting('infinitepay_webhook_secret')
   if (!configuredSecret) {
     configuredSecret = $os.getenv('INFINITEPAY_WEBHOOK_SECRET') || ''
@@ -381,8 +393,8 @@ routerAdd('POST', '/backend/v1/infinitepay/webhook', (e) => {
       ''
 
     const queryToken = (info.query && info.query.token) || ''
-
     let isAuthorized = false
+
     if (queryToken && queryToken === configuredSecret) {
       isAuthorized = true
     } else if (receivedSignature) {
@@ -403,107 +415,333 @@ routerAdd('POST', '/backend/v1/infinitepay/webhook', (e) => {
     }
 
     if (!isAuthorized) {
-      console.log('Webhook InfinitePay: Assinatura ou token inválido rejeitado')
+      console.log('[Webhook] Assinatura ou token inválido rejeitado')
       return e.json(401, { success: false, error: 'Unauthorized webhook request' })
     }
   }
 
-  const invoiceSlug = body.invoice_slug || (body.data && body.data.invoice_slug) || ''
-  const orderNsu = body.order_nsu || (body.data && body.data.order_nsu) || ''
-  const paymentId =
+  // 3.2 Extração dos dados do payload da InfinitePay
+  const innerData = body.data || {}
+  const invoiceSlug = String(
+    body.invoice_slug || innerData.invoice_slug || body.slug || innerData.slug || '',
+  ).trim()
+  const orderNsu = String(body.order_nsu || innerData.order_nsu || '').trim()
+  const transactionNsu = String(
+    body.transaction_nsu || innerData.transaction_nsu || body.nsu || innerData.nsu || '',
+  ).trim()
+  const paymentId = String(
     body.payment_id ||
-    (body.data && body.data.payment_id) ||
-    body.id ||
-    (body.data && body.data.id) ||
-    invoiceSlug ||
-    orderNsu
+      innerData.payment_id ||
+      body.id ||
+      innerData.id ||
+      orderNsu ||
+      invoiceSlug ||
+      '',
+  ).trim()
 
-  const statusRaw = (
-    body.status ||
-    (body.data && body.data.status) ||
-    body.event ||
-    ''
-  ).toLowerCase()
+  const rawEventType = String(
+    body.event_type ||
+      body.event ||
+      innerData.event_type ||
+      innerData.event ||
+      body.status ||
+      innerData.status ||
+      '',
+  )
+    .trim()
+    .toLowerCase()
 
-  const isPaidEvent =
-    statusRaw === '' ||
-    statusRaw.includes('paid') ||
-    statusRaw.includes('pago') ||
-    statusRaw.includes('confirmed') ||
-    statusRaw.includes('approved') ||
-    statusRaw.includes('settled')
-
-  const isRefundedEvent = statusRaw.includes('refund') || statusRaw.includes('estorn')
-  const isCanceledEvent = statusRaw.includes('cancel') || statusRaw.includes('fail')
-
-  if (!paymentId && !orderNsu && !invoiceSlug) {
-    return e.json(400, { success: false, error: 'Missing payment identifier in webhook payload' })
+  if (!orderNsu && !paymentId && !invoiceSlug && !transactionNsu) {
+    console.log('[Webhook] Payload sem identificadores válidos:', JSON.stringify(body))
+    return e.json(400, {
+      success: false,
+      error: 'Missing order_nsu / payment identifier in webhook payload',
+    })
   }
 
-  let mappedChargeStatus = 'em_aberto'
-  let mappedPaymentStatus = 'pendente'
+  // Mapeamento dos eventos oficiais da InfinitePay:
+  // created, paid, settled, canceled, refunded, payment_failed
+  let normalizedEvent = 'unknown'
+  let targetChargeStatus = null
+  let targetPaymentStatus = null
+  let requiresConfirmation = false
 
-  if (isRefundedEvent) {
-    mappedChargeStatus = 'cancelada'
-    mappedPaymentStatus = 'reembolsado'
-  } else if (isCanceledEvent) {
-    mappedChargeStatus = 'cancelada'
-    mappedPaymentStatus = 'cancelado'
-  } else if (isPaidEvent) {
-    mappedChargeStatus = 'paga'
-    mappedPaymentStatus = 'pago'
+  if (
+    rawEventType === 'paid' ||
+    rawEventType.includes('paid') ||
+    rawEventType.includes('pago') ||
+    rawEventType.includes('approved')
+  ) {
+    normalizedEvent = 'paid'
+    targetChargeStatus = 'paga'
+    targetPaymentStatus = 'pago'
+    requiresConfirmation = true
+  } else if (rawEventType === 'settled' || rawEventType.includes('settled')) {
+    normalizedEvent = 'settled'
+    targetChargeStatus = 'paga'
+    targetPaymentStatus = 'pago'
+    requiresConfirmation = true
+  } else if (
+    rawEventType === 'refunded' ||
+    rawEventType.includes('refund') ||
+    rawEventType.includes('estorn')
+  ) {
+    normalizedEvent = 'refunded'
+    targetChargeStatus = 'cancelada'
+    targetPaymentStatus = 'reembolsado'
+  } else if (
+    rawEventType === 'canceled' ||
+    rawEventType === 'cancelled' ||
+    rawEventType.includes('cancel')
+  ) {
+    normalizedEvent = 'canceled'
+    targetChargeStatus = 'cancelada'
+    targetPaymentStatus = 'cancelado'
+  } else if (
+    rawEventType === 'payment_failed' ||
+    rawEventType === 'failed' ||
+    rawEventType.includes('fail') ||
+    rawEventType.includes('falh')
+  ) {
+    normalizedEvent = 'payment_failed'
+    targetChargeStatus = 'em_aberto'
+    targetPaymentStatus = 'pendente'
+  } else if (rawEventType === 'created' || rawEventType.includes('creat')) {
+    normalizedEvent = 'created'
+    targetChargeStatus = 'em_aberto'
+    targetPaymentStatus = 'pendente'
+  } else {
+    normalizedEvent = rawEventType || 'unknown'
   }
 
-  let updatedCharge = null
-  let updatedPayment = null
-
-  // 1. Locate charge by infinipay_payment_id OR payment_link
+  // 3.3 Idempotência por evento: combinar event_type com identificador
+  const idempotencyKey = `${normalizedEvent}_${orderNsu || transactionNsu || invoiceSlug || paymentId}`
   try {
-    const filters = []
-    if (paymentId) filters.push(`infinipay_payment_id = '${paymentId}'`)
-    if (invoiceSlug && invoiceSlug !== paymentId)
-      filters.push(`infinipay_payment_id = '${invoiceSlug}'`)
-    if (orderNsu && orderNsu !== paymentId) filters.push(`infinipay_payment_id = '${orderNsu}'`)
-    if (paymentId) filters.push(`payment_link ~ '${paymentId}'`)
-
-    const charges = $app.findRecordsByFilter('charges', filters.join(' || '), '-created', 1, 0)
-
-    if (charges && charges.length > 0) {
-      updatedCharge = charges[0]
+    const existingEvents = $app.findRecordsByFilter(
+      'webhook_events',
+      `event_key = '${idempotencyKey}'`,
+      '-created',
+      1,
+      0,
+    )
+    if (existingEvents && existingEvents.length > 0) {
+      console.log(
+        `[Webhook] Evento já processado anteriormente (${idempotencyKey}). Ignorando re-tentativa.`,
+      )
+      return e.json(200, {
+        success: true,
+        idempotent: true,
+        message: 'Event already processed',
+        event_key: idempotencyKey,
+      })
     }
   } catch (err) {
-    console.log('Error looking up charge in infinitepay webhook:', err)
+    console.log('[Webhook] Verificação de idempotência:', err)
   }
 
-  // 2. Locate payment by charge_id OR infinipay_transaction_id
-  try {
-    const filters = []
-    if (updatedCharge) filters.push(`charge_id = '${updatedCharge.id}'`)
-    if (paymentId) filters.push(`infinipay_transaction_id = '${paymentId}'`)
-    if (invoiceSlug) filters.push(`infinipay_transaction_id = '${invoiceSlug}'`)
-    if (orderNsu) filters.push(`infinipay_transaction_id = '${orderNsu}'`)
-    if (paymentId) filters.push(`payment_link ~ '${paymentId}'`)
+  // 3.4 Casamento de cobrança — PRIORIDADE MÁXIMA PARA order_nsu
+  let matchedCharge = null
+  let matchedPayment = null
 
-    const payments = $app.findRecordsByFilter('payments', filters.join(' || '), '-created', 1, 0)
-
-    if (payments && payments.length > 0) {
-      updatedPayment = payments[0]
-    }
-  } catch (err) {
-    console.log('Error looking up payment in infinitepay webhook:', err)
+  if (orderNsu) {
+    try {
+      const byOrder = $app.findRecordsByFilter(
+        'charges',
+        `order_nsu = '${orderNsu}' || infinipay_payment_id = '${orderNsu}'`,
+        '-created',
+        1,
+        0,
+      )
+      if (byOrder && byOrder.length > 0) {
+        matchedCharge = byOrder[0]
+      }
+    } catch (_) {}
   }
 
-  // 3. Process Status and apply Family Discount Rule if paying
+  if (!matchedCharge && invoiceSlug) {
+    try {
+      const bySlug = $app.findRecordsByFilter(
+        'charges',
+        `invoice_slug = '${invoiceSlug}' || infinipay_payment_id = '${invoiceSlug}' || payment_link ~ '${invoiceSlug}'`,
+        '-created',
+        1,
+        0,
+      )
+      if (bySlug && bySlug.length > 0) {
+        matchedCharge = bySlug[0]
+      }
+    } catch (_) {}
+  }
+
+  if (!matchedCharge && paymentId) {
+    try {
+      const byPayId = $app.findRecordsByFilter(
+        'charges',
+        `infinipay_payment_id = '${paymentId}' || payment_link ~ '${paymentId}'`,
+        '-created',
+        1,
+        0,
+      )
+      if (byPayId && byPayId.length > 0) {
+        matchedCharge = byPayId[0]
+      }
+    } catch (_) {}
+  }
+
+  if (matchedCharge) {
+    try {
+      const pmts = $app.findRecordsByFilter(
+        'payments',
+        `charge_id = '${matchedCharge.id}'`,
+        '-created',
+        1,
+        0,
+      )
+      if (pmts && pmts.length > 0) {
+        matchedPayment = pmts[0]
+      }
+    } catch (_) {}
+  }
+
+  if (!matchedPayment) {
+    try {
+      const filters = []
+      if (orderNsu) filters.push(`order_nsu = '${orderNsu}'`)
+      if (invoiceSlug) filters.push(`invoice_slug = '${invoiceSlug}'`)
+      if (paymentId) filters.push(`infinipay_transaction_id = '${paymentId}'`)
+      if (filters.length > 0) {
+        const pmts = $app.findRecordsByFilter('payments', filters.join(' || '), '-created', 1, 0)
+        if (pmts && pmts.length > 0) {
+          matchedPayment = pmts[0]
+        }
+      }
+    } catch (_) {}
+  }
+
+  if (!matchedCharge) {
+    console.log(
+      `[Webhook] Cobrança não encontrada para order_nsu=${orderNsu}, slug=${invoiceSlug}, paymentId=${paymentId}`,
+    )
+    return e.json(400, {
+      success: false,
+      error: `Charge not found for order_nsu: ${orderNsu || paymentId}`,
+    })
+  }
+
+  // 3.5 Se o evento for paid/settled: Confirmação OBRIGATÓRIA via POST /payment_check antes de dar baixa!
+  let verifiedCaptureMethod = 'pix'
+  let confirmedPaid = false
   const nowIso = new Date().toISOString()
   let finalPaidAmount = 0
   let appliedDiscount = 0
 
-  if (mappedChargeStatus === 'paga' && updatedCharge) {
-    const chargeNominal = updatedCharge.getInt('amount') || 0
-    const chargeDiscount = updatedCharge.getInt('discount_amount') || 0
-    const dueDateStr = updatedCharge.getString('due_date')
+  if (requiresConfirmation) {
+    const apiKey = readSetting('infinitepay_api_key')
+    const handle = readSetting('infinitepay_handle').replace(/^@/, '').replace(/^\$/, '')
+    let apiUrl = (
+      readSetting('infinitepay_api_url') || 'https://api.checkout.infinitepay.io'
+    ).replace(/\/+$/, '')
+    if (apiUrl.includes('api.infinitepay.io/invoices/public/checkout')) {
+      apiUrl = 'https://api.checkout.infinitepay.io'
+    }
 
-    // Rule: Desconto família de R$ 10,00 por aluno quando pago ATÉ o vencimento (sem desconto se pago após).
+    const checkHeaders = {
+      'Content-Type': 'application/json',
+      'User-Agent': 'RCAcquaLife-Academy/1.0',
+    }
+    if (apiKey) {
+      checkHeaders['X-Api-Key'] = apiKey
+    }
+
+    const checkPayload = {
+      handle: handle,
+      order_nsu:
+        orderNsu ||
+        matchedCharge.getString('order_nsu') ||
+        matchedCharge.getString('infinipay_payment_id'),
+    }
+    if (transactionNsu) checkPayload.transaction_nsu = transactionNsu
+    if (invoiceSlug || matchedCharge.getString('invoice_slug')) {
+      checkPayload.slug = invoiceSlug || matchedCharge.getString('invoice_slug')
+    }
+
+    let checkSuccess = false
+    let checkRespJson = null
+
+    try {
+      const checkRes = $http.send({
+        url: `${apiUrl}/payment_check`,
+        method: 'POST',
+        headers: checkHeaders,
+        body: JSON.stringify(checkPayload),
+        timeout: 10,
+      })
+
+      if (checkRes.statusCode >= 200 && checkRes.statusCode < 300) {
+        try {
+          checkRespJson = JSON.parse(checkRes.raw)
+        } catch (_) {}
+
+        if (checkRespJson) {
+          const isPaid = checkRespJson.paid === true || checkRespJson.status === 'paid'
+          const confirmedAmountCents = Number(
+            checkRespJson.paid_amount || checkRespJson.amount || 0,
+          )
+          const expectedAmount = matchedCharge.getFloat('amount') || 0
+          const expectedDiscount = matchedCharge.getFloat('discount_amount') || 0
+          const expectedAmountCents = Math.round(expectedAmount * 100)
+          const expectedDiscountedCents = Math.round(
+            Math.max(0, expectedAmount - expectedDiscount) * 100,
+          )
+
+          const amountMatches =
+            confirmedAmountCents <= 0 ||
+            confirmedAmountCents === expectedAmountCents ||
+            confirmedAmountCents === expectedDiscountedCents ||
+            Math.abs(confirmedAmountCents - expectedAmountCents) <= 50 ||
+            Math.abs(confirmedAmountCents - expectedDiscountedCents) <= 50
+
+          if (isPaid && amountMatches) {
+            checkSuccess = true
+            confirmedPaid = true
+            if (checkRespJson.capture_method) {
+              verifiedCaptureMethod = String(checkRespJson.capture_method).toLowerCase()
+            }
+          } else {
+            console.log(
+              `[Webhook /payment_check] Divergência na confirmação: paid=${isPaid}, amountCents=${confirmedAmountCents}, expected=${expectedAmountCents}/${expectedDiscountedCents}`,
+            )
+          }
+        }
+      } else {
+        console.log(
+          `[Webhook /payment_check] API respondeu HTTP ${checkRes.statusCode}:`,
+          checkRes.raw,
+        )
+      }
+    } catch (checkErr) {
+      console.log('[Webhook /payment_check] Falha ao chamar endpoint de confirmação:', checkErr)
+    }
+
+    if (!checkSuccess) {
+      console.log(
+        `[Webhook] Confirmação via /payment_check NÃO aprovada para cobrança ${matchedCharge.id}. Cobrança permanece pendente de verificação.`,
+      )
+      return e.json(400, {
+        success: false,
+        error:
+          'Confirmation via /payment_check failed or unavailable. Charge kept pending verification.',
+      })
+    }
+  }
+
+  // 3.6 Aplicar atualização do status da cobrança e pagamento
+  if (targetChargeStatus === 'paga' && confirmedPaid) {
+    const chargeNominal = matchedCharge.getFloat('amount') || 0
+    const chargeDiscount = matchedCharge.getFloat('discount_amount') || 0
+    const dueDateStr = matchedCharge.getString('due_date')
+
+    // Regra: Desconto família de R$ 10,00 por aluno quando pago ATÉ o vencimento
     let isOnTime = true
     if (dueDateStr) {
       const dueDay = new Date(dueDateStr).setHours(23, 59, 59, 999)
@@ -515,44 +753,55 @@ routerAdd('POST', '/backend/v1/infinitepay/webhook', (e) => {
       appliedDiscount = chargeDiscount
       finalPaidAmount = Math.max(0, chargeNominal - chargeDiscount)
     } else {
-      // Paid after due date or no discount: full nominal amount
       appliedDiscount = 0
       finalPaidAmount = chargeNominal
     }
 
-    // Save updated charge
+    // Salvar cobrança como paga
     try {
-      updatedCharge.set('status', 'paga')
-      updatedCharge.set('amount', finalPaidAmount)
-      updatedCharge.set('discount_amount', appliedDiscount)
-      $app.save(updatedCharge)
+      matchedCharge.set('status', 'paga')
+      matchedCharge.set('amount', finalPaidAmount)
+      matchedCharge.set('discount_amount', appliedDiscount)
+      if (orderNsu && !matchedCharge.getString('order_nsu')) {
+        matchedCharge.set('order_nsu', orderNsu)
+      }
+      if (invoiceSlug && !matchedCharge.getString('invoice_slug')) {
+        matchedCharge.set('invoice_slug', invoiceSlug)
+      }
+      $app.save(matchedCharge)
     } catch (err) {
-      console.log('Error saving charge in webhook:', err)
+      console.log('[Webhook] Erro ao salvar charge como paga:', err)
     }
 
-    // Save updated payment
-    if (updatedPayment) {
+    // Salvar pagamento como pago
+    if (matchedPayment) {
       try {
-        updatedPayment.set('status', 'pago')
-        updatedPayment.set('amount', finalPaidAmount)
-        updatedPayment.set('discount_amount', appliedDiscount)
-        updatedPayment.set('paid_date', nowIso)
-        $app.save(updatedPayment)
+        matchedPayment.set('status', 'pago')
+        matchedPayment.set('amount', finalPaidAmount)
+        matchedPayment.set('discount_amount', appliedDiscount)
+        matchedPayment.set('paid_date', nowIso)
+        if (orderNsu && !matchedPayment.getString('order_nsu')) {
+          matchedPayment.set('order_nsu', orderNsu)
+        }
+        if (invoiceSlug && !matchedPayment.getString('invoice_slug')) {
+          matchedPayment.set('invoice_slug', invoiceSlug)
+        }
+        $app.save(matchedPayment)
       } catch (err) {
-        console.log('Error saving payment in webhook:', err)
+        console.log('[Webhook] Erro ao salvar payment como pago:', err)
       }
     }
 
-    // 4. Create Income Transaction in `transactions`
+    // Criar movimentação financeira de receita
     try {
-      const chargeId = updatedCharge.id
+      const chargeId = matchedCharge.id
       const transDesc =
-        updatedCharge.getString('description') || `Mensalidade InfinitePay (${paymentId})`
+        matchedCharge.getString('description') ||
+        `Mensalidade InfinitePay (${orderNsu || paymentId})`
 
-      // Avoid duplicate transaction
       const existingTrans = $app.findRecordsByFilter(
         'transactions',
-        `notes ~ '${chargeId}' || notes ~ '${paymentId}'`,
+        `notes ~ '${chargeId}' || notes ~ '${orderNsu || paymentId}'`,
         '-created',
         1,
         0,
@@ -567,57 +816,724 @@ routerAdd('POST', '/backend/v1/infinitepay/webhook', (e) => {
         newTrans.set('amount', finalPaidAmount)
         newTrans.set('date', nowIso)
 
-        const captureMethod = (
-          body.capture_method ||
-          (body.data && body.data.capture_method) ||
-          ''
-        ).toLowerCase()
         let mappedMethod = 'pix'
-        if (captureMethod.includes('card') || captureMethod.includes('cred')) {
+        if (verifiedCaptureMethod.includes('card') || verifiedCaptureMethod.includes('cred')) {
           mappedMethod = 'cartao'
-        } else if (captureMethod.includes('bol')) {
+        } else if (verifiedCaptureMethod.includes('bol')) {
           mappedMethod = 'boleto'
-        } else if (updatedCharge.getString('payment_method')) {
-          mappedMethod = updatedCharge.getString('payment_method')
+        } else if (matchedCharge.getString('payment_method')) {
+          mappedMethod = matchedCharge.getString('payment_method')
         }
 
         newTrans.set('payment_method', mappedMethod)
         newTrans.set('status', 'confirmado')
         newTrans.set(
           'notes',
-          `Baixa automática via Webhook Infinitepay (${paymentId || invoiceSlug || orderNsu}) - Cobrança #${chargeId}${appliedDiscount > 0 ? ' [Desconto família R$ 10,00 aplicado]' : ''}`,
+          `Baixa automática confirmada via InfinitePay (order_nsu: ${orderNsu || paymentId}) - Cobrança #${chargeId}${appliedDiscount > 0 ? ' [Desconto família R$ 10,00 aplicado]' : ''}`,
         )
         $app.save(newTrans)
       }
-    } catch (err) {
-      console.log('Error creating transaction in infinitepay webhook:', err)
+    } catch (transErr) {
+      console.log('[Webhook] Erro ao criar transação financeira:', transErr)
     }
-  } else {
-    // Other statuses (canceled/refunded)
-    if (updatedCharge) {
-      try {
-        updatedCharge.set('status', mappedChargeStatus)
-        $app.save(updatedCharge)
-      } catch (err) {
-        console.log('Error updating charge non-paid status:', err)
+  } else if (targetChargeStatus) {
+    try {
+      if (normalizedEvent === 'refunded') {
+        matchedCharge.set('status', 'cancelada')
+        $app.save(matchedCharge)
+        if (matchedPayment) {
+          matchedPayment.set('status', 'reembolsado')
+          $app.save(matchedPayment)
+        }
+      } else if (normalizedEvent === 'canceled') {
+        matchedCharge.set('status', 'cancelada')
+        $app.save(matchedCharge)
+        if (matchedPayment) {
+          matchedPayment.set('status', 'cancelado')
+          $app.save(matchedPayment)
+        }
+      } else if (normalizedEvent === 'payment_failed') {
+        console.log(
+          `[Webhook] Tentativa de pagamento falhou para cobrança #${matchedCharge.id}. Mantida em aberto.`,
+        )
       }
+    } catch (updErr) {
+      console.log('[Webhook] Erro ao atualizar status não-pago:', updErr)
     }
-    if (updatedPayment) {
-      try {
-        updatedPayment.set('status', mappedPaymentStatus)
-        $app.save(updatedPayment)
-      } catch (err) {
-        console.log('Error updating payment non-paid status:', err)
-      }
-    }
+  }
+
+  // 3.7 Registrar na tabela de idempotência/auditoria `webhook_events`
+  try {
+    const webhookEventsCol = $app.findCollectionByNameOrId('webhook_events')
+    const evtRecord = new Record(webhookEventsCol)
+    evtRecord.set('event_key', idempotencyKey)
+    evtRecord.set('event_type', normalizedEvent)
+    evtRecord.set('order_nsu', orderNsu)
+    evtRecord.set('transaction_nsu', transactionNsu)
+    evtRecord.set('invoice_slug', invoiceSlug)
+    evtRecord.set('charge_id', matchedCharge.id)
+    evtRecord.set('status', targetChargeStatus || 'processado')
+    evtRecord.set('payload', body)
+    $app.save(evtRecord)
+  } catch (auditErr) {
+    console.log('[Webhook] Erro ao registrar webhook_events:', auditErr)
   }
 
   return e.json(200, {
     success: true,
-    payment_id: paymentId,
-    charge_status: mappedChargeStatus,
-    payment_status: mappedPaymentStatus,
-    discount_applied: appliedDiscount,
+    event_type: normalizedEvent,
+    order_nsu: orderNsu,
+    charge_id: matchedCharge.id,
+    charge_status: matchedCharge.getString('status'),
+    payment_status: matchedPayment ? matchedPayment.getString('status') : null,
     amount_paid: finalPaidAmount,
+    discount_applied: appliedDiscount,
   })
+})
+
+// -------------------------------------------------------------
+// 4. Endpoint para acionar manualmente ou testar a rotina recorrente
+// -------------------------------------------------------------
+routerAdd('POST', '/backend/v1/recurring-billing/run-now', (e) => {
+  const readSetting = (k, fallback = '') => {
+    try {
+      const records = $app.findRecordsByFilter('settings', `key = '${k}'`, '-created', 1, 0)
+      if (records && records.length > 0) {
+        const val = records[0].getString('value')
+        return val !== undefined && val !== null ? val.trim() : fallback
+      }
+    } catch (_) {}
+    return fallback
+  }
+
+  const setSetting = (k, v) => {
+    try {
+      const settingsCol = $app.findCollectionByNameOrId('settings')
+      let rec = null
+      try {
+        rec = $app.findFirstRecordByData('settings', 'key', k)
+      } catch (_) {}
+      if (rec) {
+        rec.set('value', String(v))
+        $app.save(rec)
+      } else {
+        const newRec = new Record(settingsCol)
+        newRec.set('key', k)
+        newRec.set('value', String(v))
+        $app.save(newRec)
+      }
+    } catch (err) {
+      console.log(`[Settings] Erro ao salvar setting ${k}:`, err)
+    }
+  }
+
+  const normalizeGuardian = (name) => {
+    if (!name) return ''
+    return String(name).trim().replace(/\s+/g, ' ')
+  }
+
+  const info = e.requestInfo()
+  const body = info.body || {}
+  const force = body.force === true
+
+  const isAutomationActive = readSetting('recurring_billing_active', 'false') === 'true'
+
+  if (!isAutomationActive && !force) {
+    return e.json(400, {
+      success: false,
+      message:
+        'A geração automática de cobranças está DESLIGADA no sistema. Ative o interruptor nas Configurações ou envie force: true para testar.',
+    })
+  }
+
+  const daysBefore = parseInt(readSetting('recurring_billing_days_before', '7'), 10) || 7
+  const now = new Date()
+  const nowIso = now.toISOString()
+  const todayStr = nowIso.split('T')[0]
+  console.log(
+    `[Cobrança Automática Manual] Iniciando rotina (forçado=${force}, ativo=${isAutomationActive}, dias_antes=${daysBefore}, data_base=${todayStr})`,
+  )
+
+  // Carregar planos
+  const planMap = {}
+  try {
+    const allPlans = $app.findRecordsByFilter('plans', 'is_active = true', 'name', 100, 0)
+    for (const p of allPlans) {
+      planMap[p.id] = {
+        id: p.id,
+        name: p.getString('name') || '',
+        price: p.getFloat('monthly_price') || 0,
+      }
+    }
+  } catch (pErr) {
+    console.log('[Cobrança Automática] Erro ao carregar planos:', pErr)
+  }
+
+  // Carregar alunos ativos
+  let activeStudents = []
+  try {
+    activeStudents = $app.findRecordsByFilter(
+      'students',
+      "status = 'ativo' && fee_suspended = false",
+      'name',
+      2000,
+      0,
+    )
+  } catch (stErr) {
+    console.log('[Cobrança Automática] Erro ao carregar alunos ativos:', stErr)
+    return e.json(500, {
+      success: false,
+      message: 'Erro ao carregar alunos: ' + String(stErr),
+    })
+  }
+
+  // Contagem por responsável
+  const guardianCount = {}
+  for (const st of activeStudents) {
+    const gName = normalizeGuardian(st.getString('guardian_name')).toLowerCase()
+    if (gName) {
+      guardianCount[gName] = (guardianCount[gName] || 0) + 1
+    }
+  }
+
+  let processedCount = 0
+  let createdCount = 0
+  let skippedIsentoCount = 0
+  let alreadyIssuedCount = 0
+  const errorDetails = []
+
+  const targetDate = new Date(now)
+  targetDate.setDate(targetDate.getDate() + daysBefore)
+  const targetDueDay = targetDate.getDate()
+  const targetYear = targetDate.getFullYear()
+  const targetMonth = targetDate.getMonth()
+
+  const targetDueDateStr = `${targetYear}-${String(targetMonth + 1).padStart(2, '0')}-${String(targetDueDay).padStart(2, '0')}`
+  const cyclePeriodStr = `${targetYear}-${String(targetMonth + 1).padStart(2, '0')}`
+
+  const apiKey = readSetting('infinitepay_api_key')
+  const handle = readSetting('infinitepay_handle').replace(/^@/, '').replace(/^\$/, '')
+  let apiUrl = (
+    readSetting('infinitepay_api_url') || 'https://api.checkout.infinitepay.io'
+  ).replace(/\/+$/, '')
+  if (apiUrl.includes('api.infinitepay.io/invoices/public/checkout')) {
+    apiUrl = 'https://api.checkout.infinitepay.io'
+  }
+
+  const pbUrl = $os.getenv('PB_INSTANCE_URL') || readSetting('site_url') || ''
+  const webhookUrl = pbUrl ? `${pbUrl.replace(/\/+$/, '')}/backend/v1/infinitepay/webhook` : ''
+
+  for (const st of activeStudents) {
+    const studentId = st.id
+    const studentName = st.getString('name') || 'Aluno'
+    const dueDay = st.getInt('due_day') || 0
+    const planId = st.getString('plan_id') || ''
+    const plan = planMap[planId] || null
+    const situation = (st.getString('situation') || '').toLowerCase()
+
+    const isIsento =
+      situation === 'isento' ||
+      (plan && (plan.price === 0 || plan.name.toLowerCase().includes('isento'))) ||
+      (st.getFloat('monthly_fee') === 0 && plan && plan.price === 0)
+
+    if (isIsento) {
+      skippedIsentoCount++
+      continue
+    }
+
+    if (dueDay <= 0) {
+      continue
+    }
+
+    if (dueDay !== targetDueDay) {
+      continue
+    }
+
+    processedCount++
+
+    // Anti-duplicação
+    try {
+      const existingCharges = $app.findRecordsByFilter(
+        'charges',
+        `student_id = '${studentId}' && due_date ~ '${cyclePeriodStr}' && status != 'cancelada'`,
+        '-created',
+        1,
+        0,
+      )
+
+      if (existingCharges && existingCharges.length > 0) {
+        alreadyIssuedCount++
+        console.log(
+          `[Cobrança Automática] Aluno ${studentName} (#${studentId}) já possui cobrança para o ciclo ${cyclePeriodStr}. Pulando duplicação.`,
+        )
+        continue
+      }
+    } catch (dupErr) {
+      console.log(`[Cobrança Automática] Erro ao checar duplicação para ${studentName}:`, dupErr)
+    }
+
+    // Regras de valor e família
+    const guardianName = normalizeGuardian(st.getString('guardian_name')).toLowerCase()
+    const isFamilyMember =
+      (guardianName && guardianCount[guardianName] > 1) ||
+      (plan && plan.name.toLowerCase().includes('fam')) ||
+      st.getFloat('monthly_fee') === 100
+
+    let baseAmount = st.getFloat('monthly_fee')
+    if (!baseAmount || baseAmount <= 0) {
+      if (plan && plan.price > 0) {
+        baseAmount = plan.price
+      } else if (isFamilyMember) {
+        baseAmount = 100
+      } else {
+        baseAmount = 110
+      }
+    }
+
+    const discountAmount = isFamilyMember ? 10 : 0
+    const planLabel = plan ? plan.name : isFamilyMember ? 'Plano Família' : 'Plano Integral'
+    const monthNames = [
+      'Janeiro',
+      'Fevereiro',
+      'Março',
+      'Abril',
+      'Maio',
+      'Junho',
+      'Julho',
+      'Agosto',
+      'Setembro',
+      'Outubro',
+      'Novembro',
+      'Dezembro',
+    ]
+    const description = `Mensalidade ${monthNames[targetMonth]}/${targetYear} — ${planLabel}`
+    const deterministicOrderNsu = `rc_rec_${studentId.substring(0, 5)}_${targetYear}${String(targetMonth + 1).padStart(2, '0')}_${dueDay}`
+
+    // Chamada à InfinitePay
+    let paymentLink = ''
+    let invoiceSlug = ''
+    let infinitepayPaymentId = deterministicOrderNsu
+
+    if (apiKey || handle) {
+      const priceCents = Math.round(baseAmount * 100)
+      const customerPayload = { name: studentName }
+      const sEmail = st.getString('email') || st.getString('guardian_email')
+      if (sEmail) customerPayload.email = sEmail
+      const sPhone =
+        st.getString('phone') || st.getString('whatsapp') || st.getString('guardian_phone')
+      if (sPhone) {
+        const cleanPhone = sPhone.replace(/\D/g, '')
+        customerPayload.phone_number = cleanPhone.startsWith('55')
+          ? '+' + cleanPhone
+          : '+55' + cleanPhone
+      }
+
+      const headers = {
+        'Content-Type': 'application/json',
+        'User-Agent': 'RCAcquaLife-Academy/1.0',
+      }
+      if (apiKey) headers['X-Api-Key'] = apiKey
+
+      const payload = {
+        order_nsu: deterministicOrderNsu,
+        items: [{ quantity: 1, price: priceCents, description: description }],
+        customer: customerPayload,
+      }
+      if (handle) payload.handle = handle
+      if (webhookUrl) payload.webhook_url = webhookUrl
+
+      try {
+        const res = $http.send({
+          url: `${apiUrl}/links`,
+          method: 'POST',
+          headers: headers,
+          body: JSON.stringify(payload),
+          timeout: 15,
+        })
+        if (res.statusCode >= 200 && res.statusCode < 300) {
+          let respData = null
+          try {
+            respData = JSON.parse(res.raw)
+          } catch (_) {}
+          if (respData) {
+            paymentLink = respData.url || respData.link || respData.checkout_url || ''
+            invoiceSlug = respData.invoice_slug || respData.slug || ''
+            infinitepayPaymentId = invoiceSlug || respData.order_nsu || deterministicOrderNsu
+          }
+        }
+      } catch (genErr) {
+        console.log(`[Cobrança Automática] Erro API para ${studentName}:`, genErr)
+      }
+    }
+
+    if (!paymentLink) {
+      paymentLink = `https://pay.infinitepay.io/link/${infinitepayPaymentId}`
+    }
+
+    // Salvar cobrança
+    try {
+      const chargesCol = $app.findCollectionByNameOrId('charges')
+      const chargeRecord = new Record(chargesCol)
+      chargeRecord.set('student_id', studentId)
+      chargeRecord.set('description', description)
+      chargeRecord.set('amount', baseAmount)
+      chargeRecord.set('discount_amount', discountAmount)
+      chargeRecord.set('due_date', `${targetDueDateStr} 00:00:00.000Z`)
+      chargeRecord.set('status', 'em_aberto')
+      chargeRecord.set('payment_method', 'pix')
+      chargeRecord.set('infinipay_payment_id', infinitepayPaymentId)
+      chargeRecord.set('payment_link', paymentLink)
+      chargeRecord.set('order_nsu', deterministicOrderNsu)
+      if (invoiceSlug) chargeRecord.set('invoice_slug', invoiceSlug)
+      $app.save(chargeRecord)
+
+      const paymentsCol = $app.findCollectionByNameOrId('payments')
+      const paymentRecord = new Record(paymentsCol)
+      paymentRecord.set('student_id', studentId)
+      paymentRecord.set('charge_id', chargeRecord.id)
+      paymentRecord.set('amount', baseAmount)
+      paymentRecord.set('discount_amount', discountAmount)
+      paymentRecord.set('due_date', `${targetDueDateStr} 00:00:00.000Z`)
+      paymentRecord.set('status', 'pendente')
+      paymentRecord.set('payment_method', 'pix')
+      paymentRecord.set('payment_link', paymentLink)
+      paymentRecord.set('infinipay_transaction_id', infinitepayPaymentId)
+      paymentRecord.set('order_nsu', deterministicOrderNsu)
+      if (invoiceSlug) paymentRecord.set('invoice_slug', invoiceSlug)
+      $app.save(paymentRecord)
+
+      createdCount++
+      console.log(
+        `[Cobrança Automática] Emitida para ${studentName}: R$ ${baseAmount}, vencimento ${targetDueDateStr}`,
+      )
+    } catch (saveErr) {
+      console.log(`[Cobrança Automática] Erro ao salvar para ${studentName}:`, saveErr)
+      errorDetails.push({ studentId, studentName, error: String(saveErr) })
+    }
+  }
+
+  const summary = `Executado em ${nowIso}: ${processedCount} alunos aptos com vencimento em ${targetDueDateStr}, ${createdCount} cobranças emitidas, ${alreadyIssuedCount} já existentes, ${skippedIsentoCount} isentos, ${errorDetails.length} erros.`
+  console.log(`[Cobrança Automática] Resumo: ${summary}`)
+
+  setSetting('recurring_billing_last_run', nowIso)
+  setSetting('recurring_billing_last_status', summary)
+
+  return e.json(200, {
+    success: true,
+    summary,
+    targetDueDate: targetDueDateStr,
+    processedCount,
+    createdCount,
+    alreadyIssuedCount,
+    skippedIsentoCount,
+    errors: errorDetails,
+  })
+})
+
+// -------------------------------------------------------------
+// 5. Registro do Agendamento Diário (cronAdd)
+// Roda todos os dias às 06:00 da manhã (horário do servidor)
+// -------------------------------------------------------------
+cronAdd('daily_recurring_billing', '0 6 * * *', () => {
+  const readSetting = (k, fallback = '') => {
+    try {
+      const records = $app.findRecordsByFilter('settings', `key = '${k}'`, '-created', 1, 0)
+      if (records && records.length > 0) {
+        const val = records[0].getString('value')
+        return val !== undefined && val !== null ? val.trim() : fallback
+      }
+    } catch (_) {}
+    return fallback
+  }
+
+  const setSetting = (k, v) => {
+    try {
+      const settingsCol = $app.findCollectionByNameOrId('settings')
+      let rec = null
+      try {
+        rec = $app.findFirstRecordByData('settings', 'key', k)
+      } catch (_) {}
+      if (rec) {
+        rec.set('value', String(v))
+        $app.save(rec)
+      } else {
+        const newRec = new Record(settingsCol)
+        newRec.set('key', k)
+        newRec.set('value', String(v))
+        $app.save(newRec)
+      }
+    } catch (err) {
+      console.log(`[Settings] Erro ao salvar setting ${k}:`, err)
+    }
+  }
+
+  const normalizeGuardian = (name) => {
+    if (!name) return ''
+    return String(name).trim().replace(/\s+/g, ' ')
+  }
+
+  const isAutomationActive = readSetting('recurring_billing_active', 'false') === 'true'
+
+  // SE DESLIGADO, NÃO EMITIR COBRANÇA ALGUMA
+  if (!isAutomationActive) {
+    console.log(
+      '[Cron] daily_recurring_billing ignorado: interruptor mestre está DESLIGADO nas Configurações.',
+    )
+    return
+  }
+
+  const daysBefore = parseInt(readSetting('recurring_billing_days_before', '7'), 10) || 7
+  const now = new Date()
+  const nowIso = now.toISOString()
+  console.log(`[Cron] daily_recurring_billing executando: dias_antes=${daysBefore}, hora=${nowIso}`)
+
+  const planMap = {}
+  try {
+    const allPlans = $app.findRecordsByFilter('plans', 'is_active = true', 'name', 100, 0)
+    for (const p of allPlans) {
+      planMap[p.id] = {
+        id: p.id,
+        name: p.getString('name') || '',
+        price: p.getFloat('monthly_price') || 0,
+      }
+    }
+  } catch (pErr) {
+    console.log('[Cron] Erro ao carregar planos:', pErr)
+  }
+
+  let activeStudents = []
+  try {
+    activeStudents = $app.findRecordsByFilter(
+      'students',
+      "status = 'ativo' && fee_suspended = false",
+      'name',
+      2000,
+      0,
+    )
+  } catch (stErr) {
+    console.log('[Cron] Erro ao carregar alunos ativos:', stErr)
+    return
+  }
+
+  const guardianCount = {}
+  for (const st of activeStudents) {
+    const gName = normalizeGuardian(st.getString('guardian_name')).toLowerCase()
+    if (gName) {
+      guardianCount[gName] = (guardianCount[gName] || 0) + 1
+    }
+  }
+
+  let processedCount = 0
+  let createdCount = 0
+  let skippedIsentoCount = 0
+  let alreadyIssuedCount = 0
+  const errorDetails = []
+
+  const targetDate = new Date(now)
+  targetDate.setDate(targetDate.getDate() + daysBefore)
+  const targetDueDay = targetDate.getDate()
+  const targetYear = targetDate.getFullYear()
+  const targetMonth = targetDate.getMonth()
+
+  const targetDueDateStr = `${targetYear}-${String(targetMonth + 1).padStart(2, '0')}-${String(targetDueDay).padStart(2, '0')}`
+  const cyclePeriodStr = `${targetYear}-${String(targetMonth + 1).padStart(2, '0')}`
+
+  const apiKey = readSetting('infinitepay_api_key')
+  const handle = readSetting('infinitepay_handle').replace(/^@/, '').replace(/^\$/, '')
+  let apiUrl = (
+    readSetting('infinitepay_api_url') || 'https://api.checkout.infinitepay.io'
+  ).replace(/\/+$/, '')
+  if (apiUrl.includes('api.infinitepay.io/invoices/public/checkout')) {
+    apiUrl = 'https://api.checkout.infinitepay.io'
+  }
+
+  const pbUrl = $os.getenv('PB_INSTANCE_URL') || readSetting('site_url') || ''
+  const webhookUrl = pbUrl ? `${pbUrl.replace(/\/+$/, '')}/backend/v1/infinitepay/webhook` : ''
+
+  for (const st of activeStudents) {
+    const studentId = st.id
+    const studentName = st.getString('name') || 'Aluno'
+    const dueDay = st.getInt('due_day') || 0
+    const planId = st.getString('plan_id') || ''
+    const plan = planMap[planId] || null
+    const situation = (st.getString('situation') || '').toLowerCase()
+
+    const isIsento =
+      situation === 'isento' ||
+      (plan && (plan.price === 0 || plan.name.toLowerCase().includes('isento'))) ||
+      (st.getFloat('monthly_fee') === 0 && plan && plan.price === 0)
+
+    if (isIsento) {
+      skippedIsentoCount++
+      continue
+    }
+
+    if (dueDay <= 0) {
+      continue
+    }
+
+    if (dueDay !== targetDueDay) {
+      continue
+    }
+
+    processedCount++
+
+    // Anti-duplicação
+    try {
+      const existingCharges = $app.findRecordsByFilter(
+        'charges',
+        `student_id = '${studentId}' && due_date ~ '${cyclePeriodStr}' && status != 'cancelada'`,
+        '-created',
+        1,
+        0,
+      )
+
+      if (existingCharges && existingCharges.length > 0) {
+        alreadyIssuedCount++
+        continue
+      }
+    } catch (_) {}
+
+    const guardianName = normalizeGuardian(st.getString('guardian_name')).toLowerCase()
+    const isFamilyMember =
+      (guardianName && guardianCount[guardianName] > 1) ||
+      (plan && plan.name.toLowerCase().includes('fam')) ||
+      st.getFloat('monthly_fee') === 100
+
+    let baseAmount = st.getFloat('monthly_fee')
+    if (!baseAmount || baseAmount <= 0) {
+      if (plan && plan.price > 0) {
+        baseAmount = plan.price
+      } else if (isFamilyMember) {
+        baseAmount = 100
+      } else {
+        baseAmount = 110
+      }
+    }
+
+    const discountAmount = isFamilyMember ? 10 : 0
+    const planLabel = plan ? plan.name : isFamilyMember ? 'Plano Família' : 'Plano Integral'
+    const monthNames = [
+      'Janeiro',
+      'Fevereiro',
+      'Março',
+      'Abril',
+      'Maio',
+      'Junho',
+      'Julho',
+      'Agosto',
+      'Setembro',
+      'Outubro',
+      'Novembro',
+      'Dezembro',
+    ]
+    const description = `Mensalidade ${monthNames[targetMonth]}/${targetYear} — ${planLabel}`
+    const deterministicOrderNsu = `rc_rec_${studentId.substring(0, 5)}_${targetYear}${String(targetMonth + 1).padStart(2, '0')}_${dueDay}`
+
+    let paymentLink = ''
+    let invoiceSlug = ''
+    let infinitepayPaymentId = deterministicOrderNsu
+
+    if (apiKey || handle) {
+      const priceCents = Math.round(baseAmount * 100)
+      const customerPayload = { name: studentName }
+      const sEmail = st.getString('email') || st.getString('guardian_email')
+      if (sEmail) customerPayload.email = sEmail
+      const sPhone =
+        st.getString('phone') || st.getString('whatsapp') || st.getString('guardian_phone')
+      if (sPhone) {
+        const cleanPhone = sPhone.replace(/\D/g, '')
+        customerPayload.phone_number = cleanPhone.startsWith('55')
+          ? '+' + cleanPhone
+          : '+55' + cleanPhone
+      }
+
+      const headers = {
+        'Content-Type': 'application/json',
+        'User-Agent': 'RCAcquaLife-Academy/1.0',
+      }
+      if (apiKey) headers['X-Api-Key'] = apiKey
+
+      const payload = {
+        order_nsu: deterministicOrderNsu,
+        items: [{ quantity: 1, price: priceCents, description: description }],
+        customer: customerPayload,
+      }
+      if (handle) payload.handle = handle
+      if (webhookUrl) payload.webhook_url = webhookUrl
+
+      try {
+        const res = $http.send({
+          url: `${apiUrl}/links`,
+          method: 'POST',
+          headers: headers,
+          body: JSON.stringify(payload),
+          timeout: 15,
+        })
+        if (res.statusCode >= 200 && res.statusCode < 300) {
+          let respData = null
+          try {
+            respData = JSON.parse(res.raw)
+          } catch (_) {}
+          if (respData) {
+            paymentLink = respData.url || respData.link || respData.checkout_url || ''
+            invoiceSlug = respData.invoice_slug || respData.slug || ''
+            infinitepayPaymentId = invoiceSlug || respData.order_nsu || deterministicOrderNsu
+          }
+        }
+      } catch (genErr) {
+        console.log(`[Cron] Erro API para ${studentName}:`, genErr)
+      }
+    }
+
+    if (!paymentLink) {
+      paymentLink = `https://pay.infinitepay.io/link/${infinitepayPaymentId}`
+    }
+
+    try {
+      const chargesCol = $app.findCollectionByNameOrId('charges')
+      const chargeRecord = new Record(chargesCol)
+      chargeRecord.set('student_id', studentId)
+      chargeRecord.set('description', description)
+      chargeRecord.set('amount', baseAmount)
+      chargeRecord.set('discount_amount', discountAmount)
+      chargeRecord.set('due_date', `${targetDueDateStr} 00:00:00.000Z`)
+      chargeRecord.set('status', 'em_aberto')
+      chargeRecord.set('payment_method', 'pix')
+      chargeRecord.set('infinipay_payment_id', infinitepayPaymentId)
+      chargeRecord.set('payment_link', paymentLink)
+      chargeRecord.set('order_nsu', deterministicOrderNsu)
+      if (invoiceSlug) chargeRecord.set('invoice_slug', invoiceSlug)
+      $app.save(chargeRecord)
+
+      const paymentsCol = $app.findCollectionByNameOrId('payments')
+      const paymentRecord = new Record(paymentsCol)
+      paymentRecord.set('student_id', studentId)
+      paymentRecord.set('charge_id', chargeRecord.id)
+      paymentRecord.set('amount', baseAmount)
+      paymentRecord.set('discount_amount', discountAmount)
+      paymentRecord.set('due_date', `${targetDueDateStr} 00:00:00.000Z`)
+      paymentRecord.set('status', 'pendente')
+      paymentRecord.set('payment_method', 'pix')
+      paymentRecord.set('payment_link', paymentLink)
+      paymentRecord.set('infinipay_transaction_id', infinitepayPaymentId)
+      paymentRecord.set('order_nsu', deterministicOrderNsu)
+      if (invoiceSlug) paymentRecord.set('invoice_slug', invoiceSlug)
+      $app.save(paymentRecord)
+
+      createdCount++
+      console.log(
+        `[Cron] Emitida para ${studentName}: R$ ${baseAmount}, vencimento ${targetDueDateStr}`,
+      )
+    } catch (saveErr) {
+      console.log(`[Cron] Erro ao salvar para ${studentName}:`, saveErr)
+      errorDetails.push({ studentId, studentName, error: String(saveErr) })
+    }
+  }
+
+  const summary = `Cron executado em ${nowIso}: ${processedCount} alunos aptos com vencimento em ${targetDueDateStr}, ${createdCount} cobranças emitidas, ${alreadyIssuedCount} já existentes, ${skippedIsentoCount} isentos, ${errorDetails.length} erros.`
+  console.log(`[Cron] Resumo: ${summary}`)
+
+  setSetting('recurring_billing_last_run', nowIso)
+  setSetting('recurring_billing_last_status', summary)
 })
