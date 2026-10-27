@@ -14,7 +14,12 @@ import {
   Users,
   Sparkles,
   Calendar,
+  Search,
+  X,
+  UserCheck,
 } from 'lucide-react'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { getStudentPhotoUrl, normalizeName } from '@/lib/studentPhoto'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -67,6 +72,7 @@ export default function Charges() {
   // Modal State
   const [newModalOpen, setNewModalOpen] = useState(false)
   const [formStudentId, setFormStudentId] = useState('')
+  const [studentSearchQuery, setStudentSearchQuery] = useState('')
   const [formDescription, setFormDescription] = useState('Mensalidade de Natação')
   const [formAmount, setFormAmount] = useState('110')
   const [formDiscountAmount, setFormDiscountAmount] = useState('0')
@@ -139,6 +145,7 @@ export default function Charges() {
   // Auto-fill amount when student changes
   const handleStudentChange = (stId: string) => {
     setFormStudentId(stId)
+    setStudentSearchQuery('')
     const st = students.find((s) => s.id === stId)
     if (st) {
       const calc = calculateStudentCharge(st, plans, students)
@@ -151,6 +158,39 @@ export default function Charges() {
       )
     }
   }
+
+  // Clear selected student in new charge modal
+  const handleClearSelectedStudent = () => {
+    setFormStudentId('')
+    setStudentSearchQuery('')
+    setIsFamilyCharge(false)
+    setFormDiscountAmount('0')
+  }
+
+  // Filter students for modal search
+  const filteredModalStudents = useMemo(() => {
+    const raw = studentSearchQuery.trim()
+    if (!raw) return students.slice(0, 10)
+    const norm = normalizeName(raw)
+    const rawLower = raw.toLowerCase()
+    return students
+      .filter((s) => {
+        const normName = normalizeName(s.name)
+        const matchName = normName.includes(norm)
+        const matchCpf = s.cpf ? s.cpf.replace(/\D/g, '').includes(raw.replace(/\D/g, '')) : false
+        const matchEmail = s.email ? s.email.toLowerCase().includes(rawLower) : false
+        const matchGuardian = s.guardian_name
+          ? normalizeName(s.guardian_name).includes(norm)
+          : false
+        return matchName || matchCpf || matchEmail || matchGuardian
+      })
+      .slice(0, 8)
+  }, [students, studentSearchQuery])
+
+  // Selected student object for modal display
+  const selectedModalStudent = useMemo(() => {
+    return students.find((s) => s.id === formStudentId) || null
+  }, [students, formStudentId])
 
   const handleCreateCharge = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -340,7 +380,8 @@ export default function Charges() {
 
         <Button
           onClick={() => {
-            setFormStudentId(students[0]?.id || '')
+            setFormStudentId('')
+            setStudentSearchQuery('')
             setNewModalOpen(true)
           }}
           className="bg-[#D4AF37] hover:bg-[#B8953A] text-[#0F1B3D] font-bold shadow-md text-xs h-10 px-4 rounded-xl flex items-center gap-2"
@@ -605,20 +646,148 @@ export default function Charges() {
             </DialogHeader>
 
             <div className="grid gap-3 py-4 text-xs">
-              <div className="space-y-1">
-                <Label className="font-semibold text-[#1E2A3A]">Aluno</Label>
-                <Select value={formStudentId} onValueChange={handleStudentChange}>
-                  <SelectTrigger className="focus:ring-[#D4AF37]">
-                    <SelectValue placeholder="Selecione o aluno" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {students.map((st) => (
-                      <SelectItem key={st.id} value={st.id}>
-                        {st.name} ({st.cpf || st.email})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <Label className="font-semibold text-[#1E2A3A]">
+                    Aluno <span className="text-red-500">*</span>
+                  </Label>
+                  {selectedModalStudent && (
+                    <button
+                      type="button"
+                      onClick={handleClearSelectedStudent}
+                      className="text-[11px] text-[#17A2B8] hover:text-[#0F1B3D] font-medium flex items-center gap-1 transition"
+                    >
+                      <RotateCcw className="w-3 h-3" /> Trocar aluno
+                    </button>
+                  )}
+                </div>
+
+                {selectedModalStudent ? (
+                  /* Card do aluno selecionado com opção de limpar */
+                  <div className="flex items-center justify-between p-2.5 bg-slate-50 border border-slate-200 rounded-xl">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <Avatar className="w-9 h-9 border border-slate-200 bg-white shrink-0">
+                        {getStudentPhotoUrl(selectedModalStudent) ? (
+                          <AvatarImage
+                            src={getStudentPhotoUrl(selectedModalStudent)!}
+                            alt={selectedModalStudent.name}
+                            className="object-cover"
+                          />
+                        ) : null}
+                        <AvatarFallback className="text-[11px] bg-[#0F1B3D] text-white font-bold">
+                          {selectedModalStudent.name.slice(0, 2).toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <p className="text-xs font-bold text-[#0F1B3D] truncate">
+                            {selectedModalStudent.name}
+                          </p>
+                          <Badge
+                            className={`text-[9px] px-1.5 py-0 ${
+                              selectedModalStudent.status === 'ativo'
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                : 'bg-red-50 text-red-600 border-red-200'
+                            }`}
+                          >
+                            {selectedModalStudent.status === 'ativo' ? 'Ativo' : 'Inativo'}
+                          </Badge>
+                        </div>
+                        <p className="text-[11px] text-slate-500 truncate">
+                          {selectedModalStudent.cpf ? `CPF: ${selectedModalStudent.cpf}` : ''}
+                          {selectedModalStudent.cpf && selectedModalStudent.email ? ' • ' : ''}
+                          {selectedModalStudent.email || ''}
+                          {selectedModalStudent.guardian_name
+                            ? ` • Resp: ${selectedModalStudent.guardian_name}`
+                            : ''}
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleClearSelectedStudent}
+                      className="p-1 text-slate-400 hover:text-red-500 hover:bg-slate-100 rounded-lg transition shrink-0 ml-2"
+                      title="Remover e buscar outro aluno"
+                      aria-label="Remover e buscar outro aluno"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ) : (
+                  /* Campo de busca por nome com sugestões em tempo real */
+                  <div className="space-y-1.5">
+                    <div className="relative">
+                      <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      <Input
+                        type="text"
+                        autoFocus
+                        placeholder="Buscar aluno por nome..."
+                        value={studentSearchQuery}
+                        onChange={(e) => setStudentSearchQuery(e.target.value)}
+                        className="pl-9 pr-8 bg-[#F5F7FA] border-[#E0E4EA] text-xs h-9 rounded-xl focus-visible:ring-[#D4AF37]"
+                      />
+                      {studentSearchQuery && (
+                        <button
+                          type="button"
+                          onClick={() => setStudentSearchQuery('')}
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5"
+                          aria-label="Limpar busca"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Lista de sugestões filtradas */}
+                    <div className="border border-slate-200 rounded-xl bg-white max-h-48 overflow-y-auto divide-y divide-slate-100 shadow-inner">
+                      {filteredModalStudents.length === 0 ? (
+                        <div className="p-3 text-center text-xs text-slate-400">
+                          Nenhum aluno encontrado para "{studentSearchQuery}".
+                        </div>
+                      ) : (
+                        filteredModalStudents.map((st) => {
+                          const photoUrl = getStudentPhotoUrl(st)
+                          return (
+                            <button
+                              key={st.id}
+                              type="button"
+                              onClick={() => handleStudentChange(st.id)}
+                              className="w-full text-left px-3 py-2 hover:bg-[#F5F7FA] flex items-center justify-between gap-2 transition group"
+                            >
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <Avatar className="w-7 h-7 bg-slate-100 shrink-0">
+                                  {photoUrl ? (
+                                    <AvatarImage
+                                      src={photoUrl}
+                                      alt={st.name}
+                                      className="object-cover"
+                                    />
+                                  ) : null}
+                                  <AvatarFallback className="text-[10px] bg-[#0F1B3D] text-white">
+                                    {st.name.slice(0, 2).toUpperCase()}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <div className="min-w-0">
+                                  <p className="text-xs font-medium text-[#1E2A3A] group-hover:text-[#0F1B3D] truncate">
+                                    {st.name}
+                                  </p>
+                                  <p className="text-[10px] text-slate-400 truncate">
+                                    {st.cpf ? `CPF: ${st.cpf}` : st.email || 'Sem CPF/E-mail'}
+                                    {st.guardian_name ? ` • Resp: ${st.guardian_name}` : ''}
+                                  </p>
+                                </div>
+                              </div>
+                              <span className="text-[10px] font-semibold text-[#17A2B8] opacity-0 group-hover:opacity-100 transition shrink-0">
+                                Selecionar
+                              </span>
+                            </button>
+                          )
+                        })
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="space-y-1">
