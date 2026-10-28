@@ -14,6 +14,7 @@ import {
   ArrowRight,
   RotateCcw,
   SlidersHorizontal,
+  Sparkles,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -41,6 +42,7 @@ import {
   importBubbleStudents,
   previewBubbleUpsert,
   resolveColumnMapping,
+  DEFAULT_COLUMN_MAPPING,
   type ColumnMapping,
   type ImportResult,
   type ImportPreviewPlan,

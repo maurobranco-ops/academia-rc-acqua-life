@@ -147,6 +147,536 @@ routerAdd('POST', '/backend/v1/students/delete-with-history', (e) => {
 })
 
 // -------------------------------------------------------------
+// 1.1 Execução de mesclagem (upsert) do CSV do Bubble
+// POST /backend/v1/import/execute-csv
+// -------------------------------------------------------------
+routerAdd('POST', '/backend/v1/import/execute-csv', (e) => {
+  const info = e.requestInfo()
+  const body = info.body || {}
+
+  let rows = body.rows || null
+  const csvText = body.csv_text || ''
+
+  const parseBubbleDateInternal = (dateStr) => {
+    if (!dateStr || !String(dateStr).trim()) return null
+    const s = String(dateStr).trim()
+    const regex = /^([A-Za-z]{3})\s+(\d{1,2}),\s+(\d{4})(?:\s+(\d{1,2}):(\d{2})\s*(am|pm))?/i
+    const match = s.match(regex)
+    const monthMap = {
+      jan: 0,
+      feb: 1,
+      mar: 2,
+      apr: 3,
+      may: 4,
+      jun: 5,
+      jul: 6,
+      aug: 7,
+      sep: 8,
+      oct: 9,
+      nov: 10,
+      dec: 11,
+    }
+    if (match) {
+      const monStr = match[1].toLowerCase()
+      const day = parseInt(match[2], 10)
+      const year = parseInt(match[3], 10)
+      let hour = match[4] ? parseInt(match[4], 10) : 0
+      const minute = match[5] ? parseInt(match[5], 10) : 0
+      const ampm = match[6] ? match[6].toLowerCase() : ''
+      if (ampm === 'pm' && hour < 12) hour += 12
+      if (ampm === 'am' && hour === 12) hour = 0
+      const monIdx = monthMap[monStr]
+      if (monIdx !== undefined) {
+        const d = new Date(Date.UTC(year, monIdx, day, hour, minute, 0))
+        if (!isNaN(d.getTime())) {
+          return d.toISOString().replace('T', ' ')
+        }
+      }
+    }
+    const standard = new Date(s)
+    if (!isNaN(standard.getTime())) {
+      return standard.toISOString().replace('T', ' ')
+    }
+    return null
+  }
+
+  const normalizeNameInternal = (str) => {
+    if (!str) return ''
+    return String(str)
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/\s*\([^)]*\)\s*/g, ' ')
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+  }
+
+  const normalizeNameExactInternal = (str) => {
+    if (!str) return ''
+    return String(str)
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+  }
+
+  const parseNumberInternal = (val) => {
+    if (val === undefined || val === null) return 0
+    if (typeof val === 'number') return isNaN(val) ? 0 : val
+    const s = String(val).trim().replace(/\s/g, '').replace(',', '.')
+    const n = parseFloat(s)
+    return isNaN(n) ? 0 : n
+  }
+
+  const formatAddressInternal = (p) => {
+    const log = (p.logradouro || '').trim()
+    const num = (p.numero || '').trim()
+    const comp = (p.complemento || '').trim()
+    const bairro = (p.bairro || '').trim()
+    const cidade = (p.cidade || '').trim()
+    const uf = (p.uf || '').trim()
+    const cep = (p.cep || '').trim()
+    const parts = []
+    let street = log
+    if (street && num && num !== '0' && num !== 'S/N' && num !== 'S.N⁰') {
+      street += ', Nº ' + num
+    } else if (num && !street) {
+      street = 'Nº ' + num
+    }
+    if (comp) {
+      street = street ? street + ' - ' + comp : comp
+    }
+    if (street) parts.push(street)
+    if (bairro) parts.push(bairro)
+    if (cidade && uf) parts.push(cidade + '/' + uf.toUpperCase())
+    else if (cidade) parts.push(cidade)
+    else if (uf) parts.push(uf.toUpperCase())
+    if (cep && cep !== '00000-000') parts.push('CEP ' + cep)
+    return parts.join(', ')
+  }
+
+  if (!rows && csvText) {
+    let content = csvText
+    if (content.charCodeAt(0) === 0xfeff) content = content.slice(1)
+    const rawRows = []
+    let currentRow = []
+    let currentField = ''
+    let insideQuotes = false
+    let i = 0
+    while (i < content.length) {
+      const char = content[i]
+      if (insideQuotes) {
+        if (char === '"') {
+          if (i + 1 < content.length && content[i + 1] === '"') {
+            currentField += '"'
+            i += 2
+            continue
+          } else {
+            insideQuotes = false
+            i++
+            continue
+          }
+        } else {
+          currentField += char
+          i++
+          continue
+        }
+      } else {
+        if (char === '"') {
+          insideQuotes = true
+          i++
+          continue
+        } else if (char === ',') {
+          currentRow.push(currentField)
+          currentField = ''
+          i++
+          continue
+        } else if (char === '\r') {
+          if (i + 1 < content.length && content[i + 1] === '\n') i++
+          currentRow.push(currentField)
+          rawRows.push(currentRow)
+          currentRow = []
+          currentField = ''
+          i++
+          continue
+        } else if (char === '\n') {
+          currentRow.push(currentField)
+          rawRows.push(currentRow)
+          currentRow = []
+          currentField = ''
+          i++
+          continue
+        } else {
+          currentField += char
+          i++
+          continue
+        }
+      }
+    }
+    if (currentField.length > 0 || currentRow.length > 0) {
+      currentRow.push(currentField)
+      rawRows.push(currentRow)
+    }
+
+    if (rawRows.length > 1) {
+      const headers = rawRows[0].map((h) => (h || '').trim())
+      rows = []
+      for (let r = 1; r < rawRows.length; r++) {
+        const line = rawRows[r]
+        if (line.length === 1 && !line[0].trim()) continue
+        if (line.every((v) => !v.trim())) continue
+        const obj = {}
+        for (let c = 0; c < headers.length; c++) {
+          obj[headers[c]] = line[c] !== undefined ? line[c] : ''
+        }
+        rows.push(obj)
+      }
+    }
+  }
+
+  if (!rows || !Array.isArray(rows) || rows.length === 0) {
+    return e.json(400, {
+      success: false,
+      message: 'Nenhum registro para importar. Envie "rows" (array) ou "csv_text" (string).',
+    })
+  }
+
+  const result = {
+    totalProcessed: 0,
+    studentsCreated: 0,
+    studentsUpdated: 0,
+    studentsInactiveTR: 0,
+    classesCreated: 0,
+    enrollmentsCreated: 0,
+    enrollmentsUpdated: 0,
+    warnings: [],
+  }
+
+  // 1. Carregar turmas
+  const classMap = {}
+  try {
+    const classes = $app.findRecordsByFilter('classes', '', 'name', 500, 0)
+    for (let i = 0; i < classes.length; i++) {
+      const c = classes[i]
+      classMap[c.getString('name').trim().toLowerCase()] = c
+    }
+  } catch (errClasses) {}
+
+  // 2. Carregar alunos existentes
+  const studentByBubbleId = {}
+  const studentByNormName = {}
+  const studentByNormExact = {}
+  const studentByCpfAndName = {}
+
+  const indexStudent = (s) => {
+    const bid = (s.getString('bubble_id') || '').trim()
+    if (bid) studentByBubbleId[bid] = s
+
+    const sName = s.getString('name') || ''
+    const norm = normalizeNameInternal(sName)
+    if (norm) studentByNormName[norm] = s
+
+    const normExact = normalizeNameExactInternal(sName)
+    if (normExact) studentByNormExact[normExact] = s
+
+    const gCpf = (s.getString('guardian_cpf') || '').replace(/\D/g, '')
+    if (gCpf && norm) studentByCpfAndName[norm + ':' + gCpf] = s
+  }
+
+  try {
+    const existingStudents = $app.findRecordsByFilter('students', '', 'name', 2000, 0)
+    for (let i = 0; i < existingStudents.length; i++) {
+      indexStudent(existingStudents[i])
+    }
+  } catch (errSt) {}
+
+  // 3. Carregar matrículas
+  const enrollmentMap = {}
+  try {
+    const existingEnrollments = $app.findRecordsByFilter('enrollments', '', '-created', 5000, 0)
+    for (let i = 0; i < existingEnrollments.length; i++) {
+      const enr = existingEnrollments[i]
+      enrollmentMap[enr.getString('student_id') + ':' + enr.getString('class_id')] = true
+    }
+  } catch (errEnr) {}
+
+  // 4. Carregar planos
+  let defaultPlanId = ''
+  try {
+    const plans = $app.findRecordsByFilter('plans', 'is_active = true', 'monthly_price', 10, 0)
+    if (plans.length > 0) defaultPlanId = plans[0].id
+  } catch (_) {}
+
+  const studentsCol = $app.findCollectionByNameOrId('students')
+  const classesCol = $app.findCollectionByNameOrId('classes')
+  const enrollmentsCol = $app.findCollectionByNameOrId('enrollments')
+
+  // Pre-criar turmas
+  for (let r = 0; r < rows.length; r++) {
+    const row = rows[r]
+    const rawAtividade = (row['Atividade'] || row['atividade'] || '').trim()
+    if (rawAtividade) {
+      const acts = rawAtividade
+        .split(',')
+        .map((x) => x.trim())
+        .filter((x) => x.length > 0)
+      for (let a = 0; a < acts.length; a++) {
+        const actName = acts[a]
+        const key = actName.toLowerCase()
+        if (!classMap[key]) {
+          try {
+            const classRec = new Record(classesCol)
+            classRec.set('name', actName)
+            let cType = 'natacao'
+            if (key.indexOf('hidro') !== -1) cType = 'hidroginastica'
+            else if (key.indexOf('funcional') !== -1) cType = 'funcional'
+            classRec.set('type', cType)
+            classRec.set('schedule_days', ['seg', 'qua', 'sex'])
+            classRec.set('schedule_time', '08:00')
+            classRec.set('capacity', 20)
+            classRec.set('monthly_price', 100)
+            $app.save(classRec)
+            classMap[key] = classRec
+            result.classesCreated++
+          } catch (errC) {}
+        }
+      }
+    }
+  }
+
+  // 6. Processar linhas
+  for (let r = 0; r < rows.length; r++) {
+    const row = rows[r]
+    const rowNum = r + 2
+
+    const rawName = (row['Aluno'] || row['aluno'] || row['Nome'] || '').trim()
+    const bubbleId = (row['unique id'] || row['uniqueId'] || row['Bubble ID'] || '').trim()
+
+    if (!rawName) {
+      result.warnings.push({ row: rowNum, message: 'Linha ignorada: nome do aluno não informado.' })
+      result.totalProcessed++
+      continue
+    }
+
+    try {
+      const normName = normalizeNameInternal(rawName)
+      const normExact = normalizeNameExactInternal(rawName)
+
+      let rawPhoto = (row['Foto'] || row['foto'] || '').trim()
+      if (rawPhoto.startsWith('//')) rawPhoto = 'https:' + rawPhoto
+
+      const birthDate = parseBubbleDateInternal(row['Nascimento'] || row['nascimento'])
+      const guardianName = (row['Nome Responsável'] || row['nomeResponsavel'] || '').trim()
+      const guardianCpf = (row['CPF do responsável'] || row['cpfResponsavel'] || '').trim()
+      const guardianPhone = (
+        row['Celular do responsável'] ||
+        row['celularResponsavel'] ||
+        ''
+      ).trim()
+      const guardianEmail = (row['E-mail Responsável'] || row['emailResponsavel'] || '').trim()
+      const rawWhatsapp = (row['WhatsApp'] || row['whatsapp'] || '').trim()
+
+      const address = formatAddressInternal({
+        logradouro: row['Logradouro'],
+        numero: row['Número'],
+        complemento: row['Complemento'],
+        bairro: row['Bairro'],
+        cidade: row['Cidade'],
+        uf: row['UF'],
+        cep: row['CEP'],
+      })
+
+      const monthlyFee = parseNumberInternal(row['Mensalidade'] || row['mensalidade'])
+      const discountedFee = parseNumberInternal(
+        row['Mensalidade com desconto'] || row['mensalidadeComDesconto'],
+      )
+      const dueDay = Math.round(parseNumberInternal(row['Vencimento'] || row['vencimento'])) || 5
+
+      const rawSituation = (row['Atestado/TR'] || row['atestadoTr'] || '').trim()
+      const lowerSit = rawSituation.toLowerCase()
+      const isTR = lowerSit === 'tr' || lowerSit === 'trancado'
+
+      let systemStatus = 'ativo'
+      let situationTag = 'ativo'
+      if (isTR) {
+        systemStatus = 'inativo'
+        situationTag = 'trancado'
+        result.studentsInactiveTR++
+      } else if (lowerSit === 'atestado') {
+        systemStatus = 'inativo'
+        situationTag = 'atestado'
+      } else if (lowerSit === 'vencido') {
+        systemStatus = 'ativo'
+        situationTag = 'inadimplente'
+      } else if (lowerSit === 'inativo') {
+        systemStatus = 'inativo'
+        situationTag = 'inativo'
+      }
+
+      const atestadoValidade = parseBubbleDateInternal(
+        row['Atestado/TR Validade'] || row['atestadoTrValidade'],
+      )
+      const trancamentoValidade = parseBubbleDateInternal(
+        row['Validade Trancamento Alunos'] || row['validadeTrancamento'],
+      )
+      const rawValidadePagto = (
+        row['Data Ultimo Pagamento'] ||
+        row['dataUltimoPagamento'] ||
+        ''
+      ).trim()
+      const validadeDoUltimoPagamento = parseBubbleDateInternal(rawValidadePagto)
+
+      const rawFeeSusp = (row['Mensalidade trancada'] || row['mensalidadeTrancada'] || '')
+        .trim()
+        .toLowerCase()
+      const feeSuspended = isTR || rawFeeSusp === 'sim' || rawFeeSusp === 'true'
+
+      const guardianCpfDigits = guardianCpf.replace(/\D/g, '')
+      const cpfKey = guardianCpfDigits && normName ? normName + ':' + guardianCpfDigits : ''
+
+      let existingStudent = null
+      if (bubbleId && studentByBubbleId[bubbleId]) {
+        existingStudent = studentByBubbleId[bubbleId]
+      } else if (cpfKey && studentByCpfAndName[cpfKey]) {
+        existingStudent = studentByCpfAndName[cpfKey]
+      } else if (normName && studentByNormName[normName]) {
+        existingStudent = studentByNormName[normName]
+      } else if (normExact && studentByNormExact[normExact]) {
+        existingStudent = studentByNormExact[normExact]
+      }
+
+      let savedStudent = null
+
+      if (existingStudent) {
+        existingStudent.set('name', rawName)
+        existingStudent.set('status', systemStatus)
+        existingStudent.set('situation', situationTag)
+        if (rawSituation) existingStudent.set('raw_situation', rawSituation)
+        existingStudent.set('fee_suspended', feeSuspended)
+
+        if (bubbleId && !existingStudent.getString('bubble_id')) {
+          existingStudent.set('bubble_id', bubbleId)
+        }
+        if (rawPhoto && !existingStudent.getString('photo_file')) {
+          existingStudent.set('photo', rawPhoto)
+        }
+        if (birthDate) existingStudent.set('birth_date', birthDate)
+        if (guardianName) existingStudent.set('guardian_name', guardianName)
+        if (guardianCpf) existingStudent.set('guardian_cpf', guardianCpf)
+        if (guardianPhone) existingStudent.set('guardian_phone', guardianPhone)
+        if (guardianEmail) existingStudent.set('guardian_email', guardianEmail)
+        if (rawWhatsapp) existingStudent.set('whatsapp', rawWhatsapp)
+        if (guardianPhone || rawWhatsapp) {
+          existingStudent.set('phone', rawWhatsapp || guardianPhone)
+        }
+        if (guardianEmail) existingStudent.set('email', guardianEmail)
+        if (address) existingStudent.set('address', address)
+        if (monthlyFee > 0) existingStudent.set('monthly_fee', monthlyFee)
+        if (discountedFee > 0 || monthlyFee > 0) {
+          existingStudent.set('discounted_fee', discountedFee || monthlyFee)
+        }
+        if (dueDay > 0) existingStudent.set('due_day', dueDay)
+        if (atestadoValidade) existingStudent.set('atestado_validade', atestadoValidade)
+        if (trancamentoValidade) existingStudent.set('trancamento_validade', trancamentoValidade)
+        if (validadeDoUltimoPagamento) {
+          existingStudent.set('validade_do_ultimo_pagamento', validadeDoUltimoPagamento)
+        }
+
+        $app.save(existingStudent)
+        savedStudent = existingStudent
+        result.studentsUpdated++
+      } else {
+        savedStudent = new Record(studentsCol)
+        savedStudent.set('name', rawName)
+        if (bubbleId) savedStudent.set('bubble_id', bubbleId)
+        if (rawPhoto) savedStudent.set('photo', rawPhoto)
+        if (birthDate) savedStudent.set('birth_date', birthDate)
+        if (guardianName) savedStudent.set('guardian_name', guardianName)
+        if (guardianCpf) savedStudent.set('guardian_cpf', guardianCpf)
+        if (guardianPhone) savedStudent.set('guardian_phone', guardianPhone)
+        if (guardianEmail) savedStudent.set('guardian_email', guardianEmail)
+        if (rawWhatsapp) savedStudent.set('whatsapp', rawWhatsapp)
+        if (rawWhatsapp || guardianPhone) {
+          savedStudent.set('phone', rawWhatsapp || guardianPhone)
+        }
+        if (guardianEmail) savedStudent.set('email', guardianEmail)
+        if (address) savedStudent.set('address', address)
+        savedStudent.set('monthly_fee', monthlyFee)
+        savedStudent.set('discounted_fee', discountedFee || monthlyFee)
+        savedStudent.set('due_day', dueDay)
+        savedStudent.set('situation', situationTag)
+        if (rawSituation) savedStudent.set('raw_situation', rawSituation)
+        savedStudent.set('status', systemStatus)
+        if (atestadoValidade) savedStudent.set('atestado_validade', atestadoValidade)
+        if (trancamentoValidade) savedStudent.set('trancamento_validade', trancamentoValidade)
+        if (validadeDoUltimoPagamento) {
+          savedStudent.set('validade_do_ultimo_pagamento', validadeDoUltimoPagamento)
+        }
+        savedStudent.set('fee_suspended', feeSuspended)
+        if (defaultPlanId) savedStudent.set('plan_id', defaultPlanId)
+
+        $app.save(savedStudent)
+        result.studentsCreated++
+      }
+
+      indexStudent(savedStudent)
+
+      // Matrículas
+      const rawAtividade = (row['Atividade'] || row['atividade'] || '').trim()
+      if (rawAtividade) {
+        const activityNames = rawAtividade
+          .split(',')
+          .map((a) => a.trim())
+          .filter((a) => a.length > 0)
+        for (let a = 0; a < activityNames.length; a++) {
+          const actName = activityNames[a]
+          const actKey = actName.toLowerCase()
+          const classRec = classMap[actKey]
+          if (classRec) {
+            const enrollKey = savedStudent.id + ':' + classRec.id
+            if (!enrollmentMap[enrollKey]) {
+              const enrollmentDate =
+                parseBubbleDateInternal(row['Data matrícula']) ||
+                parseBubbleDateInternal(row['Data Início']) ||
+                new Date().toISOString().replace('T', ' ')
+              try {
+                const enrRecord = new Record(enrollmentsCol)
+                enrRecord.set('student_id', savedStudent.id)
+                enrRecord.set('class_id', classRec.id)
+                enrRecord.set('enrollment_date', enrollmentDate)
+                enrRecord.set('is_active', systemStatus === 'ativo')
+                $app.save(enrRecord)
+                enrollmentMap[enrollKey] = true
+                result.enrollmentsCreated++
+              } catch (enrErr) {}
+            } else {
+              result.enrollmentsUpdated++
+            }
+          }
+        }
+      }
+
+      result.totalProcessed++
+    } catch (errRow) {
+      result.warnings.push({
+        row: rowNum,
+        studentName: rawName,
+        message: 'Erro ao processar: ' + (errRow.message || String(errRow)),
+      })
+      result.totalProcessed++
+    }
+  }
+
+  return e.json(200, {
+    success: true,
+    result: result,
+  })
+})
+
+// -------------------------------------------------------------
 // 2. Pré-visualizar / Buscar dados de exemplo fictícios
 // GET /backend/v1/cleanup/sample-data
 // -------------------------------------------------------------
