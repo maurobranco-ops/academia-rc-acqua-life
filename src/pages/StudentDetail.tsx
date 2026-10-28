@@ -583,6 +583,16 @@ export default function StudentDetail() {
                   </p>
                 </div>
               )}
+              {student.validade_do_ultimo_pagamento && (
+                <div className="bg-emerald-50/70 p-2.5 rounded-lg border border-emerald-200">
+                  <span className="text-emerald-800 block mb-0.5 text-[11px] font-semibold">
+                    Validade do Último Pagamento
+                  </span>
+                  <p className="font-bold text-emerald-950 text-xs">
+                    {new Date(student.validade_do_ultimo_pagamento).toLocaleDateString('pt-BR')}
+                  </p>
+                </div>
+              )}
               {student.bubble_id && (
                 <div>
                   <span className="text-[#6C757D] block mb-1">Bubble ID</span>

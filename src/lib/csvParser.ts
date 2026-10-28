@@ -299,7 +299,7 @@ export function mapSituation(rawSituation?: string): {
   const trimmed = (rawSituation || '').trim()
   const lower = trimmed.toLowerCase()
 
-  if (lower === 'tr') {
+  if (lower === 'tr' || lower === 'trancado') {
     return { systemStatus: 'inativo', situationTag: 'trancado' }
   }
   if (lower === 'atestado') {
@@ -308,5 +308,9 @@ export function mapSituation(rawSituation?: string): {
   if (lower === 'vencido') {
     return { systemStatus: 'ativo', situationTag: 'inadimplente' }
   }
+  if (lower === 'inativo') {
+    return { systemStatus: 'inativo', situationTag: 'inativo' }
+  }
+  // Ausente, vazio ou qualquer outro segue ativo
   return { systemStatus: 'ativo', situationTag: 'ativo' }
 }

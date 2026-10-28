@@ -10,6 +10,22 @@ import type { StudentRecord } from '@/types/database'
  */
 export function normalizeName(name: string): string {
   if (!name) return ''
+  // Remove sufixos entre parênteses como "(Lia)", "(Edjane)", "(Zeza)"
+  const withoutParens = name.replace(/\s*\([^)]*\)\s*/g, ' ')
+  return withoutParens
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^\w\s]/g, ' ')
+    .replace(/[\s_]+/g, ' ')
+    .trim()
+}
+
+/**
+ * Normaliza mantendo o texto entre parênteses para comparação exata caso necessário.
+ */
+export function normalizeNameExact(name: string): string {
+  if (!name) return ''
   return name
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')

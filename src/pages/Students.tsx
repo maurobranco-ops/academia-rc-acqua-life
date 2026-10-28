@@ -763,7 +763,7 @@ export default function Students() {
                     <th className="px-4 py-3.5">Turma(s)</th>
                     <th className="px-3 py-3.5">Status</th>
                     <th className="px-4 py-3.5">Mensalidade</th>
-                    <th className="px-4 py-3.5">Último Pagamento</th>
+                    <th className="px-4 py-3.5">Validade / Pagto</th>
                     <th className="px-4 py-3.5 text-right">Ações</th>
                   </tr>
                 </thead>
@@ -779,6 +779,7 @@ export default function Students() {
                       const plan = plans.find((p) => p.id === st.plan_id)
                       const studentClasses = studentEnrollmentsMap[st.id] || []
                       const lastPay = latestPaymentMap[st.id]
+                      const validadePagto = st.validade_do_ultimo_pagamento
 
                       const photoUrl = getStudentPhotoUrl(st)
 
@@ -851,8 +852,26 @@ export default function Students() {
                             R$ {(plan?.monthly_price || 160).toFixed(2)}
                           </td>
 
-                          <td className="px-4 py-3.5 text-[#6C757D]">
-                            {lastPay ? new Date(lastPay).toLocaleDateString('pt-BR') : '—'}
+                          <td className="px-4 py-3.5 text-xs text-[#6C757D]">
+                            {validadePagto ? (
+                              <div>
+                                <span className="font-semibold text-emerald-800">
+                                  {new Date(validadePagto).toLocaleDateString('pt-BR')}
+                                </span>
+                                <span className="block text-[10px] text-slate-400">
+                                  Validade Últ. Pagto
+                                </span>
+                              </div>
+                            ) : lastPay ? (
+                              <div>
+                                <span>{new Date(lastPay).toLocaleDateString('pt-BR')}</span>
+                                <span className="block text-[10px] text-slate-400">
+                                  Pago no sistema
+                                </span>
+                              </div>
+                            ) : (
+                              '—'
+                            )}
                           </td>
 
                           <td className="px-4 py-3.5 text-right">

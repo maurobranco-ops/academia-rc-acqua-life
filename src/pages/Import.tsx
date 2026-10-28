@@ -39,9 +39,11 @@ import { toast } from '@/hooks/use-toast'
 import { parseCSV } from '@/lib/csvParser'
 import {
   importBubbleStudents,
-  DEFAULT_COLUMN_MAPPING,
+  previewBubbleUpsert,
+  resolveColumnMapping,
   type ColumnMapping,
   type ImportResult,
+  type ImportPreviewPlan,
 } from '@/lib/bubbleImporter'
 import { PhotoBatchUpload } from '@/components/PhotoBatchUpload'
 
@@ -54,8 +56,10 @@ export default function Import() {
   const [mapping, setMapping] = useState<ColumnMapping>(DEFAULT_COLUMN_MAPPING)
   const [showMappingConfig, setShowMappingConfig] = useState(false)
 
-  // Import State
+  // Import & Preview State
   const [isImporting, setIsImporting] = useState(false)
+  const [isCalculatingPreview, setIsCalculatingPreview] = useState(false)
+  const [previewPlan, setPreviewPlan] = useState<ImportPreviewPlan | null>(null)
   const [progressPercent, setProgressPercent] = useState(0)
   const [progressStatus, setProgressStatus] = useState<string>('')
   const [importResult, setImportResult] = useState<ImportResult | null>(null)
@@ -98,21 +102,22 @@ export default function Import() {
         setCsvHeaders(headers)
         setCsvRows(rows)
 
-        // Try to auto-match mapping if names match closely
-        const newMapping: ColumnMapping = { ...DEFAULT_COLUMN_MAPPING }
-        const headerLookup = new Map<string, string>()
-        headers.forEach((h) => headerLookup.set(h.toLowerCase().trim(), h))
+        // Auto-match mapping com suporte tanto ao novo quanto ao antigo export Bubble
+        const detectedMapping = resolveColumnMapping(headers)
+        setMapping(detectedMapping)
 
-        Object.keys(newMapping).forEach((k) => {
-          const key = k as keyof ColumnMapping
-          const defaultCol = DEFAULT_COLUMN_MAPPING[key]
-          const match = headerLookup.get(defaultCol.toLowerCase().trim())
-          if (match) {
-            newMapping[key] = match
-          }
-        })
-
-        setMapping(newMapping)
+        // Calcular plano de mesclagem (preview)
+        setIsCalculatingPreview(true)
+        previewBubbleUpsert(rows, detectedMapping)
+          .then((plan) => {
+            setPreviewPlan(plan)
+          })
+          .catch((err) => {
+            console.error('Erro ao gerar preview de mesclagem:', err)
+          })
+          .finally(() => {
+            setIsCalculatingPreview(false)
+          })
 
         toast({
           title: 'Arquivo carregado!',
@@ -186,11 +191,24 @@ export default function Import() {
     setFileName('')
     setCsvHeaders([])
     setCsvRows([])
+    setPreviewPlan(null)
     setImportResult(null)
     setProgressPercent(0)
     setProgressStatus('')
     if (fileInputRef.current) {
       fileInputRef.current.value = ''
+    }
+  }
+
+  // Recalcular preview se o usuário ajustar o mapeamento manualmente
+  const handleRecalculatePreview = async (customMapping: ColumnMapping) => {
+    if (csvRows.length === 0) return
+    setIsCalculatingPreview(true)
+    try {
+      const plan = await previewBubbleUpsert(csvRows, customMapping)
+      setPreviewPlan(plan)
+    } finally {
+      setIsCalculatingPreview(false)
     }
   }
 
@@ -419,6 +437,110 @@ export default function Import() {
                 </div>
               </div>
 
+              {/* Resumo da Mesclagem (Preview Pré-execução) */}
+              {previewPlan && !importResult && (
+                <Card className="border-blue-200 bg-white shadow-sm animate-fade-in">
+                  <CardHeader className="pb-3 border-b border-slate-100">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Sparkles className="w-5 h-5 text-[#17A2B8]" />
+                        <div>
+                          <CardTitle className="text-base font-bold text-[#0F1B3D]">
+                            Pré-visualização da Mesclagem (Upsert Inteligente)
+                          </CardTitle>
+                          <CardDescription className="text-xs text-slate-500">
+                            Casamento por Nome Normalizado e CPF do Responsável sem duplicar e sem
+                            perder o histórico financeiro.
+                          </CardDescription>
+                        </div>
+                      </div>
+                      <Badge className="bg-blue-50 text-blue-700 border-blue-200">
+                        {isCalculatingPreview ? 'Calculando...' : 'Pronto para Mesclar'}
+                      </Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="p-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 mb-4">
+                      <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 text-center">
+                        <p className="text-[11px] font-semibold text-slate-500 uppercase">
+                          Total no Arquivo
+                        </p>
+                        <p className="text-xl font-bold text-[#0F1B3D] mt-0.5">
+                          {previewPlan.totalRows}
+                        </p>
+                      </div>
+                      <div className="bg-blue-50/80 p-3 rounded-xl border border-blue-200 text-center">
+                        <p className="text-[11px] font-semibold text-blue-700 uppercase">
+                          Alunos a Atualizar
+                        </p>
+                        <p className="text-xl font-bold text-blue-800 mt-0.5">
+                          {previewPlan.toUpdateCount}
+                        </p>
+                      </div>
+                      <div className="bg-emerald-50/80 p-3 rounded-xl border border-emerald-200 text-center">
+                        <p className="text-[11px] font-semibold text-emerald-700 uppercase">
+                          Alunos Novos a Criar
+                        </p>
+                        <p className="text-xl font-bold text-emerald-800 mt-0.5">
+                          {previewPlan.toCreateCount}
+                        </p>
+                      </div>
+                      <div className="bg-amber-50/80 p-3 rounded-xl border border-amber-200 text-center">
+                        <p className="text-[11px] font-semibold text-amber-700 uppercase">
+                          Trancados (TR) Inativos
+                        </p>
+                        <p className="text-xl font-bold text-amber-800 mt-0.5">
+                          {previewPlan.inactiveTRCount}
+                        </p>
+                      </div>
+                    </div>
+
+                    {previewPlan.sampleMatches.length > 0 && (
+                      <div className="bg-slate-50/70 p-3 rounded-xl border border-slate-200">
+                        <p className="text-xs font-bold text-slate-700 mb-2">
+                          Exemplos de Casamento Detectados:
+                        </p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                          {previewPlan.sampleMatches.slice(0, 6).map((sample, idx) => (
+                            <div
+                              key={idx}
+                              className="bg-white p-2 rounded-lg border border-slate-200 flex items-center justify-between"
+                            >
+                              <div className="min-w-0 pr-2">
+                                <span className="font-semibold text-slate-800 truncate block">
+                                  {sample.rawName}
+                                </span>
+                                {sample.matchReason && (
+                                  <span className="text-[10px] text-slate-500">
+                                    {sample.matchReason}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-1 shrink-0">
+                                {sample.action === 'atualizar' ? (
+                                  <Badge className="bg-blue-50 text-blue-700 border-blue-200 text-[10px]">
+                                    Atualizar
+                                  </Badge>
+                                ) : (
+                                  <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px]">
+                                    Novo
+                                  </Badge>
+                                )}
+                                {sample.isTR && (
+                                  <Badge className="bg-amber-50 text-amber-700 border-amber-200 text-[10px]">
+                                    TR
+                                  </Badge>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+
               {/* Progress Bar (during import) */}
               {isImporting && (
                 <Card className="border-[#17A2B8]/40 bg-white shadow-md animate-fade-in">
@@ -491,6 +613,15 @@ export default function Import() {
                           </p>
                           <p className="text-2xl font-bold text-blue-800 mt-0.5">
                             {importResult.studentsUpdated}
+                          </p>
+                        </div>
+
+                        <div className="bg-rose-50/80 p-3.5 rounded-xl border border-rose-200 text-center">
+                          <p className="text-[11px] font-medium text-rose-700 uppercase">
+                            Trancados (TR) Inativos
+                          </p>
+                          <p className="text-2xl font-bold text-rose-800 mt-0.5">
+                            {importResult.studentsInactiveTR}
                           </p>
                         </div>
 
@@ -580,9 +711,11 @@ export default function Import() {
                           </div>
                           <Select
                             value={mapping[item.key] || ''}
-                            onValueChange={(val) =>
-                              setMapping((prev) => ({ ...prev, [item.key]: val }))
-                            }
+                            onValueChange={(val) => {
+                              const updated = { ...mapping, [item.key]: val }
+                              setMapping(updated)
+                              handleRecalculatePreview(updated)
+                            }}
                           >
                             <SelectTrigger className="h-8 text-xs bg-white border-slate-300">
                               <SelectValue placeholder="Selecione a coluna..." />

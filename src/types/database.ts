@@ -47,6 +47,7 @@ export interface StudentRecord extends RecordModel {
   trancamento_validade?: string
   fee_suspended?: boolean
   raw_situation?: string
+  validade_do_ultimo_pagamento?: string
   expand?: {
     plan_id?: PlanRecord
   }
