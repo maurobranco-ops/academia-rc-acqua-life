@@ -1537,3 +1537,220 @@ cronAdd('daily_recurring_billing', '0 6 * * *', () => {
   setSetting('recurring_billing_last_run', nowIso)
   setSetting('recurring_billing_last_status', summary)
 })
+
+// -------------------------------------------------------------
+// 6. Cancel Charge Route
+// POST /backend/v1/charges/{id}/cancel
+// -------------------------------------------------------------
+routerAdd('POST', '/backend/v1/charges/{id}/cancel', (e) => {
+  const readSetting = (k, fallback = '') => {
+    try {
+      const records = $app.findRecordsByFilter('settings', `key = '${k}'`, '-created', 1, 0)
+      if (records && records.length > 0) {
+        const val = records[0].getString('value')
+        return val !== undefined && val !== null ? val.trim() : fallback
+      }
+    } catch (_) {}
+    return fallback
+  }
+
+  const info = e.requestInfo()
+
+  // Validação de autenticação (PocketBase: info.auth existe no requestInfo)
+  if (!info.auth && !info.hasSuperuserAuth) {
+    return e.json(401, {
+      success: false,
+      message: 'Não autorizado. Faça login para cancelar cobranças.',
+    })
+  }
+
+  const chargeId = String(e.request.pathValue('id') || '').trim()
+  if (!chargeId) {
+    return e.json(400, {
+      success: false,
+      message: 'ID da cobrança é obrigatório.',
+    })
+  }
+
+  let charge = null
+  try {
+    charge = $app.findRecordById('charges', chargeId)
+  } catch (err) {
+    return e.json(404, {
+      success: false,
+      message: 'Cobrança não encontrada no sistema.',
+    })
+  }
+
+  const currentStatus = charge.getString('status') || 'em_aberto'
+
+  // Proteção 1: Só aceita cancelar cobranças em status "em_aberto"
+  if (currentStatus !== 'em_aberto') {
+    if (currentStatus === 'paga') {
+      return e.json(400, {
+        success: false,
+        message:
+          'Não é possível cancelar uma cobrança já paga ou liquidada. Se necessário, utilize o estorno.',
+      })
+    }
+    if (currentStatus === 'cancelada') {
+      return e.json(400, {
+        success: false,
+        message: 'Esta cobrança já se encontra cancelada no sistema.',
+      })
+    }
+    return e.json(400, {
+      success: false,
+      message: `Apenas cobranças em aberto podem ser canceladas (status atual: ${currentStatus}).`,
+    })
+  }
+
+  const orderNsu = charge.getString('order_nsu') || ''
+  const invoiceSlug = charge.getString('invoice_slug') || ''
+  const infinipayPaymentId = charge.getString('infinipay_payment_id') || ''
+
+  const apiKey = readSetting('infinitepay_api_key')
+  const handle = readSetting('infinitepay_handle').replace(/^@/, '').replace(/^\$/, '')
+  let apiUrl = (
+    readSetting('infinitepay_api_url') || 'https://api.checkout.infinitepay.io'
+  ).replace(/\/+$/, '')
+  if (apiUrl.includes('api.infinitepay.io/invoices/public/checkout')) {
+    apiUrl = 'https://api.checkout.infinitepay.io'
+  }
+
+  // Verifica se a cobrança possui integração ativa na InfinitePay
+  const hasActiveIntegration = (orderNsu || invoiceSlug) && (apiKey || handle)
+
+  if (hasActiveIntegration) {
+    // Primeiro tenta chamar a API da InfinitePay para desativar/cancelar o link
+    let apiSuccess = false
+    let lastErrorMsg = ''
+    let receivedStatusCode = 0
+
+    const headers = {
+      'Content-Type': 'application/json',
+      'User-Agent': 'RCAcquaLife-Academy/1.0',
+    }
+    if (apiKey) {
+      headers['X-Api-Key'] = apiKey
+    }
+
+    const cancelPayload = {
+      handle: handle,
+      order_nsu: orderNsu || infinipayPaymentId,
+    }
+    if (invoiceSlug) {
+      cancelPayload.slug = invoiceSlug
+      cancelPayload.invoice_slug = invoiceSlug
+    }
+
+    const targetIdentifier = invoiceSlug || orderNsu || infinipayPaymentId
+
+    // Tentativa 1: POST {apiUrl}/links/{id}/cancel
+    try {
+      const res1 = $http.send({
+        url: `${apiUrl}/links/${targetIdentifier}/cancel`,
+        method: 'POST',
+        headers: headers,
+        body: JSON.stringify(cancelPayload),
+        timeout: 10,
+      })
+      receivedStatusCode = res1.statusCode
+      if (res1.statusCode >= 200 && res1.statusCode < 300) {
+        apiSuccess = true
+      } else if (res1.statusCode !== 404 && res1.statusCode !== 405) {
+        let errJson = null
+        try {
+          errJson = JSON.parse(res1.raw)
+        } catch (_) {}
+        lastErrorMsg = (errJson && (errJson.message || errJson.error)) || res1.raw
+      }
+    } catch (e1) {
+      lastErrorMsg = e1.message || String(e1)
+    }
+
+    // Tentativa 2: Se não funcionou, tenta DELETE {apiUrl}/links/{id}
+    if (
+      !apiSuccess &&
+      (receivedStatusCode === 404 || receivedStatusCode === 405 || !receivedStatusCode)
+    ) {
+      try {
+        const res2 = $http.send({
+          url: `${apiUrl}/links/${targetIdentifier}`,
+          method: 'DELETE',
+          headers: headers,
+          body: JSON.stringify(cancelPayload),
+          timeout: 10,
+        })
+        receivedStatusCode = res2.statusCode
+        if (res2.statusCode >= 200 && res2.statusCode < 300) {
+          apiSuccess = true
+        } else if (res2.statusCode !== 404 && res2.statusCode !== 405) {
+          let errJson = null
+          try {
+            errJson = JSON.parse(res2.raw)
+          } catch (_) {}
+          lastErrorMsg = (errJson && (errJson.message || errJson.error)) || res2.raw
+        }
+      } catch (e2) {
+        lastErrorMsg = e2.message || String(e2)
+      }
+    }
+
+    // Tentativa 3: Se a rota de links não existir na API (retornou 404 em ambas),
+    // a API pública da InfinitePay trabalha com links sem expiração ativa e cancela apenas via dashboard/webhook.
+    // Mas se retornou 401, 403, 422, 500, trata como falha real.
+    const isEndpointUnsupported = receivedStatusCode === 404 || receivedStatusCode === 405
+    if (!apiSuccess && !isEndpointUnsupported) {
+      console.log(
+        `[Cancel Charge] Falha ao cancelar link na InfinitePay (${receivedStatusCode}): ${lastErrorMsg}`,
+      )
+      return e.json(502, {
+        success: false,
+        message: `Falha ao cancelar cobrança na InfinitePay (${receivedStatusCode || 'erro de rede'}): ${lastErrorMsg || 'Serviço indisponível'}. A cobrança não foi cancelada localmente para manter a consistência.`,
+      })
+    }
+  }
+
+  // Atualização atômica local: charges.status = 'cancelada' e payment vinculado = 'cancelado'
+  let linkedPayment = null
+  try {
+    $app.runInTransaction((txApp) => {
+      charge.set('status', 'cancelada')
+      txApp.save(charge)
+
+      // Buscar payment vinculado por charge_id
+      try {
+        const pmts = txApp.findRecordsByFilter(
+          'payments',
+          `charge_id = '${charge.id}'`,
+          '-created',
+          1,
+          0,
+        )
+        if (pmts && pmts.length > 0) {
+          linkedPayment = pmts[0]
+          linkedPayment.set('status', 'cancelado')
+          txApp.save(linkedPayment)
+        }
+      } catch (pErr) {
+        console.log('[Cancel Charge] Aviso ao buscar payment vinculado:', pErr)
+      }
+    })
+  } catch (dbErr) {
+    console.log('[Cancel Charge] Erro ao persistir cancelamento no banco:', dbErr)
+    return e.json(500, {
+      success: false,
+      message: 'Erro ao atualizar cobrança no banco de dados: ' + (dbErr.message || String(dbErr)),
+    })
+  }
+
+  return e.json(200, {
+    success: true,
+    message: 'Cobrança cancelada com sucesso.',
+    charge_id: charge.id,
+    order_nsu: orderNsu,
+    status: 'cancelada',
+    payment_status: linkedPayment ? 'cancelado' : null,
+  })
+})

@@ -17,6 +17,7 @@ import {
   Upload,
   Sparkles,
   Edit,
+  Ban,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -38,6 +39,7 @@ import type {
   StudentRecord,
   PlanRecord,
   PaymentRecord,
+  ChargeRecord,
   EnrollmentRecord,
   ClassRecord,
 } from '@/types/database'
@@ -52,11 +54,17 @@ export default function StudentDetail() {
   const [student, setStudent] = useState<StudentRecord | null>(null)
   const [plan, setPlan] = useState<PlanRecord | null>(null)
   const [payments, setPayments] = useState<PaymentRecord[]>([])
+  const [charges, setCharges] = useState<ChargeRecord[]>([])
   const [enrollments, setEnrollments] = useState<EnrollmentRecord[]>([])
   const [classes, setClasses] = useState<ClassRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [uploadingPhoto, setUploadingPhoto] = useState(false)
   const photoInputRef = useRef<HTMLInputElement>(null)
+
+  // Cancel charge modal state
+  const [cancelModalOpen, setCancelModalOpen] = useState(false)
+  const [selectedChargeToCancel, setSelectedChargeToCancel] = useState<ChargeRecord | null>(null)
+  const [cancelling, setCancelling] = useState(false)
 
   // Delete modal state
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
@@ -69,16 +77,18 @@ export default function StudentDetail() {
   const loadData = async () => {
     if (!id) return
     try {
-      const [sData, pList, payList, enrList, clsList] = await Promise.all([
+      const [sData, pList, payList, chgList, enrList, clsList] = await Promise.all([
         academyService.getStudent(id),
         academyService.getPlans(),
         academyService.getPayments(),
+        academyService.getCharges(),
         academyService.getEnrollments(),
         academyService.getClasses(),
       ])
       setStudent(sData)
       setPlan(pList.find((p) => p.id === sData.plan_id) || null)
       setPayments(payList.filter((pay) => pay.student_id === id))
+      setCharges(chgList.filter((c) => c.student_id === id))
       setEnrollments(enrList.filter((e) => e.student_id === id))
       setClasses(clsList)
     } catch (err) {
@@ -96,6 +106,35 @@ export default function StudentDetail() {
   useEffect(() => {
     loadData()
   }, [id])
+
+  const handleOpenCancelModal = (charge: ChargeRecord) => {
+    setSelectedChargeToCancel(charge)
+    setCancelModalOpen(true)
+  }
+
+  const handleConfirmCancel = async () => {
+    if (!selectedChargeToCancel) return
+    setCancelling(true)
+    try {
+      const res = await academyService.cancelCharge(selectedChargeToCancel.id)
+      toast({
+        title: 'Cobrança cancelada!',
+        description: res.message || 'O link de pagamento foi desativado e o status atualizado.',
+      })
+      setCancelModalOpen(false)
+      setSelectedChargeToCancel(null)
+      loadData()
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Falha ao cancelar cobrança'
+      toast({
+        title: 'Erro ao cancelar cobrança',
+        description: msg,
+        variant: 'destructive',
+      })
+    } finally {
+      setCancelling(false)
+    }
+  }
 
   const handleRequestDelete = () => {
     if (!student) return
@@ -205,7 +244,7 @@ export default function StudentDetail() {
     [overduePayments],
   )
 
-  const getStatusBadge = (status: PaymentRecord['status']) => {
+  const getStatusBadge = (status: PaymentRecord['status'] | string) => {
     switch (status) {
       case 'pago':
         return <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200">Pago</Badge>
@@ -213,6 +252,15 @@ export default function StudentDetail() {
         return <Badge className="bg-amber-50 text-amber-700 border-amber-200">Pendente</Badge>
       case 'vencido':
         return <Badge className="bg-rose-50 text-rose-700 border-rose-200 font-bold">Vencido</Badge>
+      case 'cancelado':
+      case 'cancelada':
+        return (
+          <Badge className="bg-rose-50/80 text-rose-700 border-rose-200 font-semibold">
+            Cancelado
+          </Badge>
+        )
+      case 'reembolsado':
+        return <Badge className="bg-slate-100 text-slate-700 border-slate-300">Reembolsado</Badge>
       default:
         return <Badge variant="outline">{status}</Badge>
     }
@@ -435,7 +483,7 @@ export default function StudentDetail() {
             value="pagamentos"
             className="data-[state=active]:bg-[#0F1B3D] data-[state=active]:text-white text-xs font-semibold rounded-lg px-4"
           >
-            Histórico Financeiro ({payments.length})
+            Cobranças &amp; Pagamentos ({charges.length || payments.length})
           </TabsTrigger>
           <TabsTrigger
             value="turmas"
@@ -548,7 +596,7 @@ export default function StudentDetail() {
         </TabsContent>
 
         {/* ============================================================ */}
-        {/* TAB 2: PAGAMENTOS */}
+        {/* TAB 2: COBRANÇAS & PAGAMENTOS */}
         {/* ============================================================ */}
         <TabsContent value="pagamentos" className="space-y-4">
           <Card className="bg-white border-[#E0E4EA] rounded-xl shadow-xs overflow-hidden">
@@ -557,58 +605,123 @@ export default function StudentDetail() {
                 <thead className="bg-[#F5F7FA] text-[#6C757D] uppercase font-semibold text-[10px] border-b border-[#E0E4EA]">
                   <tr>
                     <th className="px-5 py-3">Vencimento</th>
+                    <th className="px-4 py-3">Descrição / Ref</th>
                     <th className="px-4 py-3">Valor</th>
-                    <th className="px-4 py-3">Método</th>
                     <th className="px-4 py-3">Status</th>
-                    <th className="px-4 py-3">Data de Pagamento</th>
-                    <th className="px-4 py-3 text-right">Infinitepay Link</th>
+                    <th className="px-4 py-3">Pagamento / Link</th>
+                    <th className="px-4 py-3 text-right">Ações</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#E0E4EA]">
-                  {payments.length === 0 ? (
+                  {charges.length === 0 && payments.length === 0 ? (
                     <tr>
                       <td colSpan={6} className="text-center py-8 text-[#6C757D]">
-                        Nenhum pagamento registrado para este aluno.
+                        Nenhuma cobrança registrada para este aluno.
                       </td>
                     </tr>
+                  ) : charges.length > 0 ? (
+                    charges.map((c) => {
+                      const linkedPmt = payments.find((p) => p.charge_id === c.id)
+                      const isEmAberto = c.status === 'em_aberto'
+                      const isPaga = c.status === 'paga'
+                      const isCancelada = c.status === 'cancelada'
+                      const payLink = c.payment_link || linkedPmt?.payment_link
+
+                      return (
+                        <tr key={c.id} className="hover:bg-slate-50 transition">
+                          <td className="px-5 py-3.5 font-medium text-[#1E2A3A]">
+                            {new Date(c.due_date).toLocaleDateString('pt-BR')}
+                          </td>
+                          <td className="px-4 py-3.5">
+                            <div className="font-bold text-[#0F1B3D]">{c.description}</div>
+                            {c.order_nsu && (
+                              <span className="text-[10px] text-slate-400 font-mono">
+                                NSU: {c.order_nsu}
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3.5 font-mono font-bold text-[#0F1B3D]">
+                            <div>
+                              <span>R$ {c.amount.toFixed(2)}</span>
+                              {linkedPmt?.discount_amount && linkedPmt.discount_amount > 0 ? (
+                                <Badge className="ml-2 bg-emerald-100 text-emerald-800 border-emerald-300 font-bold text-[9px] inline-flex items-center gap-0.5">
+                                  <Sparkles className="w-2.5 h-2.5 text-emerald-700" />
+                                  -R$ {linkedPmt.discount_amount.toFixed(2)}
+                                </Badge>
+                              ) : null}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3.5">
+                            {isPaga ? (
+                              <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200">
+                                Paga
+                              </Badge>
+                            ) : isCancelada ? (
+                              <Badge className="bg-rose-50/80 text-rose-700 border-rose-200 font-semibold">
+                                Cancelada
+                              </Badge>
+                            ) : isEmAberto ? (
+                              <Badge className="bg-amber-50 text-amber-700 border-amber-200">
+                                Em Aberto
+                              </Badge>
+                            ) : (
+                              getStatusBadge(c.status)
+                            )}
+                          </td>
+                          <td className="px-4 py-3.5 text-[#6C757D]">
+                            {isPaga && linkedPmt?.paid_date ? (
+                              <span className="text-emerald-700 font-medium">
+                                Pago em {new Date(linkedPmt.paid_date).toLocaleDateString('pt-BR')}
+                              </span>
+                            ) : payLink && !isCancelada ? (
+                              <a
+                                href={payLink}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-xs font-semibold text-[#17A2B8] hover:underline inline-flex items-center gap-1"
+                              >
+                                Abrir Link InfinitePay
+                              </a>
+                            ) : isCancelada ? (
+                              <span className="text-rose-600/70 text-[11px] italic">
+                                Link cancelado
+                              </span>
+                            ) : (
+                              <span className="text-slate-400">—</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3.5 text-right">
+                            {isEmAberto ? (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleOpenCancelModal(c)}
+                                className="h-7 text-xs font-semibold text-rose-700 border-rose-200 hover:bg-rose-50 rounded-lg inline-flex items-center gap-1.5"
+                              >
+                                <Ban className="w-3 h-3 text-rose-600" /> Cancelar
+                              </Button>
+                            ) : (
+                              <span className="text-[11px] text-slate-400">—</span>
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    })
                   ) : (
                     payments.map((p) => (
                       <tr key={p.id} className="hover:bg-slate-50 transition">
                         <td className="px-5 py-3.5 font-medium text-[#1E2A3A]">
                           {new Date(p.due_date).toLocaleDateString('pt-BR')}
                         </td>
+                        <td className="px-4 py-3.5 font-medium text-slate-600">Mensalidade</td>
                         <td className="px-4 py-3.5 font-mono font-bold text-[#0F1B3D]">
-                          <div>
-                            <span>R$ {p.amount.toFixed(2)}</span>
-                            {p.discount_amount && p.discount_amount > 0 ? (
-                              <Badge className="ml-2 bg-emerald-100 text-emerald-800 border-emerald-300 font-bold text-[9px] inline-flex items-center gap-0.5">
-                                <Sparkles className="w-2.5 h-2.5 text-emerald-700" />
-                                Desconto família -R$ {p.discount_amount.toFixed(2)}
-                              </Badge>
-                            ) : null}
-                          </div>
-                        </td>
-                        <td className="px-4 py-3.5 uppercase text-slate-500 font-semibold text-[10px]">
-                          {p.payment_method || 'PIX'}
+                          R$ {p.amount.toFixed(2)}
                         </td>
                         <td className="px-4 py-3.5">{getStatusBadge(p.status)}</td>
                         <td className="px-4 py-3.5 text-[#6C757D]">
                           {p.paid_date ? new Date(p.paid_date).toLocaleDateString('pt-BR') : '—'}
                         </td>
-                        <td className="px-4 py-3.5 text-right">
-                          {p.payment_link ? (
-                            <a
-                              href={p.payment_link}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-xs font-semibold text-[#17A2B8] hover:underline"
-                            >
-                              Abrir link
-                            </a>
-                          ) : (
-                            <span className="text-slate-400">—</span>
-                          )}
-                        </td>
+                        <td className="px-4 py-3.5 text-right text-slate-400">—</td>
                       </tr>
                     ))
                   )}
@@ -683,6 +796,107 @@ export default function StudentDetail() {
           </Card>
         </TabsContent>
       </Tabs>
+      {/* ============================================================== */}
+      {/* Cancel Charge Modal                                            */}
+      {/* ============================================================== */}
+      <Dialog
+        open={cancelModalOpen}
+        onOpenChange={(open) => {
+          setCancelModalOpen(open)
+          if (!open) setSelectedChargeToCancel(null)
+        }}
+      >
+        <DialogContent className="sm:max-w-[460px] bg-white rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-rose-600 flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-rose-600" />
+              Cancelar Cobrança
+            </DialogTitle>
+            <DialogDescription className="text-xs text-[#6C757D] pt-1">
+              Confirme o cancelamento desta cobrança em aberto do aluno.
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedChargeToCancel && (
+            <div className="space-y-3 py-2 text-xs">
+              <div className="p-3 bg-slate-50 rounded-xl space-y-1.5 border border-slate-200">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-[#0F1B3D] text-sm">
+                    {selectedChargeToCancel.description}
+                  </span>
+                  <Badge className="bg-amber-50 text-amber-700 border-amber-200 text-[10px]">
+                    EM ABERTO
+                  </Badge>
+                </div>
+                <p className="text-slate-600">
+                  Aluno: <strong>{student.name}</strong>
+                </p>
+                <p className="text-slate-600">
+                  Vencimento:{' '}
+                  <strong>
+                    {new Date(selectedChargeToCancel.due_date).toLocaleDateString('pt-BR')}
+                  </strong>
+                </p>
+                <p className="text-slate-700 font-mono font-bold text-sm">
+                  Valor: R$ {selectedChargeToCancel.amount.toFixed(2)}
+                </p>
+              </div>
+
+              <div className="p-3 bg-rose-50/70 border border-rose-200 rounded-xl text-rose-900 space-y-1.5">
+                <p className="font-bold flex items-center gap-1.5">
+                  <Ban className="w-4 h-4 text-rose-600 shrink-0" />
+                  Aviso importante:
+                </p>
+                <ul className="list-disc list-inside space-y-1 text-[11px] text-rose-800 leading-relaxed">
+                  <li>
+                    O link de pagamento da InfinitePay será <strong>desativado</strong> para que o
+                    aluno não consiga mais efetuar o pagamento.
+                  </li>
+                  <li>O status da cobrança e do pagamento vinculado mudará para "Cancelada".</li>
+                  <li>
+                    <strong>Esta ação não pode ser desfeita.</strong>
+                  </li>
+                </ul>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="gap-2 sm:justify-between pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={cancelling}
+              onClick={() => {
+                setCancelModalOpen(false)
+                setSelectedChargeToCancel(null)
+              }}
+            >
+              Voltar
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              disabled={cancelling}
+              onClick={handleConfirmCancel}
+              className="bg-rose-600 hover:bg-rose-700 text-white font-bold flex items-center gap-1.5"
+            >
+              {cancelling ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  Cancelando...
+                </>
+              ) : (
+                <>
+                  <Ban className="w-3.5 h-3.5" />
+                  Sim, Cancelar Cobrança
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Delete Safeguard Confirmation Modal */}
       <Dialog
         open={deleteModalOpen}

@@ -443,6 +443,32 @@ export const academyService = {
     }
     return updated
   },
+  async cancelCharge(chargeId: string): Promise<{
+    success: boolean
+    message: string
+    charge_id?: string
+    status?: string
+    payment_status?: string
+  }> {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    }
+    if (pb.authStore.token) {
+      headers.Authorization = `Bearer ${pb.authStore.token}`
+    }
+
+    const response = await fetch(`${pb.baseUrl}/backend/v1/charges/${chargeId}/cancel`, {
+      method: 'POST',
+      headers,
+    })
+
+    const data = await response.json().catch(() => ({}))
+    if (!response.ok) {
+      throw new Error(data.message || `Erro HTTP ${response.status} ao cancelar cobrança`)
+    }
+    return data
+  },
+
   async refundCharge(chargeId: string): Promise<void> {
     await pb.collection('charges').update(chargeId, { status: 'cancelada' })
     const payments = await pb.collection('payments').getList<PaymentRecord>(1, 1, {
