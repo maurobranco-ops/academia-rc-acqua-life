@@ -10,6 +10,8 @@ import {
   Plus,
   Loader2,
   AlertCircle,
+  AlertTriangle,
+  Trash2,
   X,
   Camera,
   Upload,
@@ -21,6 +23,16 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { academyService } from '@/services/academy'
 import type {
   StudentRecord,
@@ -45,6 +57,14 @@ export default function StudentDetail() {
   const [loading, setLoading] = useState(true)
   const [uploadingPhoto, setUploadingPhoto] = useState(false)
   const photoInputRef = useRef<HTMLInputElement>(null)
+
+  // Delete modal state
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false)
+  const [deleteBlockedReason, setDeleteBlockedReason] = useState<string | null>(null)
+  const [pendingPaymentsCount, setPendingPaymentsCount] = useState<number>(0)
+  const [deleteWithHistory, setDeleteWithHistory] = useState(false)
+  const [confirmationNameInput, setConfirmationNameInput] = useState('')
+  const [isDeleting, setIsDeleting] = useState(false)
 
   const loadData = async () => {
     if (!id) return
@@ -76,6 +96,58 @@ export default function StudentDetail() {
   useEffect(() => {
     loadData()
   }, [id])
+
+  const handleRequestDelete = () => {
+    if (!student) return
+    setDeleteWithHistory(false)
+    setConfirmationNameInput('')
+
+    const pending = payments.filter((p) => p.status === 'pendente' || p.status === 'vencido')
+    setPendingPaymentsCount(pending.length)
+
+    if (pending.length > 0) {
+      setDeleteBlockedReason(
+        `Não é possível remover este aluno diretamente: existem ${pending.length} mensalidade(s)/pagamento(s) pendente(s) ou vencido(s). Regularize essas pendências ou marque a opção de excluir com histórico financeiro abaixo.`,
+      )
+    } else {
+      setDeleteBlockedReason(null)
+    }
+    setDeleteModalOpen(true)
+  }
+
+  const handleConfirmDelete = async () => {
+    if (!student || isDeleting) return
+    if (deleteBlockedReason && !deleteWithHistory) return
+
+    setIsDeleting(true)
+    try {
+      if (deleteWithHistory) {
+        const res = await academyService.deleteStudentWithHistory(student.id, confirmationNameInput)
+        toast({
+          title: 'Aluno e histórico excluídos!',
+          description: res.message || `O aluno ${student.name} e suas cobranças foram apagados.`,
+        })
+      } else {
+        await academyService.deleteStudent(student.id)
+        toast({
+          title: 'Aluno removido com sucesso',
+          description: `O registro de ${student.name} foi excluído permanentemente.`,
+        })
+      }
+      setDeleteModalOpen(false)
+      navigate('/alunos')
+    } catch (err: unknown) {
+      console.error(err)
+      const msg = err instanceof Error ? err.message : 'Falha ao remover aluno'
+      toast({
+        title: 'Erro ao remover aluno',
+        description: msg,
+        variant: 'destructive',
+      })
+    } finally {
+      setIsDeleting(false)
+    }
+  }
 
   const handleRemoveClassEnrollment = async (enrollmentId: string) => {
     try {
@@ -196,6 +268,15 @@ export default function StudentDetail() {
             className="bg-[#D4AF37] hover:bg-[#B8953A] text-[#0F1B3D] font-bold text-xs h-9 rounded-xl flex items-center gap-1.5 shadow-sm"
           >
             <CreditCard className="w-4 h-4" /> Emitir Cobrança Infinitepay
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleRequestDelete}
+            className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 font-bold text-xs h-9 rounded-xl flex items-center gap-1.5 shadow-xs"
+          >
+            <Trash2 className="w-4 h-4 text-red-600" /> Excluir Aluno
           </Button>
         </div>
       </div>
@@ -602,6 +683,137 @@ export default function StudentDetail() {
           </Card>
         </TabsContent>
       </Tabs>
+      {/* Delete Safeguard Confirmation Modal */}
+      <Dialog
+        open={deleteModalOpen}
+        onOpenChange={(open) => {
+          setDeleteModalOpen(open)
+          if (!open) {
+            setDeleteWithHistory(false)
+            setConfirmationNameInput('')
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-[500px] bg-white rounded-xl">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-red-600 flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-red-600" />
+              Remover Aluno
+            </DialogTitle>
+            <DialogDescription className="text-xs text-[#6C757D] space-y-3 pt-1">
+              {deleteBlockedReason && !deleteWithHistory ? (
+                <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-800 font-medium text-xs">
+                  {deleteBlockedReason}
+                </div>
+              ) : (
+                <p>
+                  Tem certeza que deseja remover o aluno{' '}
+                  <strong className="text-[#1E2A3A]">{student.name}</strong>?
+                </p>
+              )}
+
+              {/* Opção para exclusão de histórico quando houver pendências */}
+              {pendingPaymentsCount > 0 && (
+                <div className="p-3 rounded-xl bg-amber-50/80 border border-amber-200/90 space-y-2.5 text-left">
+                  <div className="flex items-start gap-2.5">
+                    <input
+                      type="checkbox"
+                      id="detail-delete-with-history"
+                      checked={deleteWithHistory}
+                      onChange={(e) => setDeleteWithHistory(e.target.checked)}
+                      className="mt-1 h-4 w-4 rounded border-amber-300 text-red-600 focus:ring-red-500 cursor-pointer"
+                    />
+                    <label
+                      htmlFor="detail-delete-with-history"
+                      className="text-xs text-amber-950 font-medium cursor-pointer leading-snug"
+                    >
+                      <strong className="block text-red-700 font-bold">
+                        Excluir também o histórico financeiro deste aluno
+                      </strong>
+                      Remove permanentemente todas as cobranças, pagamentos e matrículas vinculados
+                      em uma única ação no servidor.
+                    </label>
+                  </div>
+                  <p className="text-[11px] text-amber-800 font-semibold pl-6">
+                    ⚠ Esta ação é permanente e não pode ser desfeita.
+                  </p>
+                </div>
+              )}
+
+              {/* Confirmação reforçada: digitar o nome do aluno */}
+              {deleteWithHistory && (
+                <div className="space-y-2 pt-1 text-left">
+                  <Label className="text-xs font-bold text-[#0F1B3D]">
+                    Para confirmar a exclusão com histórico, digite o nome completo do aluno:{' '}
+                    <span className="font-mono text-red-600">{student.name}</span>
+                  </Label>
+                  <Input
+                    placeholder="Digite o nome do aluno exatamente como exibido"
+                    value={confirmationNameInput}
+                    onChange={(e) => setConfirmationNameInput(e.target.value)}
+                    className="text-xs border-red-200 focus-visible:ring-red-500 bg-white"
+                  />
+                </div>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+
+          <DialogFooter className="gap-2 sm:justify-between pt-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={isDeleting}
+              onClick={() => {
+                setDeleteModalOpen(false)
+                setDeleteWithHistory(false)
+                setConfirmationNameInput('')
+              }}
+            >
+              Cancelar
+            </Button>
+
+            {deleteWithHistory ? (
+              <Button
+                variant="destructive"
+                size="sm"
+                disabled={
+                  isDeleting ||
+                  confirmationNameInput.trim().toLowerCase().replace(/\s+/g, ' ') !==
+                    student.name.trim().toLowerCase().replace(/\s+/g, ' ')
+                }
+                onClick={handleConfirmDelete}
+                className="font-bold flex items-center gap-1.5"
+              >
+                {isDeleting ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    Excluindo com histórico...
+                  </>
+                ) : (
+                  'Excluir definitivamente'
+                )}
+              </Button>
+            ) : !deleteBlockedReason ? (
+              <Button
+                variant="destructive"
+                size="sm"
+                disabled={isDeleting}
+                onClick={handleConfirmDelete}
+                className="font-bold flex items-center gap-1.5"
+              >
+                {isDeleting ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    Excluindo...
+                  </>
+                ) : (
+                  'Confirmar Exclusão'
+                )}
+              </Button>
+            ) : null}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

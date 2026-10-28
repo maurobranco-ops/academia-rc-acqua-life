@@ -16,6 +16,10 @@ import {
   Power,
   Info,
   XCircle,
+  Sparkles,
+  ShieldAlert,
+  Search,
+  Check,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -50,6 +54,76 @@ export default function Settings() {
   const [instructors, setInstructors] = useState<InstructorRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [savingProfile, setSavingProfile] = useState(false)
+
+  // Sample Data Cleanup State
+  const [scanningSampleData, setScanningSampleData] = useState(false)
+  const [sampleDataReport, setSampleDataReport] = useState<{
+    summary: {
+      students_count: number
+      charges_count: number
+      payments_count: number
+      enrollments_count: number
+      transactions_count: number
+      ignored_count: number
+    }
+    students: Array<{
+      id: string
+      name: string
+      cpf: string
+      email: string
+      status: string
+      reason: string
+    }>
+    charges: Array<{
+      id: string
+      description: string
+      amount: number
+      due_date: string
+      status: string
+      payment_link: string
+      student_id: string
+    }>
+    payments: Array<{
+      id: string
+      charge_id: string
+      amount: number
+      status: string
+      due_date: string
+      student_id: string
+    }>
+    enrollments: Array<{
+      id: string
+      student_id: string
+      class_id: string
+    }>
+    transactions: Array<{
+      id: string
+      description: string
+      amount: number
+      type: string
+      notes: string
+    }>
+    ignored_for_safety: Array<{
+      id: string
+      name: string
+      bubble_id: string
+      reason: string
+    }>
+  } | null>(null)
+  const [cleanupModalOpen, setCleanupModalOpen] = useState(false)
+  const [cleanupConfirmationInput, setCleanupConfirmationInput] = useState('')
+  const [executingCleanup, setExecutingCleanup] = useState(false)
+  const [lastCleanupResult, setLastCleanupResult] = useState<{
+    message: string
+    report: {
+      students_deleted: number
+      charges_deleted: number
+      payments_deleted: number
+      enrollments_deleted: number
+      transactions_deleted: number
+      student_names: string[]
+    }
+  } | null>(null)
 
   // Infinitepay Connection Testing State
   const [testingConnection, setTestingConnection] = useState(false)
@@ -336,6 +410,55 @@ export default function Settings() {
     }
   }
 
+  // Sample Data Cleanup Handlers
+  const handleScanSampleData = async () => {
+    setScanningSampleData(true)
+    setLastCleanupResult(null)
+    try {
+      const res = await academyService.previewSampleDataCleanup()
+      setSampleDataReport(res)
+      toast({
+        title: 'Varredura concluída',
+        description: `Localizados: ${res.summary.students_count} aluno(s), ${res.summary.charges_count} cobrança(s), ${res.summary.payments_count} pagamento(s).`,
+      })
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Falha ao buscar dados de exemplo'
+      toast({
+        title: 'Erro na varredura',
+        description: msg,
+        variant: 'destructive',
+      })
+    } finally {
+      setScanningSampleData(false)
+    }
+  }
+
+  const handleExecuteCleanup = async () => {
+    if (cleanupConfirmationInput.trim().toUpperCase() !== 'LIMPAR') return
+    setExecutingCleanup(true)
+    try {
+      const res = await academyService.executeSampleDataCleanup('LIMPAR')
+      setLastCleanupResult(res)
+      setCleanupModalOpen(false)
+      setCleanupConfirmationInput('')
+      setSampleDataReport(null)
+      toast({
+        title: 'Limpeza realizada com sucesso!',
+        description: res.message,
+      })
+      await loadData()
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Falha ao executar limpeza'
+      toast({
+        title: 'Erro na limpeza',
+        description: msg,
+        variant: 'destructive',
+      })
+    } finally {
+      setExecutingCleanup(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[50vh] gap-3">
@@ -395,6 +518,12 @@ export default function Settings() {
             className="data-[state=active]:bg-[#0F1B3D] data-[state=active]:text-white text-xs font-semibold rounded-lg px-4"
           >
             <Bell className="w-3.5 h-3.5 mr-1.5" /> Notificações
+          </TabsTrigger>
+          <TabsTrigger
+            value="limpeza_dados"
+            className="data-[state=active]:bg-rose-700 data-[state=active]:text-white text-xs font-semibold rounded-lg px-4"
+          >
+            <Trash2 className="w-3.5 h-3.5 mr-1.5" /> Limpeza de Dados de Exemplo
           </TabsTrigger>
         </TabsList>
 
@@ -883,6 +1012,236 @@ export default function Settings() {
         </TabsContent>
 
         {/* ============================================================ */}
+        {/* TAB: LIMPEZA DE DADOS DE EXEMPLO */}
+        {/* ============================================================ */}
+        <TabsContent value="limpeza_dados" className="space-y-4">
+          <Card className="bg-white border-[#E0E4EA] rounded-xl shadow-xs">
+            <CardHeader>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div>
+                  <CardTitle className="text-base font-bold text-[#0F1B3D] flex items-center gap-2">
+                    <Trash2 className="w-4 h-4 text-rose-600" />
+                    Limpeza de Dados de Exemplo (Sementes de Demonstração)
+                  </CardTitle>
+                  <CardDescription className="text-xs text-[#6C757D]">
+                    Identifique e remova alunos fictícios criados automaticamente na versão de
+                    testes inicial, juntamente com suas cobranças e movimentações.
+                  </CardDescription>
+                </div>
+
+                <Button
+                  onClick={handleScanSampleData}
+                  disabled={scanningSampleData}
+                  className="bg-[#0F1B3D] hover:bg-[#1B2A5B] text-white font-bold text-xs h-9 flex items-center gap-2 w-fit shadow-xs"
+                >
+                  {scanningSampleData ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Analisando banco...
+                    </>
+                  ) : (
+                    <>
+                      <Search className="w-4 h-4" />
+                      Buscar dados de exemplo
+                    </>
+                  )}
+                </Button>
+              </div>
+            </CardHeader>
+
+            <CardContent className="space-y-4 text-xs">
+              {/* Regra de Proteção em Destaque */}
+              <div className="p-3.5 rounded-xl border border-blue-200 bg-blue-50/70 text-blue-900 space-y-1.5">
+                <div className="flex items-center gap-2 font-bold text-xs text-[#0F1B3D]">
+                  <ShieldAlert className="w-4 h-4 text-blue-600 shrink-0" />
+                  Proteção Obrigatória aos Dados Reais (Importação Bubble)
+                </div>
+                <p className="text-[11px] leading-relaxed text-blue-950">
+                  A rotina de limpeza protege rigorosamente qualquer registro que possua o campo{' '}
+                  <strong>bubble_id</strong> preenchido. Em particular, a aluna real{' '}
+                  <strong>Mariana Oliveira Padilha</strong> (e todos os demais alunos importados do
+                  Bubble) <strong>nunca serão excluídos nem afetados</strong> por esta ferramenta.
+                </p>
+              </div>
+
+              {/* Resultado pós-limpeza */}
+              {lastCleanupResult && (
+                <div className="p-4 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-900 space-y-2">
+                  <div className="flex items-center gap-2 font-bold text-sm text-emerald-800">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                    Relatório Final da Limpeza
+                  </div>
+                  <p className="text-xs">{lastCleanupResult.message}</p>
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 pt-2 text-[11px]">
+                    <div className="p-2 bg-white rounded-lg border border-emerald-200">
+                      <span className="text-[#6C757D] block">Alunos:</span>
+                      <strong className="text-sm font-mono text-emerald-700">
+                        {lastCleanupResult.report.students_deleted}
+                      </strong>
+                    </div>
+                    <div className="p-2 bg-white rounded-lg border border-emerald-200">
+                      <span className="text-[#6C757D] block">Cobranças:</span>
+                      <strong className="text-sm font-mono text-emerald-700">
+                        {lastCleanupResult.report.charges_deleted}
+                      </strong>
+                    </div>
+                    <div className="p-2 bg-white rounded-lg border border-emerald-200">
+                      <span className="text-[#6C757D] block">Pagamentos:</span>
+                      <strong className="text-sm font-mono text-emerald-700">
+                        {lastCleanupResult.report.payments_deleted}
+                      </strong>
+                    </div>
+                    <div className="p-2 bg-white rounded-lg border border-emerald-200">
+                      <span className="text-[#6C757D] block">Matrículas:</span>
+                      <strong className="text-sm font-mono text-emerald-700">
+                        {lastCleanupResult.report.enrollments_deleted}
+                      </strong>
+                    </div>
+                    <div className="p-2 bg-white rounded-lg border border-emerald-200">
+                      <span className="text-[#6C757D] block">Transações:</span>
+                      <strong className="text-sm font-mono text-emerald-700">
+                        {lastCleanupResult.report.transactions_deleted}
+                      </strong>
+                    </div>
+                  </div>
+                  {lastCleanupResult.report.student_names.length > 0 && (
+                    <div className="text-[11px] text-emerald-800 pt-1">
+                      Nomes removidos: {lastCleanupResult.report.student_names.join(', ')}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Resultado da Varredura */}
+              {sampleDataReport && (
+                <div className="space-y-4 pt-2">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                    <Card className="p-3 bg-slate-50 border-slate-200">
+                      <span className="text-[10px] uppercase font-semibold text-[#6C757D] block">
+                        Alunos Fictícios
+                      </span>
+                      <span className="text-lg font-bold font-mono text-rose-600">
+                        {sampleDataReport.summary.students_count}
+                      </span>
+                    </Card>
+                    <Card className="p-3 bg-slate-50 border-slate-200">
+                      <span className="text-[10px] uppercase font-semibold text-[#6C757D] block">
+                        Cobranças Falsas
+                      </span>
+                      <span className="text-lg font-bold font-mono text-rose-600">
+                        {sampleDataReport.summary.charges_count}
+                      </span>
+                    </Card>
+                    <Card className="p-3 bg-slate-50 border-slate-200">
+                      <span className="text-[10px] uppercase font-semibold text-[#6C757D] block">
+                        Pagamentos Vinculados
+                      </span>
+                      <span className="text-lg font-bold font-mono text-rose-600">
+                        {sampleDataReport.summary.payments_count}
+                      </span>
+                    </Card>
+                    <Card className="p-3 bg-slate-50 border-slate-200">
+                      <span className="text-[10px] uppercase font-semibold text-[#6C757D] block">
+                        Matrículas
+                      </span>
+                      <span className="text-lg font-bold font-mono text-rose-600">
+                        {sampleDataReport.summary.enrollments_count}
+                      </span>
+                    </Card>
+                    <Card className="p-3 bg-slate-50 border-slate-200">
+                      <span className="text-[10px] uppercase font-semibold text-[#6C757D] block">
+                        Transações Falsas
+                      </span>
+                      <span className="text-lg font-bold font-mono text-rose-600">
+                        {sampleDataReport.summary.transactions_count}
+                      </span>
+                    </Card>
+                    <Card className="p-3 bg-emerald-50 border-emerald-200">
+                      <span className="text-[10px] uppercase font-semibold text-emerald-800 block">
+                        Protegidos (Bubble)
+                      </span>
+                      <span className="text-lg font-bold font-mono text-emerald-700">
+                        {sampleDataReport.summary.ignored_count}
+                      </span>
+                    </Card>
+                  </div>
+
+                  {/* Listagem detalhada dos alunos encontrados */}
+                  {sampleDataReport.students.length > 0 ? (
+                    <div className="space-y-3">
+                      <h4 className="font-bold text-[#0F1B3D] text-xs">
+                        Alunos de exemplo identificados para remoção:
+                      </h4>
+                      <div className="divide-y divide-slate-100 rounded-xl border border-slate-200 overflow-hidden bg-white">
+                        {sampleDataReport.students.map((st) => (
+                          <div
+                            key={st.id}
+                            className="p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 hover:bg-slate-50"
+                          >
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <strong className="text-sm text-[#0F1B3D]">{st.name}</strong>
+                                <Badge className="bg-rose-50 text-rose-700 border-rose-200 text-[10px]">
+                                  Fictício
+                                </Badge>
+                              </div>
+                              <p className="text-[11px] text-[#6C757D]">
+                                CPF: {st.cpf || 'Não informado'} • E-mail:{' '}
+                                {st.email || 'Não informado'}
+                              </p>
+                            </div>
+                            <span className="text-[11px] text-amber-700 font-medium">
+                              Motivo: {st.reason}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Registros protegidos explicitamente */}
+                      {sampleDataReport.ignored_for_safety.length > 0 && (
+                        <div className="p-3 rounded-lg border border-emerald-200 bg-emerald-50/50 space-y-1">
+                          <p className="font-bold text-emerald-800 text-xs">
+                            Registros protegidos e ignorados por segurança:
+                          </p>
+                          {sampleDataReport.ignored_for_safety.map((ig) => (
+                            <div
+                              key={ig.id}
+                              className="text-[11px] text-emerald-900 flex items-center gap-1.5"
+                            >
+                              <Check className="w-3.5 h-3.5 text-emerald-600" />
+                              <strong>{ig.name}</strong> — {ig.reason} (Bubble ID: {ig.bubble_id})
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      <div className="pt-2 flex justify-end">
+                        <Button
+                          variant="destructive"
+                          onClick={() => {
+                            setCleanupConfirmationInput('')
+                            setCleanupModalOpen(true)
+                          }}
+                          className="font-bold text-xs h-9 flex items-center gap-2"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                          Limpar dados de exemplo
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-6 text-center rounded-xl border border-slate-200 bg-slate-50 text-[#6C757D]">
+                      Nenhum dado de exemplo pendente de limpeza foi encontrado. O sistema já está
+                      limpo!
+                    </div>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ============================================================ */}
         {/* TAB 5: INSTRUCTORS */}
         {/* ============================================================ */}
         <TabsContent value="instrutores" className="space-y-4">
@@ -1064,6 +1423,87 @@ export default function Settings() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* ============================================================== */}
+      {/* Sample Data Cleanup Confirmation Modal */}
+      {/* ============================================================== */}
+      <Dialog
+        open={cleanupModalOpen}
+        onOpenChange={(open) => {
+          setCleanupModalOpen(open)
+          if (!open) setCleanupConfirmationInput('')
+        }}
+      >
+        <DialogContent className="sm:max-w-[460px] bg-white rounded-xl">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-red-600 flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-red-600" />
+              Confirmar Limpeza de Dados de Exemplo
+            </DialogTitle>
+            <DialogDescription className="text-xs text-[#6C757D] space-y-3 pt-1">
+              <p>
+                Esta ação removerá permanentemente todos os{' '}
+                <strong>{sampleDataReport?.summary.students_count || 0} alunos fictícios</strong>{' '}
+                identificados, bem como suas{' '}
+                <strong>{sampleDataReport?.summary.charges_count || 0} cobranças</strong>,{' '}
+                <strong>{sampleDataReport?.summary.payments_count || 0} pagamentos</strong> e{' '}
+                <strong>{sampleDataReport?.summary.transactions_count || 0} transações</strong> de
+                teste em uma única transação no servidor.
+              </p>
+
+              <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-800 text-[11px] font-medium leading-relaxed">
+                ⚠ <strong>Aviso de irreversibilidade:</strong> Esta operação não pode ser desfeita.
+                Alunos reais importados do Bubble com <code>bubble_id</code> não serão afetados.
+              </div>
+
+              <div className="space-y-1.5 pt-1 text-left">
+                <Label className="text-xs font-bold text-[#0F1B3D]">
+                  Para confirmar, digite exatamente a palavra{' '}
+                  <span className="font-mono text-red-600 font-black">LIMPAR</span> abaixo:
+                </Label>
+                <Input
+                  value={cleanupConfirmationInput}
+                  onChange={(e) => setCleanupConfirmationInput(e.target.value)}
+                  placeholder="LIMPAR"
+                  className="text-xs font-mono border-red-200 focus-visible:ring-red-500 bg-white"
+                />
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+
+          <DialogFooter className="gap-2 sm:justify-between pt-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={executingCleanup}
+              onClick={() => {
+                setCleanupModalOpen(false)
+                setCleanupConfirmationInput('')
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              disabled={
+                executingCleanup || cleanupConfirmationInput.trim().toUpperCase() !== 'LIMPAR'
+              }
+              onClick={handleExecuteCleanup}
+              className="font-bold flex items-center gap-1.5"
+            >
+              {executingCleanup ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  Limpando registros...
+                </>
+              ) : (
+                'Excluir definitivamente'
+              )}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

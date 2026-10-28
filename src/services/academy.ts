@@ -91,6 +91,129 @@ export const academyService = {
     return pb.collection('students').delete(id)
   },
 
+  async deleteStudentWithHistory(
+    studentId: string,
+    confirmationName: string,
+  ): Promise<{
+    success: boolean
+    message: string
+    details?: {
+      student_id: string
+      student_name: string
+      charges_deleted: number
+      payments_deleted: number
+      enrollments_deleted: number
+      transactions_deleted: number
+    }
+  }> {
+    const response = await fetch(`${pb.baseUrl}/backend/v1/students/delete-with-history`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        student_id: studentId,
+        confirmation_name: confirmationName,
+      }),
+    })
+
+    const data = await response.json().catch(() => ({}))
+    if (!response.ok) {
+      throw new Error(data.message || `Erro HTTP ${response.status} ao excluir aluno com histórico`)
+    }
+    return data
+  },
+
+  async previewSampleDataCleanup(): Promise<{
+    success: boolean
+    summary: {
+      students_count: number
+      charges_count: number
+      payments_count: number
+      enrollments_count: number
+      transactions_count: number
+      ignored_count: number
+    }
+    students: Array<{
+      id: string
+      name: string
+      cpf: string
+      email: string
+      status: string
+      reason: string
+    }>
+    charges: Array<{
+      id: string
+      description: string
+      amount: number
+      due_date: string
+      status: string
+      payment_link: string
+      student_id: string
+    }>
+    payments: Array<{
+      id: string
+      charge_id: string
+      amount: number
+      status: string
+      due_date: string
+      student_id: string
+    }>
+    enrollments: Array<{
+      id: string
+      student_id: string
+      class_id: string
+    }>
+    transactions: Array<{
+      id: string
+      description: string
+      amount: number
+      type: string
+      notes: string
+    }>
+    ignored_for_safety: Array<{
+      id: string
+      name: string
+      bubble_id: string
+      reason: string
+    }>
+  }> {
+    const response = await fetch(`${pb.baseUrl}/backend/v1/cleanup/sample-data`, {
+      method: 'GET',
+    })
+    const data = await response.json().catch(() => ({}))
+    if (!response.ok) {
+      throw new Error(data.message || `Erro HTTP ${response.status} ao buscar dados de exemplo`)
+    }
+    return data
+  },
+
+  async executeSampleDataCleanup(confirmation: string): Promise<{
+    success: boolean
+    message: string
+    report: {
+      students_deleted: number
+      charges_deleted: number
+      payments_deleted: number
+      enrollments_deleted: number
+      transactions_deleted: number
+      student_names: string[]
+    }
+  }> {
+    const response = await fetch(`${pb.baseUrl}/backend/v1/cleanup/execute`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ confirmation }),
+    })
+    const data = await response.json().catch(() => ({}))
+    if (!response.ok) {
+      throw new Error(data.message || `Erro HTTP ${response.status} ao limpar dados de exemplo`)
+    }
+    return data
+  },
+
   // Classes
   async getClasses(): Promise<ClassRecord[]> {
     return pb.collection('classes').getFullList<ClassRecord>({
