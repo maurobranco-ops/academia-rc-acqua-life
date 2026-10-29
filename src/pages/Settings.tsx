@@ -928,7 +928,7 @@ export default function Settings() {
 
                     <div className="space-y-1">
                       <Label className="font-semibold text-[#1E2A3A]">
-                        Regras de Isenção e Desconto
+                        Regras de Isenção, Desconto &amp; Entrega
                       </Label>
                       <ul className="text-[11px] text-[#6C757D] list-disc list-inside space-y-0.5">
                         <li>
@@ -938,8 +938,13 @@ export default function Settings() {
                           Alunos com <strong>mensalidade suspensa</strong> não são cobrados.
                         </li>
                         <li>
-                          <strong>Desconto família (R$ 10,00)</strong> é calculado automaticamente
-                          pelo responsável.
+                          <strong>Desconto família (R$ 10,00)</strong> e desconto pontualidade
+                          calculados automaticamente.
+                        </li>
+                        <li>
+                          <strong>Envio automático por WhatsApp incluído:</strong> as cobranças
+                          geradas são enviadas diretamente ao WhatsApp do responsável através da
+                          conta conectada do proprietário.
                         </li>
                         <li>
                           <strong>Anti-duplicação:</strong> não repete cobrança já emitida para o

@@ -339,6 +339,87 @@ routerAdd('POST', '/backend/v1/infinitepay/create-charge', (e) => {
     })
   }
 
+  // Envio automático via WhatsApp do proprietário (owner connector)
+  let whatsappSent = false
+  let whatsappError = ''
+  try {
+    const rawDueDate = String(dueDate).split('T')[0]
+    const dueParts = rawDueDate.split('-')
+    const dueFormatted =
+      dueParts.length === 3 ? `${dueParts[2]}/${dueParts[1]}/${dueParts[0]}` : rawDueDate
+
+    const targetPhone =
+      student.getString('guardian_phone') ||
+      student.getString('whatsapp') ||
+      student.getString('phone') ||
+      ''
+    const studentName = student.getString('name') || 'Aluno'
+    const guardianName = student.getString('guardian_name') || ''
+    const greetingName = guardianName ? guardianName : studentName
+
+    if (!targetPhone) {
+      whatsappError = 'Aluno/responsável sem telefone cadastrado. Envio pulado.'
+      console.log(
+        `[WhatsApp Owner] Aluno ${studentName} (#${studentId}) sem telefone cadastrado. Pulando envio.`,
+      )
+    } else {
+      const cleanPhone = targetPhone.replace(/\D/g, '')
+      const fullPhone = cleanPhone.startsWith('55') ? cleanPhone : '55' + cleanPhone
+
+      const messageText =
+        `Olá, ${greetingName}! Aqui é da RC Acqua Life. 🏊‍♂️\n\n` +
+        `A fatura da mensalidade de ${studentName} no valor de R$ ${amount.toFixed(2)} com vencimento em ${dueFormatted} já está disponível.\n\n` +
+        `Você pode pagar com PIX ou Cartão pelo link InfinitePay abaixo:\n` +
+        `${paymentLink}\n\n` +
+        `Em caso de dúvidas, estamos à disposição!`
+
+      console.log(
+        `[WhatsApp Owner] Tentando envio para ${studentName} (${fullPhone}) via $connectors.executeAsOwner...`,
+      )
+
+      if (typeof $connectors !== 'undefined' && $connectors && $connectors.executeAsOwner) {
+        // Tenta obter os números da conta para achar o phone_number_id se necessário
+        let phoneId = ''
+        try {
+          const numRes = $connectors.executeAsOwner('whatsapp', 'WHATSAPP_GET_PHONE_NUMBERS', {})
+          if (numRes && numRes.successful && numRes.data) {
+            const list = numRes.data.data || numRes.data.phone_numbers || []
+            if (list.length > 0) {
+              phoneId = list[0].id || list[0].phone_number_id || ''
+            }
+          }
+        } catch (pnErr) {
+          console.log('[WhatsApp Owner] Consulta phone_number_id:', pnErr)
+        }
+
+        const msgParams = {
+          to_number: fullPhone,
+          text: messageText,
+        }
+        if (phoneId) msgParams.phone_number_id = phoneId
+
+        const sendRes = $connectors.executeAsOwner('whatsapp', 'WHATSAPP_SEND_MESSAGE', msgParams)
+
+        if (sendRes && sendRes.successful) {
+          whatsappSent = true
+          console.log(`[WhatsApp Owner] Mensagem enviada com sucesso para ${studentName}!`)
+        } else {
+          const errDetail =
+            (sendRes && sendRes.error) ||
+            'Conta WhatsApp do proprietário não conectada ou sem permissão'
+          whatsappError = String(errDetail)
+          console.log(`[WhatsApp Owner] Aviso no envio para ${studentName}:`, errDetail)
+        }
+      } else {
+        whatsappError = 'Módulo $connectors não disponível no ambiente'
+        console.log('[WhatsApp Owner] $connectors indisponível no ambiente pb_hooks')
+      }
+    }
+  } catch (waErr) {
+    whatsappError = waErr.message || String(waErr)
+    console.log('[WhatsApp Owner] Exceção capturada ao tentar enviar WhatsApp:', waErr)
+  }
+
   return e.json(200, {
     success: true,
     charge: {
@@ -355,6 +436,8 @@ routerAdd('POST', '/backend/v1/infinitepay/create-charge', (e) => {
       order_nsu: orderNsu,
       invoice_slug: invoiceSlug,
     },
+    whatsapp_sent: whatsappSent,
+    whatsapp_error: whatsappError || null,
     warning: apiWarning || null,
   })
 })
@@ -1076,21 +1159,34 @@ routerAdd('POST', '/backend/v1/recurring-billing/run-now', (e) => {
     const guardianName = normalizeGuardian(st.getString('guardian_name')).toLowerCase()
     const isFamilyMember =
       (guardianName && guardianCount[guardianName] > 1) ||
-      (plan && plan.name.toLowerCase().includes('fam')) ||
-      st.getFloat('monthly_fee') === 100
+      (plan && plan.name.toLowerCase().includes('fam'))
 
-    let baseAmount = st.getFloat('monthly_fee')
-    if (!baseAmount || baseAmount <= 0) {
-      if (plan && plan.price > 0) {
-        baseAmount = plan.price
-      } else if (isFamilyMember) {
-        baseAmount = 100
-      } else {
-        baseAmount = 110
-      }
+    // 1. Prioriza o valor com desconto pontualidade já configurado no aluno (ou calculado)
+    const storedMonthlyFee = st.getFloat('monthly_fee')
+    const storedDiscountedFee = st.getFloat('discounted_fee')
+
+    let effectiveFee = 0
+    if (storedDiscountedFee && storedDiscountedFee > 0) {
+      effectiveFee = storedDiscountedFee
+    } else if (storedMonthlyFee && storedMonthlyFee > 0) {
+      // Se não tem discounted_fee salvo, calcula mensalidade - 10 pontualidade
+      effectiveFee = Math.max(0, storedMonthlyFee - 10)
+    } else if (plan && plan.price > 0) {
+      effectiveFee = Math.max(0, plan.price - 10)
+    } else if (isFamilyMember) {
+      effectiveFee = 90 // Plano família 100 - 10
+    } else {
+      effectiveFee = 100 // Plano integral 110 - 10
     }
 
-    const discountAmount = isFamilyMember ? 10 : 0
+    // Se fizer parte de grupo familiar com múltiplos alunos pelo mesmo responsável, desconta mais R$ 10 da regra familiar
+    // Atenção: se o aluno já estiver com mensalidade reduzida pelo plano família (100 -> 90), confere se aplica desconto adicional
+    let finalAmount = effectiveFee
+    let discountAmount = 0
+    if (isFamilyMember) {
+      discountAmount = 10
+      finalAmount = Math.max(0, effectiveFee - 10)
+    }
     const planLabel = plan ? plan.name : isFamilyMember ? 'Plano Família' : 'Plano Integral'
     const monthNames = [
       'Janeiro',
@@ -1115,7 +1211,7 @@ routerAdd('POST', '/backend/v1/recurring-billing/run-now', (e) => {
     let infinitepayPaymentId = deterministicOrderNsu
 
     if (apiKey || handle) {
-      const priceCents = Math.round(baseAmount * 100)
+      const priceCents = Math.round(finalAmount * 100)
       const customerPayload = { name: studentName }
       const sEmail = st.getString('email') || st.getString('guardian_email')
       if (sEmail) customerPayload.email = sEmail
@@ -1176,7 +1272,7 @@ routerAdd('POST', '/backend/v1/recurring-billing/run-now', (e) => {
       const chargeRecord = new Record(chargesCol)
       chargeRecord.set('student_id', studentId)
       chargeRecord.set('description', description)
-      chargeRecord.set('amount', baseAmount)
+      chargeRecord.set('amount', finalAmount)
       chargeRecord.set('discount_amount', discountAmount)
       chargeRecord.set('due_date', `${targetDueDateStr} 00:00:00.000Z`)
       chargeRecord.set('status', 'em_aberto')
@@ -1191,7 +1287,7 @@ routerAdd('POST', '/backend/v1/recurring-billing/run-now', (e) => {
       const paymentRecord = new Record(paymentsCol)
       paymentRecord.set('student_id', studentId)
       paymentRecord.set('charge_id', chargeRecord.id)
-      paymentRecord.set('amount', baseAmount)
+      paymentRecord.set('amount', finalAmount)
       paymentRecord.set('discount_amount', discountAmount)
       paymentRecord.set('due_date', `${targetDueDateStr} 00:00:00.000Z`)
       paymentRecord.set('status', 'pendente')
@@ -1204,8 +1300,76 @@ routerAdd('POST', '/backend/v1/recurring-billing/run-now', (e) => {
 
       createdCount++
       console.log(
-        `[Cobrança Automática] Emitida para ${studentName}: R$ ${baseAmount}, vencimento ${targetDueDateStr}`,
+        `[Cobrança Automática] Emitida para ${studentName}: R$ ${finalAmount}, vencimento ${targetDueDateStr}`,
       )
+
+      // Envio automático WhatsApp do proprietário (owner)
+      try {
+        const rawDueDate = targetDueDateStr
+        const dueParts = rawDueDate.split('-')
+        const dueFormatted =
+          dueParts.length === 3 ? `${dueParts[2]}/${dueParts[1]}/${dueParts[0]}` : rawDueDate
+
+        const targetPhone =
+          st.getString('guardian_phone') || st.getString('whatsapp') || st.getString('phone') || ''
+        const guardianName = st.getString('guardian_name') || ''
+        const greetingName = guardianName ? guardianName : studentName
+
+        if (!targetPhone) {
+          console.log(
+            `[Cobrança Automática WhatsApp] Aluno ${studentName} sem telefone. Pulando envio.`,
+          )
+        } else {
+          const cleanPhone = targetPhone.replace(/\D/g, '')
+          const fullPhone = cleanPhone.startsWith('55') ? cleanPhone : '55' + cleanPhone
+
+          const messageText =
+            `Olá, ${greetingName}! Aqui é da RC Acqua Life. 🏊‍♂️\n\n` +
+            `A fatura da mensalidade de ${studentName} no valor de R$ ${finalAmount.toFixed(2)} com vencimento em ${dueFormatted} já está disponível.\n\n` +
+            `Você pode pagar com PIX ou Cartão pelo link InfinitePay abaixo:\n` +
+            `${paymentLink}\n\n` +
+            `Em caso de dúvidas, estamos à disposição!`
+
+          if (typeof $connectors !== 'undefined' && $connectors && $connectors.executeAsOwner) {
+            let phoneId = ''
+            try {
+              const numRes = $connectors.executeAsOwner(
+                'whatsapp',
+                'WHATSAPP_GET_PHONE_NUMBERS',
+                {},
+              )
+              if (numRes && numRes.successful && numRes.data) {
+                const list = numRes.data.data || numRes.data.phone_numbers || []
+                if (list.length > 0) phoneId = list[0].id || list[0].phone_number_id || ''
+              }
+            } catch (_) {}
+
+            const msgParams = { to_number: fullPhone, text: messageText }
+            if (phoneId) msgParams.phone_number_id = phoneId
+
+            const sendRes = $connectors.executeAsOwner(
+              'whatsapp',
+              'WHATSAPP_SEND_MESSAGE',
+              msgParams,
+            )
+            if (sendRes && sendRes.successful) {
+              console.log(
+                `[Cobrança Automática WhatsApp] Mensagem enviada com sucesso para ${studentName}!`,
+              )
+            } else {
+              console.log(
+                `[Cobrança Automática WhatsApp] Falha ou aviso ao enviar para ${studentName}:`,
+                sendRes ? sendRes.error : 'Conta não conectada',
+              )
+            }
+          }
+        }
+      } catch (waRecErr) {
+        console.log(
+          `[Cobrança Automática WhatsApp] Erro não impeditivo para ${studentName}:`,
+          waRecErr,
+        )
+      }
     } catch (saveErr) {
       console.log(`[Cobrança Automática] Erro ao salvar para ${studentName}:`, saveErr)
       errorDetails.push({ studentId, studentName, error: String(saveErr) })
@@ -1397,21 +1561,30 @@ cronAdd('daily_recurring_billing', '0 6 * * *', () => {
     const guardianName = normalizeGuardian(st.getString('guardian_name')).toLowerCase()
     const isFamilyMember =
       (guardianName && guardianCount[guardianName] > 1) ||
-      (plan && plan.name.toLowerCase().includes('fam')) ||
-      st.getFloat('monthly_fee') === 100
+      (plan && plan.name.toLowerCase().includes('fam'))
 
-    let baseAmount = st.getFloat('monthly_fee')
-    if (!baseAmount || baseAmount <= 0) {
-      if (plan && plan.price > 0) {
-        baseAmount = plan.price
-      } else if (isFamilyMember) {
-        baseAmount = 100
-      } else {
-        baseAmount = 110
-      }
+    const storedMonthlyFee = st.getFloat('monthly_fee')
+    const storedDiscountedFee = st.getFloat('discounted_fee')
+
+    let effectiveFee = 0
+    if (storedDiscountedFee && storedDiscountedFee > 0) {
+      effectiveFee = storedDiscountedFee
+    } else if (storedMonthlyFee && storedMonthlyFee > 0) {
+      effectiveFee = Math.max(0, storedMonthlyFee - 10)
+    } else if (plan && plan.price > 0) {
+      effectiveFee = Math.max(0, plan.price - 10)
+    } else if (isFamilyMember) {
+      effectiveFee = 90
+    } else {
+      effectiveFee = 100
     }
 
-    const discountAmount = isFamilyMember ? 10 : 0
+    let finalAmount = effectiveFee
+    let discountAmount = 0
+    if (isFamilyMember) {
+      discountAmount = 10
+      finalAmount = Math.max(0, effectiveFee - 10)
+    }
     const planLabel = plan ? plan.name : isFamilyMember ? 'Plano Família' : 'Plano Integral'
     const monthNames = [
       'Janeiro',
@@ -1435,7 +1608,7 @@ cronAdd('daily_recurring_billing', '0 6 * * *', () => {
     let infinitepayPaymentId = deterministicOrderNsu
 
     if (apiKey || handle) {
-      const priceCents = Math.round(baseAmount * 100)
+      const priceCents = Math.round(finalAmount * 100)
       const customerPayload = { name: studentName }
       const sEmail = st.getString('email') || st.getString('guardian_email')
       if (sEmail) customerPayload.email = sEmail
@@ -1495,7 +1668,7 @@ cronAdd('daily_recurring_billing', '0 6 * * *', () => {
       const chargeRecord = new Record(chargesCol)
       chargeRecord.set('student_id', studentId)
       chargeRecord.set('description', description)
-      chargeRecord.set('amount', baseAmount)
+      chargeRecord.set('amount', finalAmount)
       chargeRecord.set('discount_amount', discountAmount)
       chargeRecord.set('due_date', `${targetDueDateStr} 00:00:00.000Z`)
       chargeRecord.set('status', 'em_aberto')
@@ -1510,7 +1683,7 @@ cronAdd('daily_recurring_billing', '0 6 * * *', () => {
       const paymentRecord = new Record(paymentsCol)
       paymentRecord.set('student_id', studentId)
       paymentRecord.set('charge_id', chargeRecord.id)
-      paymentRecord.set('amount', baseAmount)
+      paymentRecord.set('amount', finalAmount)
       paymentRecord.set('discount_amount', discountAmount)
       paymentRecord.set('due_date', `${targetDueDateStr} 00:00:00.000Z`)
       paymentRecord.set('status', 'pendente')
@@ -1523,8 +1696,69 @@ cronAdd('daily_recurring_billing', '0 6 * * *', () => {
 
       createdCount++
       console.log(
-        `[Cron] Emitida para ${studentName}: R$ ${baseAmount}, vencimento ${targetDueDateStr}`,
+        `[Cron] Emitida para ${studentName}: R$ ${finalAmount}, vencimento ${targetDueDateStr}`,
       )
+
+      // Envio automático WhatsApp do proprietário (owner)
+      try {
+        const rawDueDate = targetDueDateStr
+        const dueParts = rawDueDate.split('-')
+        const dueFormatted =
+          dueParts.length === 3 ? `${dueParts[2]}/${dueParts[1]}/${dueParts[0]}` : rawDueDate
+
+        const targetPhone =
+          st.getString('guardian_phone') || st.getString('whatsapp') || st.getString('phone') || ''
+        const guardianName = st.getString('guardian_name') || ''
+        const greetingName = guardianName ? guardianName : studentName
+
+        if (!targetPhone) {
+          console.log(`[Cron WhatsApp] Aluno ${studentName} sem telefone. Pulando envio.`)
+        } else {
+          const cleanPhone = targetPhone.replace(/\D/g, '')
+          const fullPhone = cleanPhone.startsWith('55') ? cleanPhone : '55' + cleanPhone
+
+          const messageText =
+            `Olá, ${greetingName}! Aqui é da RC Acqua Life. 🏊‍♂️\n\n` +
+            `A fatura da mensalidade de ${studentName} no valor de R$ ${finalAmount.toFixed(2)} com vencimento em ${dueFormatted} já está disponível.\n\n` +
+            `Você pode pagar com PIX ou Cartão pelo link InfinitePay abaixo:\n` +
+            `${paymentLink}\n\n` +
+            `Em caso de dúvidas, estamos à disposição!`
+
+          if (typeof $connectors !== 'undefined' && $connectors && $connectors.executeAsOwner) {
+            let phoneId = ''
+            try {
+              const numRes = $connectors.executeAsOwner(
+                'whatsapp',
+                'WHATSAPP_GET_PHONE_NUMBERS',
+                {},
+              )
+              if (numRes && numRes.successful && numRes.data) {
+                const list = numRes.data.data || numRes.data.phone_numbers || []
+                if (list.length > 0) phoneId = list[0].id || list[0].phone_number_id || ''
+              }
+            } catch (_) {}
+
+            const msgParams = { to_number: fullPhone, text: messageText }
+            if (phoneId) msgParams.phone_number_id = phoneId
+
+            const sendRes = $connectors.executeAsOwner(
+              'whatsapp',
+              'WHATSAPP_SEND_MESSAGE',
+              msgParams,
+            )
+            if (sendRes && sendRes.successful) {
+              console.log(`[Cron WhatsApp] Mensagem enviada com sucesso para ${studentName}!`)
+            } else {
+              console.log(
+                `[Cron WhatsApp] Falha ou aviso ao enviar para ${studentName}:`,
+                sendRes ? sendRes.error : 'Conta não conectada',
+              )
+            }
+          }
+        }
+      } catch (waCronErr) {
+        console.log(`[Cron WhatsApp] Erro não impeditivo para ${studentName}:`, waCronErr)
+      }
     } catch (saveErr) {
       console.log(`[Cron] Erro ao salvar para ${studentName}:`, saveErr)
       errorDetails.push({ studentId, studentName, error: String(saveErr) })

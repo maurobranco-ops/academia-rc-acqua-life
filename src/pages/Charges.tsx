@@ -157,7 +157,7 @@ export default function Charges() {
     if (st) {
       const calc = calculateStudentCharge(st, plans, students)
       const pl = plans.find((p) => p.id === st.plan_id)
-      setFormAmount(String(calc.baseAmount))
+      setFormAmount(String(calc.finalAmount))
       setFormDiscountAmount(String(calc.discountAmount))
       setIsFamilyCharge(calc.isFamilyPlan)
       setFormDescription(
@@ -223,11 +223,22 @@ export default function Charges() {
         generateInfinitepay: generateInfinitepayLink,
       })
 
+      const waSent = (created as { whatsapp_sent?: boolean }).whatsapp_sent
+      const waError = (created as { whatsapp_error?: string }).whatsapp_error
+
+      let feedbackMsg = generateInfinitepayLink
+        ? `Link InfinitePay pronto para pagamento (${created.infinipay_payment_id || 'ativo'}).`
+        : 'Cobrança cadastrada com sucesso.'
+
+      if (waSent) {
+        feedbackMsg += ' Notificação enviada pelo WhatsApp do proprietário.'
+      } else if (waError) {
+        feedbackMsg += ` WhatsApp: ${waError}.`
+      }
+
       toast({
         title: 'Cobrança Gerada com Sucesso!',
-        description: generateInfinitepayLink
-          ? `Link InfinitePay integrado pronto para pagamento (${created.infinipay_payment_id || 'ativo'}).`
-          : 'Cobrança cadastrada com sucesso.',
+        description: feedbackMsg,
       })
       setNewModalOpen(false)
       loadData()
@@ -850,15 +861,21 @@ export default function Charges() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <Label className="font-semibold text-[#1E2A3A]">Valor Cheio (R$)</Label>
+                  <Label className="font-semibold text-[#1E2A3A]">
+                    Valor a Cobrar no Link (R$)
+                  </Label>
                   <Input
                     required
                     type="number"
                     step="0.01"
                     value={formAmount}
                     onChange={(e) => setFormAmount(e.target.value)}
-                    className="focus-visible:ring-[#D4AF37]"
+                    className="focus-visible:ring-[#D4AF37] font-mono font-bold text-emerald-800"
                   />
+                  <p className="text-[10px] text-slate-500">
+                    Valor exato enviado ao checkout InfinitePay (líquido com desconto
+                    pontualidade/família se aplicável).
+                  </p>
                 </div>
 
                 <div className="space-y-1">
@@ -887,7 +904,7 @@ export default function Charges() {
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
                     <Label className="font-semibold text-[11px] text-[#1E2A3A]">
-                      Desconto em Dia (R$)
+                      Desconto Identificado (R$)
                     </Label>
                     <Input
                       type="number"
@@ -898,13 +915,9 @@ export default function Charges() {
                     />
                   </div>
                   <div className="flex flex-col justify-end text-xs">
-                    <span className="text-[10px] text-slate-500">Valor com desconto em dia:</span>
+                    <span className="text-[10px] text-slate-500">Total enviado à InfinitePay:</span>
                     <span className="font-bold font-mono text-emerald-700 text-sm">
-                      R${' '}
-                      {Math.max(
-                        0,
-                        (Number(formAmount) || 0) - (Number(formDiscountAmount) || 0),
-                      ).toFixed(2)}
+                      R$ {Number(formAmount || 0).toFixed(2)}
                     </span>
                   </div>
                 </div>

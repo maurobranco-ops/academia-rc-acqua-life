@@ -153,14 +153,17 @@ export default function Students() {
     setFormBirthDate('')
     setFormAddress('')
     const initialPlan = plans[0]
+    const initialPrice = initialPlan?.monthly_price ?? 110
+    const initialIsIsento =
+      initialPrice === 0 || (initialPlan?.name || '').toLowerCase().includes('isento')
     setFormPlanId(initialPlan?.id || '')
     setFormClassId('')
     setFormGuardianName('')
     setFormGuardianCpf('')
     setFormGuardianPhone('')
     setFormGuardianEmail('')
-    setFormMonthlyFee(initialPlan?.monthly_price ? String(initialPlan.monthly_price) : '110')
-    setFormDiscountedFee('')
+    setFormMonthlyFee(initialIsIsento ? '0' : String(initialPrice))
+    setFormDiscountedFee(initialIsIsento ? '0' : String(Math.max(0, initialPrice - 10)))
     setFormDueDay('5')
     setFormValidadePagto('')
     setFormStatus('ativo')
@@ -182,14 +185,33 @@ export default function Students() {
     setFormGuardianCpf(st.guardian_cpf || '')
     setFormGuardianPhone(st.guardian_phone || '')
     setFormGuardianEmail(st.guardian_email || '')
-    setFormMonthlyFee(
-      typeof st.monthly_fee === 'number'
-        ? String(st.monthly_fee)
-        : st.plan_id
-          ? String(plans.find((p) => p.id === st.plan_id)?.monthly_price ?? '')
-          : '',
-    )
-    setFormDiscountedFee(typeof st.discounted_fee === 'number' ? String(st.discounted_fee) : '')
+    const studentPlan = plans.find((p) => p.id === st.plan_id)
+    const planFee = studentPlan ? studentPlan.monthly_price : 110
+    const isPlanIsento =
+      studentPlan &&
+      (studentPlan.monthly_price === 0 || studentPlan.name.toLowerCase().includes('isento'))
+
+    if (typeof st.monthly_fee === 'number') {
+      setFormMonthlyFee(String(st.monthly_fee))
+    } else if (isPlanIsento) {
+      setFormMonthlyFee('0')
+    } else if (studentPlan) {
+      setFormMonthlyFee(String(planFee))
+    } else {
+      setFormMonthlyFee('')
+    }
+
+    if (typeof st.discounted_fee === 'number') {
+      setFormDiscountedFee(String(st.discounted_fee))
+    } else if (isPlanIsento) {
+      setFormDiscountedFee('0')
+    } else if (studentPlan) {
+      setFormDiscountedFee(String(Math.max(0, planFee - 10)))
+    } else if (typeof st.monthly_fee === 'number') {
+      setFormDiscountedFee(String(Math.max(0, st.monthly_fee - 10)))
+    } else {
+      setFormDiscountedFee('')
+    }
     setFormDueDay(typeof st.due_day === 'number' ? String(st.due_day) : '5')
     setFormValidadePagto(
       st.validade_do_ultimo_pagamento ? st.validade_do_ultimo_pagamento.substring(0, 10) : '',
@@ -1495,8 +1517,17 @@ export default function Students() {
                     onValueChange={(pId) => {
                       setFormPlanId(pId)
                       const picked = plans.find((p) => p.id === pId)
-                      if (picked && (!formMonthlyFee || formMonthlyFee === '0')) {
-                        setFormMonthlyFee(String(picked.monthly_price || 0))
+                      if (picked) {
+                        const price =
+                          typeof picked.monthly_price === 'number' ? picked.monthly_price : 0
+                        const isIsento = price === 0 || picked.name.toLowerCase().includes('isento')
+                        if (isIsento) {
+                          setFormMonthlyFee('0')
+                          setFormDiscountedFee('0')
+                        } else {
+                          setFormMonthlyFee(String(price))
+                          setFormDiscountedFee(String(Math.max(0, price - 10)))
+                        }
                       }
                     }}
                   >
@@ -1537,9 +1568,14 @@ export default function Students() {
 
               {/* Informações Financeiras da Mensalidade */}
               <div className="p-3 bg-amber-50/60 border border-amber-200/80 rounded-xl space-y-2">
-                <div className="flex items-center gap-1.5 text-xs font-bold text-[#0F1B3D]">
-                  <DollarSign className="w-3.5 h-3.5 text-[#D4AF37]" />
-                  <span>Mensalidade &amp; Condições de Pagamento</span>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-[#0F1B3D]">
+                    <DollarSign className="w-3.5 h-3.5 text-[#D4AF37]" />
+                    <span>Mensalidade &amp; Condições de Pagamento</span>
+                  </div>
+                  <span className="text-[10px] text-[#17A2B8] font-semibold">
+                    Valores preenchidos pelo plano (ajustáveis à mão)
+                  </span>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                   <div className="space-y-1">
@@ -1554,6 +1590,7 @@ export default function Students() {
                       onChange={(e) => setFormMonthlyFee(e.target.value)}
                       className="h-8 text-xs focus-visible:ring-[#D4AF37] bg-white font-mono"
                     />
+                    <p className="text-[9px] text-slate-500">Valor cheio da mensalidade</p>
                   </div>
                   <div className="space-y-1">
                     <Label className="font-semibold text-[11px] text-[#1E2A3A]">
@@ -1565,8 +1602,11 @@ export default function Students() {
                       placeholder="Ex: 90.00"
                       value={formDiscountedFee}
                       onChange={(e) => setFormDiscountedFee(e.target.value)}
-                      className="h-8 text-xs focus-visible:ring-[#D4AF37] bg-white font-mono"
+                      className="h-8 text-xs focus-visible:ring-[#D4AF37] bg-white font-mono text-emerald-700 font-bold"
                     />
+                    <p className="text-[9px] text-emerald-700 font-medium">
+                      ★ Cobrado até o vencimento
+                    </p>
                   </div>
                   <div className="space-y-1">
                     <Label className="font-semibold text-[11px] text-[#1E2A3A]">
@@ -1581,8 +1621,26 @@ export default function Students() {
                       onChange={(e) => setFormDueDay(e.target.value)}
                       className="h-8 text-xs focus-visible:ring-[#D4AF37] bg-white font-mono"
                     />
+                    <p className="text-[9px] text-slate-500">Dia do mês para fatura</p>
                   </div>
                 </div>
+
+                {/* Destaque explícito de qual valor será efetivamente cobrado */}
+                <div className="p-2 bg-emerald-50 border border-emerald-200 rounded-lg text-xs flex items-center justify-between">
+                  <span className="text-[11px] text-emerald-900 font-medium">
+                    Valor efetivo na cobrança até o vencimento:
+                  </span>
+                  <span className="font-mono font-bold text-sm text-emerald-800">
+                    R${' '}
+                    {(formDiscountedFee && !isNaN(Number(formDiscountedFee))
+                      ? Number(formDiscountedFee)
+                      : formMonthlyFee && !isNaN(Number(formMonthlyFee))
+                        ? Number(formMonthlyFee)
+                        : 0
+                    ).toFixed(2)}
+                  </span>
+                </div>
+
                 <div className="space-y-1 pt-1">
                   <Label className="font-semibold text-[11px] text-[#1E2A3A]">
                     Data de Validade do Último Pagamento

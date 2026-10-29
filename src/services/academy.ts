@@ -338,10 +338,17 @@ export const academyService = {
       }
 
       if (resJson.charge && resJson.charge.id) {
-        // Retorna o registro completo atualizado
-        return pb.collection('charges').getOne<ChargeRecord>(resJson.charge.id, {
+        // Retorna o registro completo atualizado com dados de envio de whatsapp
+        const record = await pb.collection('charges').getOne<ChargeRecord>(resJson.charge.id, {
           expand: 'student_id',
         })
+        const enhanced = record as ChargeRecord & {
+          whatsapp_sent?: boolean
+          whatsapp_error?: string
+        }
+        if (resJson.whatsapp_sent !== undefined) enhanced.whatsapp_sent = resJson.whatsapp_sent
+        if (resJson.whatsapp_error !== undefined) enhanced.whatsapp_error = resJson.whatsapp_error
+        return enhanced
       }
     }
 
