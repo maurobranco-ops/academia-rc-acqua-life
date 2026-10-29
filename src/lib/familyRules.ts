@@ -35,6 +35,8 @@ export interface FamilyGroup {
   guardianPhone?: string
   guardianEmail?: string
   students: StudentRecord[]
+  activeCount: number
+  inactiveCount: number
   totalMonthlyFee: number
   totalDiscountedFeeOnTime: number
   hasFamilyDiscount: boolean
@@ -70,6 +72,8 @@ export function groupStudentsByGuardian(
         guardianPhone: student.guardian_phone || student.phone || student.whatsapp || undefined,
         guardianEmail: student.guardian_email || student.email || undefined,
         students: [],
+        activeCount: 0,
+        inactiveCount: 0,
         totalMonthlyFee: 0,
         totalDiscountedFeeOnTime: 0,
         hasFamilyDiscount: false,
@@ -92,13 +96,18 @@ export function groupStudentsByGuardian(
   // Calcula totais de cada grupo
   const groups = Array.from(groupsMap.values())
   for (const group of groups) {
+    const activeStudents = group.students.filter((s) => s.status === 'ativo')
+    group.activeCount = activeStudents.length
+    group.inactiveCount = group.students.length - activeStudents.length
+
     const isMultiStudentFamily =
       group.students.length > 1 && !group.guardianName.startsWith('Aluno:')
 
     let totalFull = 0
     let totalOnTime = 0
 
-    for (const st of group.students) {
+    // A contagem e mensalidade da família consideram apenas os alunos ATIVOS
+    for (const st of activeStudents) {
       const plan = st.plan_id ? planMap.get(st.plan_id) : undefined
       const isIsento =
         (plan && (plan.monthly_price === 0 || plan.name.toLowerCase().includes('isento'))) ||
@@ -133,8 +142,8 @@ export function groupStudentsByGuardian(
     group.totalMonthlyFee = totalFull
     group.totalDiscountedFeeOnTime = totalOnTime
     group.hasFamilyDiscount =
-      isMultiStudentFamily ||
-      group.students.some((s) => {
+      (activeStudents.length > 0 && isMultiStudentFamily) ||
+      activeStudents.some((s) => {
         const p = s.plan_id ? planMap.get(s.plan_id) : undefined
         return p?.name.toLowerCase().includes('fam')
       })

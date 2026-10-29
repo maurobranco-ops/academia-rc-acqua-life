@@ -95,6 +95,10 @@ export default function Students() {
   const [formGuardianCpf, setFormGuardianCpf] = useState('')
   const [formGuardianPhone, setFormGuardianPhone] = useState('')
   const [formGuardianEmail, setFormGuardianEmail] = useState('')
+  const [formMonthlyFee, setFormMonthlyFee] = useState<string>('')
+  const [formDiscountedFee, setFormDiscountedFee] = useState<string>('')
+  const [formDueDay, setFormDueDay] = useState<string>('5')
+  const [formValidadePagto, setFormValidadePagto] = useState<string>('')
   const [formStatus, setFormStatus] = useState<'ativo' | 'inativo'>('ativo')
   const [submitting, setSubmitting] = useState(false)
 
@@ -148,12 +152,17 @@ export default function Students() {
     setFormCpf('')
     setFormBirthDate('')
     setFormAddress('')
-    setFormPlanId(plans[0]?.id || '')
+    const initialPlan = plans[0]
+    setFormPlanId(initialPlan?.id || '')
     setFormClassId('')
     setFormGuardianName('')
     setFormGuardianCpf('')
     setFormGuardianPhone('')
     setFormGuardianEmail('')
+    setFormMonthlyFee(initialPlan?.monthly_price ? String(initialPlan.monthly_price) : '110')
+    setFormDiscountedFee('')
+    setFormDueDay('5')
+    setFormValidadePagto('')
     setFormStatus('ativo')
     setStudentModalOpen(true)
   }
@@ -173,6 +182,18 @@ export default function Students() {
     setFormGuardianCpf(st.guardian_cpf || '')
     setFormGuardianPhone(st.guardian_phone || '')
     setFormGuardianEmail(st.guardian_email || '')
+    setFormMonthlyFee(
+      typeof st.monthly_fee === 'number'
+        ? String(st.monthly_fee)
+        : st.plan_id
+          ? String(plans.find((p) => p.id === st.plan_id)?.monthly_price ?? '')
+          : '',
+    )
+    setFormDiscountedFee(typeof st.discounted_fee === 'number' ? String(st.discounted_fee) : '')
+    setFormDueDay(typeof st.due_day === 'number' ? String(st.due_day) : '5')
+    setFormValidadePagto(
+      st.validade_do_ultimo_pagamento ? st.validade_do_ultimo_pagamento.substring(0, 10) : '',
+    )
     setFormStatus(st.status || 'ativo')
     setStudentModalOpen(true)
   }
@@ -190,6 +211,14 @@ export default function Students() {
 
     setSubmitting(true)
     try {
+      const parsedMonthlyFee = formMonthlyFee.trim()
+        ? parseFloat(formMonthlyFee.replace(',', '.'))
+        : undefined
+      const parsedDiscountedFee = formDiscountedFee.trim()
+        ? parseFloat(formDiscountedFee.replace(',', '.'))
+        : undefined
+      const parsedDueDay = formDueDay.trim() ? parseInt(formDueDay, 10) : undefined
+
       const payload: Partial<StudentRecord> = {
         name: formName,
         email: formEmail,
@@ -202,16 +231,27 @@ export default function Students() {
         guardian_cpf: formGuardianCpf.trim() || undefined,
         guardian_phone: formGuardianPhone.trim() || undefined,
         guardian_email: formGuardianEmail.trim() || undefined,
+        monthly_fee: !isNaN(parsedMonthlyFee as number) ? parsedMonthlyFee : undefined,
+        discounted_fee: !isNaN(parsedDiscountedFee as number) ? parsedDiscountedFee : undefined,
+        due_day: !isNaN(parsedDueDay as number) ? parsedDueDay : undefined,
+        validade_do_ultimo_pagamento: formValidadePagto
+          ? `${formValidadePagto} 00:00:00.000Z`
+          : undefined,
         status: formStatus,
       }
 
       let studentId = selectedStudent?.id
       if (selectedStudent) {
-        await academyService.updateStudent(selectedStudent.id, payload)
+        const updated = await academyService.updateStudent(selectedStudent.id, payload)
+        // Atualização instantânea em memória no estado
+        setStudents((prev) =>
+          prev.map((s) => (s.id === selectedStudent.id ? { ...s, ...updated } : s)),
+        )
         toast({ title: 'Aluno atualizado com sucesso!' })
       } else {
         const created = await academyService.createStudent(payload)
         studentId = created.id
+        setStudents((prev) => [created, ...prev])
         toast({ title: 'Aluno cadastrado com sucesso!' })
       }
 
@@ -227,13 +267,18 @@ export default function Students() {
       }
 
       setStudentModalOpen(false)
-      await loadData()
+      setSelectedStudent(null)
 
       const editId = searchParams.get('editar')
       const origem = searchParams.get('origem')
       if (origem === 'detalhe' && (editId || selectedStudent?.id)) {
         navigate(`/alunos/${editId || selectedStudent?.id}`)
+      } else if (editId) {
+        // Limpa os parâmetros de busca da URL para não reabrir o modal em renderizações subsequentes
+        navigate('/alunos', { replace: true })
       }
+
+      await loadData()
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Falha ao salvar aluno'
       toast({
@@ -274,18 +319,23 @@ export default function Students() {
 
     setIsDeleting(true)
     try {
+      const studentToDeleteId = selectedStudent.id
       if (deleteWithHistory) {
         const res = await academyService.deleteStudentWithHistory(
-          selectedStudent.id,
+          studentToDeleteId,
           confirmationNameInput,
         )
+        // Atualização instantânea em memória: remove o aluno da lista
+        setStudents((prev) => prev.filter((s) => s.id !== studentToDeleteId))
         toast({
           title: 'Aluno e histórico excluídos!',
           description:
             res.message || `Aluno ${selectedStudent.name} e suas cobranças foram apagados.`,
         })
       } else {
-        await academyService.deleteStudent(selectedStudent.id)
+        await academyService.deleteStudent(studentToDeleteId)
+        // Atualização instantânea em memória: remove o aluno da lista
+        setStudents((prev) => prev.filter((s) => s.id !== studentToDeleteId))
         toast({
           title: 'Aluno removido com sucesso',
           description: `O registro de ${selectedStudent.name} foi excluído permanentemente.`,
@@ -329,10 +379,23 @@ export default function Students() {
     })
   }, [students, searchTerm, statusFilter])
 
-  // Family groups based on filtered students
+  // Family groups: montados a partir de TODOS os alunos conhecidos (ou filtrados apenas pela busca de texto),
+  // ignorando o statusFilter para não esconder membros inativos de uma família e nunca quebrar o grupo familiar.
   const familyGroups = useMemo(() => {
-    return groupStudentsByGuardian(filteredStudents, plans)
-  }, [filteredStudents, plans])
+    const q = searchTerm.trim().toLowerCase()
+    const pool = q
+      ? students.filter((s) => {
+          const nameMatch = s.name.toLowerCase().includes(q)
+          const emailMatch = s.email && s.email.toLowerCase().includes(q)
+          const cpfMatch = s.cpf && s.cpf.includes(q)
+          const guardianMatch = s.guardian_name && s.guardian_name.toLowerCase().includes(q)
+          const guardianCpfMatch = s.guardian_cpf && s.guardian_cpf.includes(q)
+          return nameMatch || emailMatch || cpfMatch || guardianMatch || guardianCpfMatch
+        })
+      : students
+
+    return groupStudentsByGuardian(pool, plans)
+  }, [students, searchTerm, plans])
 
   // Class groups based on filtered students and enrollments
   const classGroups = useMemo(() => {
@@ -581,11 +644,16 @@ export default function Students() {
                           <h3 className="font-bold text-[#0F1B3D] text-sm sm:text-base">
                             {group.guardianName}
                           </h3>
-                          {isMulti && (
+                          {isMulti ? (
                             <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px] font-bold">
-                              Família ({group.students.length} alunos)
+                              Família ({group.students.length} alunos
+                              {group.inactiveCount > 0 ? ` • ${group.activeCount} ativos` : ''})
                             </Badge>
-                          )}
+                          ) : group.inactiveCount > 0 ? (
+                            <Badge className="bg-red-50 text-red-700 border-red-200 text-[10px] font-semibold">
+                              1 aluno (Inativo)
+                            </Badge>
+                          ) : null}
                         </div>
                         <p className="text-[11px] text-[#6C757D]">
                           {group.guardianCpf ? `CPF: ${group.guardianCpf}` : ''}
@@ -611,7 +679,7 @@ export default function Students() {
                       {group.hasFamilyDiscount && (
                         <div className="pl-3 border-l border-slate-200">
                           <span className="text-[10px] uppercase font-semibold text-emerald-700 block">
-                            Até Vencimento (-R$ {(group.students.length * 10).toFixed(2)})
+                            Até Vencimento (-R$ {(group.activeCount * 10).toFixed(2)})
                           </span>
                           <span className="font-bold font-mono text-emerald-700 text-sm">
                             R$ {group.totalDiscountedFeeOnTime.toFixed(2)}
@@ -849,7 +917,13 @@ export default function Students() {
                           </td>
 
                           <td className="px-4 py-3.5 font-mono font-bold text-[#0F1B3D]">
-                            R$ {(plan?.monthly_price || 160).toFixed(2)}
+                            R$ {(st.monthly_fee || plan?.monthly_price || 110).toFixed(2)}
+                            {st.discounted_fee &&
+                            st.discounted_fee < (st.monthly_fee || plan?.monthly_price || 110) ? (
+                              <span className="block text-[10px] text-emerald-600 font-semibold">
+                                R$ {st.discounted_fee.toFixed(2)} em dia
+                              </span>
+                            ) : null}
                           </td>
 
                           <td className="px-4 py-3.5 text-xs text-[#6C757D]">
@@ -1416,7 +1490,16 @@ export default function Students() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <Label className="font-semibold text-[#1E2A3A]">Plano de Matrícula</Label>
-                  <Select value={formPlanId} onValueChange={setFormPlanId}>
+                  <Select
+                    value={formPlanId}
+                    onValueChange={(pId) => {
+                      setFormPlanId(pId)
+                      const picked = plans.find((p) => p.id === pId)
+                      if (picked && (!formMonthlyFee || formMonthlyFee === '0')) {
+                        setFormMonthlyFee(String(picked.monthly_price || 0))
+                      }
+                    }}
+                  >
                     <SelectTrigger className="focus:ring-[#D4AF37]">
                       <SelectValue placeholder="Selecione um plano" />
                     </SelectTrigger>
@@ -1449,6 +1532,70 @@ export default function Students() {
                       ))}
                     </SelectContent>
                   </Select>
+                </div>
+              </div>
+
+              {/* Informações Financeiras da Mensalidade */}
+              <div className="p-3 bg-amber-50/60 border border-amber-200/80 rounded-xl space-y-2">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-[#0F1B3D]">
+                  <DollarSign className="w-3.5 h-3.5 text-[#D4AF37]" />
+                  <span>Mensalidade &amp; Condições de Pagamento</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                  <div className="space-y-1">
+                    <Label className="font-semibold text-[11px] text-[#1E2A3A]">
+                      Valor Mensalidade (R$)
+                    </Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      placeholder="Ex: 100.00"
+                      value={formMonthlyFee}
+                      onChange={(e) => setFormMonthlyFee(e.target.value)}
+                      className="h-8 text-xs focus-visible:ring-[#D4AF37] bg-white font-mono"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="font-semibold text-[11px] text-[#1E2A3A]">
+                      Com Desconto Pontualidade (R$)
+                    </Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      placeholder="Ex: 90.00"
+                      value={formDiscountedFee}
+                      onChange={(e) => setFormDiscountedFee(e.target.value)}
+                      className="h-8 text-xs focus-visible:ring-[#D4AF37] bg-white font-mono"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="font-semibold text-[11px] text-[#1E2A3A]">
+                      Dia de Vencimento
+                    </Label>
+                    <Input
+                      type="number"
+                      min="1"
+                      max="31"
+                      placeholder="Ex: 5"
+                      value={formDueDay}
+                      onChange={(e) => setFormDueDay(e.target.value)}
+                      className="h-8 text-xs focus-visible:ring-[#D4AF37] bg-white font-mono"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1 pt-1">
+                  <Label className="font-semibold text-[11px] text-[#1E2A3A]">
+                    Data de Validade do Último Pagamento
+                  </Label>
+                  <Input
+                    type="date"
+                    value={formValidadePagto}
+                    onChange={(e) => setFormValidadePagto(e.target.value)}
+                    className="h-8 text-xs focus-visible:ring-[#D4AF37] bg-white"
+                  />
+                  <p className="text-[10px] text-slate-500">
+                    Controla a validade da mensalidade atual no quadro de alunos.
+                  </p>
                 </div>
               </div>
 

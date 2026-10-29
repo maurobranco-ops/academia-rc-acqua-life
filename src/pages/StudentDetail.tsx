@@ -420,17 +420,21 @@ export default function StudentDetail() {
                   )}
                 </div>
                 <p className="text-xs text-[#6C757D] font-medium mt-0.5">
-                  {student.discounted_fee ? (
+                  {student.monthly_fee || student.discounted_fee ? (
                     <>
-                      Mensalidade com Desconto:{' '}
-                      <strong className="text-emerald-700 font-bold">
-                        R$ {student.discounted_fee.toFixed(2)}
-                      </strong>{' '}
-                      {student.monthly_fee && student.monthly_fee > student.discounted_fee && (
-                        <span className="line-through text-slate-400 text-[11px] ml-1">
-                          (R$ {student.monthly_fee.toFixed(2)})
-                        </span>
-                      )}
+                      Mensalidade:{' '}
+                      <strong className="text-[#0F1B3D] font-bold">
+                        R$ {(student.monthly_fee ?? plan?.monthly_price ?? 110).toFixed(2)}
+                      </strong>
+                      {student.discounted_fee ? (
+                        <>
+                          {' '}
+                          • Com Desconto:{' '}
+                          <strong className="text-emerald-700 font-bold">
+                            R$ {student.discounted_fee.toFixed(2)}
+                          </strong>
+                        </>
+                      ) : null}
                       {student.due_day ? ` • Vencimento dia ${student.due_day}` : ''}
                     </>
                   ) : (
@@ -444,6 +448,7 @@ export default function StudentDetail() {
                       ) : (
                         ` (R$ ${(plan?.monthly_price ?? 110).toFixed(2)}/mês)`
                       )}
+                      {student.due_day ? ` • Vencimento dia ${student.due_day}` : ''}
                     </>
                   )}
                 </p>
