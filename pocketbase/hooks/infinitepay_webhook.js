@@ -368,8 +368,15 @@ routerAdd('POST', '/backend/v1/infinitepay/create-charge', (e) => {
         `[WhatsApp Owner] Aluno ${studentName} (#${studentId}) sem telefone cadastrado. Pulando envio.`,
       )
     } else {
-      const cleanPhone = targetPhone.replace(/\D/g, '')
-      fullPhone = cleanPhone.startsWith('55') ? cleanPhone : '55' + cleanPhone
+      // Limpeza e normalização do número de telefone padrão E.164 brasileiro
+      let digits = targetPhone.replace(/\D/g, '')
+      if (digits.startsWith('0')) {
+        digits = digits.replace(/^0+/, '')
+      }
+      if (!digits.startsWith('55')) {
+        digits = '55' + digits
+      }
+      fullPhone = digits
 
       // Mensagem profissional em português conforme requisitos do projeto
       let discountNotice = ''
@@ -399,13 +406,16 @@ routerAdd('POST', '/backend/v1/infinitepay/create-charge', (e) => {
         try {
           const numRes = $connectors.executeAsOwner('WHATSAPP_GET_PHONE_NUMBERS', {})
           if (numRes && numRes.successful && numRes.data) {
-            const list = numRes.data.data || numRes.data.phone_numbers || []
+            const d = numRes.data
+            const list = Array.isArray(d) ? d : d.data || d.phone_numbers || d.items || []
             if (list.length > 0) {
-              phoneId = list[0].id || list[0].phone_number_id || ''
+              phoneId = String(list[0].id || list[0].phone_number_id || '').trim()
             }
+          } else if (numRes && !numRes.successful) {
+            console.log('[WhatsApp Owner] WHATSAPP_GET_PHONE_NUMBERS retornou erro:', numRes.error)
           }
         } catch (pnErr) {
-          console.log('[WhatsApp Owner] Consulta phone_number_id:', pnErr)
+          console.log('[WhatsApp Owner] Consulta phone_number_id capturou exceção:', pnErr)
         }
 
         const msgParams = {
@@ -417,7 +427,12 @@ routerAdd('POST', '/backend/v1/infinitepay/create-charge', (e) => {
         let sendRes = null
         try {
           sendRes = $connectors.executeAsOwner('WHATSAPP_SEND_MESSAGE', msgParams)
+          console.log('[WhatsApp Owner] Resposta WHATSAPP_SEND_MESSAGE:', JSON.stringify(sendRes))
         } catch (sendEx) {
+          console.log(
+            '[WhatsApp Owner] Exceção na chamada executeAsOwner WHATSAPP_SEND_MESSAGE:',
+            sendEx,
+          )
           sendRes = { successful: false, error: sendEx.message || String(sendEx) }
         }
 
@@ -1379,8 +1394,10 @@ routerAdd('POST', '/backend/v1/recurring-billing/run-now', (e) => {
             `[Cobrança Automática WhatsApp] Aluno ${studentName} sem telefone. Pulando envio.`,
           )
         } else {
-          const cleanPhone = targetPhone.replace(/\D/g, '')
-          fullPhoneRec = cleanPhone.startsWith('55') ? cleanPhone : '55' + cleanPhone
+          let digitsRec = targetPhone.replace(/\D/g, '')
+          if (digitsRec.startsWith('0')) digitsRec = digitsRec.replace(/^0+/, '')
+          if (!digitsRec.startsWith('55')) digitsRec = '55' + digitsRec
+          fullPhoneRec = digitsRec
 
           let discountNotice = ''
           if (discountAmount > 0) {
@@ -1813,8 +1830,10 @@ cronAdd('daily_recurring_billing', '0 6 * * *', () => {
           waErrorCron = 'Aluno/responsável sem telefone cadastrado'
           console.log(`[Cron WhatsApp] Aluno ${studentName} sem telefone. Pulando envio.`)
         } else {
-          const cleanPhone = targetPhone.replace(/\D/g, '')
-          fullPhoneCron = cleanPhone.startsWith('55') ? cleanPhone : '55' + cleanPhone
+          let digitsCron = targetPhone.replace(/\D/g, '')
+          if (digitsCron.startsWith('0')) digitsCron = digitsCron.replace(/^0+/, '')
+          if (!digitsCron.startsWith('55')) digitsCron = '55' + digitsCron
+          fullPhoneCron = digitsCron
 
           let discountNotice = ''
           if (discountAmount > 0) {
@@ -2196,8 +2215,14 @@ routerAdd('POST', '/backend/v1/charges/{id}/send-whatsapp', (e) => {
     })
   }
 
-  const cleanPhone = targetPhone.replace(/\D/g, '')
-  const fullPhone = cleanPhone.startsWith('55') ? cleanPhone : '55' + cleanPhone
+  let digits = targetPhone.replace(/\D/g, '')
+  if (digits.startsWith('0')) {
+    digits = digits.replace(/^0+/, '')
+  }
+  if (!digits.startsWith('55')) {
+    digits = '55' + digits
+  }
+  const fullPhone = digits
 
   const amount = charge.getFloat('amount') || 0
   const discountAmount = charge.getFloat('discount_amount') || 0
@@ -2238,10 +2263,17 @@ routerAdd('POST', '/backend/v1/charges/{id}/send-whatsapp', (e) => {
     try {
       const numRes = $connectors.executeAsOwner('WHATSAPP_GET_PHONE_NUMBERS', {})
       if (numRes && numRes.successful && numRes.data) {
-        const list = numRes.data.data || numRes.data.phone_numbers || []
-        if (list.length > 0) phoneId = list[0].id || list[0].phone_number_id || ''
+        const d = numRes.data
+        const list = Array.isArray(d) ? d : d.data || d.phone_numbers || d.items || []
+        if (list.length > 0) {
+          phoneId = String(list[0].id || list[0].phone_number_id || '').trim()
+        }
+      } else if (numRes && !numRes.successful) {
+        console.log('[Send WhatsApp Direct] WHATSAPP_GET_PHONE_NUMBERS erro:', numRes.error)
       }
-    } catch (_) {}
+    } catch (pnErr) {
+      console.log('[Send WhatsApp Direct] Erro ao consultar phone numbers:', pnErr)
+    }
 
     const msgParams = { to_number: fullPhone, text: messageText }
     if (phoneId) msgParams.phone_number_id = phoneId
@@ -2249,7 +2281,9 @@ routerAdd('POST', '/backend/v1/charges/{id}/send-whatsapp', (e) => {
     let sendRes = null
     try {
       sendRes = $connectors.executeAsOwner('WHATSAPP_SEND_MESSAGE', msgParams)
+      console.log('[Send WhatsApp Direct] Resposta WHATSAPP_SEND_MESSAGE:', JSON.stringify(sendRes))
     } catch (exManual) {
+      console.log('[Send WhatsApp Direct] Exceção executeAsOwner WHATSAPP_SEND_MESSAGE:', exManual)
       sendRes = { successful: false, error: exManual.message || String(exManual) }
     }
 
