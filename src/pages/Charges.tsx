@@ -401,8 +401,16 @@ export default function Charges() {
 
     let discountText = ''
     if (charge.discount_amount && charge.discount_amount > 0) {
-      const net = Math.max(0, charge.amount - charge.discount_amount)
-      discountText = `\n💡 Desconto pontualidade: Ganhe R$ 10,00 de desconto (pagando R$ ${net.toFixed(2)}) se pago até o vencimento (${dueFormatted})!\n`
+      const studentBaseFee = student?.monthly_fee || 0
+      const alreadyDiscounted =
+        studentBaseFee > 0 &&
+        Math.abs(charge.amount - (studentBaseFee - charge.discount_amount)) < 0.01
+
+      const promptPaymentValue = alreadyDiscounted
+        ? charge.amount
+        : Math.max(0, charge.amount - charge.discount_amount)
+
+      discountText = `\n💡 Desconto pontualidade: Ganhe R$ 10,00 de desconto (pagando R$ ${promptPaymentValue.toFixed(2)}) se pago até o vencimento (${dueFormatted})!\n`
     } else {
       discountText = `\n💡 Desconto pontualidade: Ganhe R$ 10,00 de desconto por aluno da família se pago até o vencimento!\n`
     }
@@ -640,12 +648,28 @@ export default function Charges() {
                     <span className="text-xl font-black font-mono text-[#0F1B3D]">
                       R$ {charge.amount.toFixed(2)}
                     </span>
-                    {charge.discount_amount && charge.discount_amount > 0 ? (
-                      <span className="text-[10px] text-emerald-600 font-semibold block">
-                        R$ {(charge.amount - charge.discount_amount).toFixed(2)} se pago até o
-                        vencimento
-                      </span>
-                    ) : null}
+                    {charge.discount_amount && charge.discount_amount > 0
+                      ? (() => {
+                          // Se o aluno vinculado tiver mensalidade base (ex: R$ 100) e o valor da cobrança já reflete
+                          // o desconto (ex: R$ 90 = 100 - 10), o rótulo de pontualidade exibe o próprio valor da cobrança (R$ 90).
+                          // Caso a cobrança esteja com o valor bruto/cheio (ex: R$ 100), o valor com desconto é (charge.amount - discount_amount).
+                          const studentBaseFee = student?.monthly_fee || 0
+                          const alreadyDiscounted =
+                            studentBaseFee > 0 &&
+                            Math.abs(charge.amount - (studentBaseFee - charge.discount_amount)) <
+                              0.01
+
+                          const promptPaymentValue = alreadyDiscounted
+                            ? charge.amount
+                            : Math.max(0, charge.amount - charge.discount_amount)
+
+                          return (
+                            <span className="text-[10px] text-emerald-600 font-semibold block">
+                              R$ {promptPaymentValue.toFixed(2)} se pago até o vencimento
+                            </span>
+                          )
+                        })()
+                      : null}
                   </div>
 
                   {/* WhatsApp Status Badge & Information */}
@@ -1216,10 +1240,26 @@ export default function Charges() {
               const paidDay = new Date(payDate).setHours(0, 0, 0, 0)
               const isOnTime = paidDay <= dueDay
               const discount = selectedChargeToPay.discount_amount || 0
-              const finalPayAmount =
-                isOnTime && discount > 0
+              const payStudent = students.find((s) => s.id === selectedChargeToPay.student_id)
+              const studentBaseFee = payStudent?.monthly_fee || 0
+              const alreadyDiscounted =
+                studentBaseFee > 0 &&
+                discount > 0 &&
+                Math.abs(selectedChargeToPay.amount - (studentBaseFee - discount)) < 0.01
+
+              // Se a cobrança já foi emitida pelo valor líquido (com desconto), no vencimento paga o valor dela;
+              // se pagar após o vencimento, soma de volta o desconto para cobrar o valor cheio.
+              // Caso tenha sido emitida pelo valor cheio, até o vencimento desconta R$ 10; após o vencimento mantém o valor cheio.
+              let finalPayAmount = selectedChargeToPay.amount
+              if (alreadyDiscounted) {
+                finalPayAmount = isOnTime
+                  ? selectedChargeToPay.amount
+                  : selectedChargeToPay.amount + discount
+              } else if (discount > 0) {
+                finalPayAmount = isOnTime
                   ? Math.max(0, selectedChargeToPay.amount - discount)
                   : selectedChargeToPay.amount
+              }
 
               return (
                 <div className="space-y-3 py-2 text-xs">

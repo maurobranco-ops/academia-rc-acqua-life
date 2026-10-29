@@ -381,8 +381,11 @@ routerAdd('POST', '/backend/v1/infinitepay/create-charge', (e) => {
       // Mensagem profissional em português conforme requisitos do projeto
       let discountNotice = ''
       if (discountAmount > 0) {
-        const netAmount = Math.max(0, amount - discountAmount)
-        discountNotice = `\n💡 *Desconto pontualidade:* Ganhe R$ 10,00 de desconto (pagando R$ ${netAmount.toFixed(2)}) se pago até o vencimento (${dueFormatted})!\n`
+        const studentMonthlyFee = student.getFloat('monthly_fee') || 0
+        const isAlreadyDiscounted =
+          studentMonthlyFee > 0 && Math.abs(amount - (studentMonthlyFee - discountAmount)) < 0.01
+        const promptVal = isAlreadyDiscounted ? amount : Math.max(0, amount - discountAmount)
+        discountNotice = `\n💡 *Desconto pontualidade:* Ganhe R$ 10,00 de desconto (pagando R$ ${promptVal.toFixed(2)}) se pago até o vencimento (${dueFormatted})!\n`
       } else {
         discountNotice = `\n💡 *Desconto pontualidade:* Ganhe R$ 10,00 de desconto por aluno da família se pago até o vencimento!\n`
       }
@@ -2237,8 +2240,11 @@ routerAdd('POST', '/backend/v1/charges/{id}/send-whatsapp', (e) => {
 
   let discountNotice = ''
   if (discountAmount > 0) {
-    const netAmount = Math.max(0, amount - discountAmount)
-    discountNotice = `\n💡 *Desconto pontualidade:* Ganhe R$ 10,00 de desconto (pagando R$ ${netAmount.toFixed(2)}) se pago até o vencimento (${dueFormatted})!\n`
+    const studentMonthlyFee = student.getFloat('monthly_fee') || 0
+    const isAlreadyDiscounted =
+      studentMonthlyFee > 0 && Math.abs(amount - (studentMonthlyFee - discountAmount)) < 0.01
+    const promptVal = isAlreadyDiscounted ? amount : Math.max(0, amount - discountAmount)
+    discountNotice = `\n💡 *Desconto pontualidade:* Ganhe R$ 10,00 de desconto (pagando R$ ${promptVal.toFixed(2)}) se pago até o vencimento (${dueFormatted})!\n`
   } else {
     discountNotice = `\n💡 *Desconto pontualidade:* Ganhe R$ 10,00 de desconto por aluno da família se pago até o vencimento!\n`
   }
