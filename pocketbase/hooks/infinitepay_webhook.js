@@ -2334,3 +2334,88 @@ routerAdd('POST', '/backend/v1/charges/{id}/send-whatsapp', (e) => {
     message: `Mensagem de cobrança enviada com sucesso para ${fullPhone}!`,
   })
 })
+
+// -------------------------------------------------------------
+// 8. Obter Informações do Remetente WhatsApp (Conta Conectada do Proprietário)
+// GET /backend/v1/whatsapp/sender-info
+// -------------------------------------------------------------
+routerAdd('GET', '/backend/v1/whatsapp/sender-info', (e) => {
+  const info = e.requestInfo()
+
+  // Validação de autenticação
+  if (!info.auth && !info.hasSuperuserAuth) {
+    return e.json(401, {
+      success: false,
+      message: 'Não autorizado. Faça login para consultar informações.',
+    })
+  }
+
+  if (typeof $connectors === 'undefined' || !$connectors || !$connectors.executeAsOwner) {
+    return e.json(200, {
+      success: false,
+      connected: false,
+      display_phone_number: null,
+      phone_number_id: null,
+      message: 'Módulo de conectores não disponível no backend.',
+    })
+  }
+
+  try {
+    const numRes = $connectors.executeAsOwner('WHATSAPP_GET_PHONE_NUMBERS', {})
+    if (numRes && numRes.successful && numRes.data) {
+      const d = numRes.data
+      const list = Array.isArray(d) ? d : d.data || d.phone_numbers || d.items || []
+
+      if (list.length > 0) {
+        const primary = list[0]
+        const phoneId = String(primary.id || primary.phone_number_id || '').trim()
+        const displayNumber = String(
+          primary.display_phone_number || primary.verified_name || primary.phone || '',
+        ).trim()
+        const verifiedName = String(primary.verified_name || '').trim()
+        const qualityRating = String(primary.quality_rating || '').trim()
+
+        return e.json(200, {
+          success: true,
+          connected: true,
+          phone_number_id: phoneId || null,
+          display_phone_number: displayNumber || null,
+          verified_name: verifiedName || null,
+          quality_rating: qualityRating || null,
+          total_numbers: list.length,
+          numbers: list.map((item) => ({
+            id: String(item.id || item.phone_number_id || ''),
+            display_phone_number: String(item.display_phone_number || ''),
+            verified_name: String(item.verified_name || ''),
+            quality_rating: String(item.quality_rating || ''),
+          })),
+        })
+      }
+
+      return e.json(200, {
+        success: true,
+        connected: false,
+        display_phone_number: null,
+        phone_number_id: null,
+        message: 'Nenhum número de WhatsApp encontrado na conta conectada.',
+      })
+    }
+
+    const errDetail = (numRes && numRes.error) || 'Conta não conectada ou sem permissão'
+    return e.json(200, {
+      success: false,
+      connected: false,
+      display_phone_number: null,
+      phone_number_id: null,
+      error: String(errDetail),
+    })
+  } catch (err) {
+    return e.json(200, {
+      success: false,
+      connected: false,
+      display_phone_number: null,
+      phone_number_id: null,
+      error: err.message || String(err),
+    })
+  }
+})

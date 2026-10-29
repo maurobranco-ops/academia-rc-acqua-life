@@ -469,6 +469,40 @@ export const academyService = {
     }
     return updated
   },
+  async getWhatsAppSenderInfo(): Promise<{
+    success: boolean
+    connected: boolean
+    display_phone_number?: string | null
+    phone_number_id?: string | null
+    verified_name?: string | null
+    quality_rating?: string | null
+    total_numbers?: number
+    error?: string
+    message?: string
+  }> {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    }
+    if (pb.authStore.token) {
+      headers.Authorization = `Bearer ${pb.authStore.token}`
+    }
+
+    try {
+      const response = await fetch(`${pb.baseUrl}/backend/v1/whatsapp/sender-info`, {
+        method: 'GET',
+        headers,
+      })
+      const data = await response.json().catch(() => ({}))
+      return data
+    } catch (err: unknown) {
+      return {
+        success: false,
+        connected: false,
+        error: err instanceof Error ? err.message : String(err),
+      }
+    }
+  },
+
   async sendChargeWhatsApp(chargeId: string): Promise<{
     success: boolean
     message: string
