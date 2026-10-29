@@ -675,11 +675,11 @@ export default function Charges() {
                   {/* WhatsApp Status Badge & Information */}
                   <div className="flex flex-col md:items-end justify-center min-w-[150px]">
                     {charge.whatsapp_sent ? (
-                      <div className="flex items-center gap-1.5 text-xs text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200">
-                        <MessageCircle className="w-3.5 h-3.5 text-emerald-600" />
+                      <div className="flex items-center gap-1.5 text-xs text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200 shadow-2xs">
+                        <MessageCircle className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                         <span className="font-semibold">Enviado por WhatsApp</span>
                         {charge.whatsapp_sent_at && (
-                          <span className="text-[10px] text-emerald-600 ml-1">
+                          <span className="text-[10px] text-emerald-600 ml-1 font-medium">
                             ({new Date(charge.whatsapp_sent_at).toLocaleDateString('pt-BR')})
                           </span>
                         )}
@@ -687,22 +687,27 @@ export default function Charges() {
                     ) : charge.whatsapp_status === 'sem_telefone' ? (
                       <div
                         className="flex items-center gap-1.5 text-xs text-amber-700 bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-200"
-                        title="Aluno/responsável sem telefone cadastrado"
+                        title="Aluno ou responsável sem telefone cadastrado. Atualize o cadastro para envio automático."
                       >
-                        <PhoneOff className="w-3.5 h-3.5 text-amber-600" />
+                        <PhoneOff className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                         <span className="font-semibold">Sem telefone</span>
                       </div>
                     ) : charge.whatsapp_status === 'falha' ? (
                       <div
                         className="flex items-center gap-1.5 text-xs text-rose-700 bg-rose-50 px-2.5 py-1 rounded-lg border border-rose-200"
-                        title={charge.whatsapp_error || 'Falha no envio da mensagem'}
+                        title={
+                          charge.whatsapp_error?.includes('connectors are not enabled') ||
+                          charge.whatsapp_error?.includes('não autorizada')
+                            ? 'Conexão do WhatsApp aguardando confirmação/habilitação no painel do proprietário'
+                            : charge.whatsapp_error || 'Falha no envio da mensagem'
+                        }
                       >
-                        <AlertCircle className="w-3.5 h-3.5 text-rose-600" />
+                        <AlertCircle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
                         <span className="font-semibold">Falha WhatsApp</span>
                       </div>
                     ) : (
                       <div className="flex items-center gap-1.5 text-xs text-slate-500 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200">
-                        <MessageCircle className="w-3.5 h-3.5 text-slate-400" />
+                        <MessageCircle className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                         <span>Envio pendente</span>
                       </div>
                     )}
