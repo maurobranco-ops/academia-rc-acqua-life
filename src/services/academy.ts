@@ -412,19 +412,21 @@ export const academyService = {
       discount_amount: appliedDiscount,
     })
 
-    // If set to paga, also find and update payment
+    // If set to paga or cancelada, also find and update payment
     if (status === 'paga') {
       try {
-        const payments = await pb.collection('payments').getList<PaymentRecord>(1, 1, {
+        const payments = await pb.collection('payments').getList<PaymentRecord>(1, 10, {
           filter: `charge_id = "${id}"`,
         })
-        if (payments.items.length > 0) {
-          await pb.collection('payments').update(payments.items[0].id, {
+        for (const pmt of payments.items) {
+          await pb.collection('payments').update(pmt.id, {
             status: 'pago',
             amount: effectiveAmount,
             discount_amount: appliedDiscount,
             paid_date: paymentDateIso,
           })
+        }
+        if (payments.items.length > 0) {
           // Also create income transaction
           await pb.collection('transactions').create<TransactionRecord>({
             type: 'receita',
@@ -439,6 +441,21 @@ export const academyService = {
         }
       } catch (err) {
         console.error('Failed to update corresponding payment/transaction', err)
+      }
+    } else if (status === 'cancelada') {
+      try {
+        const payments = await pb.collection('payments').getList<PaymentRecord>(1, 50, {
+          filter: `charge_id = "${id}"`,
+        })
+        for (const pmt of payments.items) {
+          if (pmt.status !== 'cancelado') {
+            await pb.collection('payments').update(pmt.id, {
+              status: 'cancelado',
+            })
+          }
+        }
+      } catch (err) {
+        console.error('Failed to cancel corresponding payment', err)
       }
     }
     return updated

@@ -70,10 +70,25 @@ export default function Index() {
   useRealtime<ClassRecord>('classes', () => loadData())
   useRealtime<TransactionRecord>('transactions', () => loadData())
 
+  // Pagamentos válidos (exclui cancelados e vinculados a cobranças canceladas)
+  const isPaymentCanceled = (p: PaymentRecord) => {
+    if (p.status === 'cancelado') return true
+    if (p.expand?.charge_id?.status === 'cancelada') return true
+    return false
+  }
+
+  // Base de pagamentos não cancelados para métricas e exibição
+  const activePayments = useMemo(() => {
+    return payments.filter((p) => !isPaymentCanceled(p))
+  }, [payments])
+
   // Calculations
   const activeStudents = useMemo(() => students.filter((s) => s.status === 'ativo'), [students])
 
-  const overduePayments = useMemo(() => payments.filter((p) => p.status === 'vencido'), [payments])
+  const overduePayments = useMemo(
+    () => activePayments.filter((p) => p.status === 'vencido'),
+    [activePayments],
+  )
 
   const totalOverdue = useMemo(
     () => overduePayments.reduce((acc, curr) => acc + curr.amount, 0),
@@ -98,11 +113,11 @@ export default function Index() {
       .reduce((acc, t) => acc + t.amount, 0)
   }, [transactions])
 
-  // Delinquency rate
+  // Delinquency rate baseada apenas em pagamentos ativos válidos
   const delinquencyRate = useMemo(() => {
-    if (payments.length === 0) return 0
-    return ((overduePayments.length / payments.length) * 100).toFixed(1)
-  }, [payments, overduePayments])
+    if (activePayments.length === 0) return 0
+    return ((overduePayments.length / activePayments.length) * 100).toFixed(1)
+  }, [activePayments, overduePayments])
 
   // Revenue Chart Data (Last 6 Months)
   const chartData = useMemo(() => {
@@ -141,7 +156,7 @@ export default function Index() {
         })
         .reduce((sum, t) => sum + t.amount, 0)
 
-      const pending = payments
+      const pending = activePayments
         .filter((p) => {
           const pd = new Date(p.due_date)
           return (
@@ -155,14 +170,14 @@ export default function Index() {
       result.push({
         name: label,
         recebido: received || (i === 0 ? 330 : 250 + i * 40), // graceful visual fallback if newly seeded
-        emAberto: pending || (i === 0 ? 340 : 160),
+        emAberto: pending || 0,
       })
     }
     return result
-  }, [transactions, payments])
+  }, [transactions, activePayments])
 
-  // Recent 5 payments
-  const recentPayments = useMemo(() => payments.slice(0, 5), [payments])
+  // Recent 5 payments — apenas pagamentos válidos (não cancelados)
+  const recentPayments = useMemo(() => activePayments.slice(0, 5), [activePayments])
 
   const getStatusBadge = (status: PaymentRecord['status']) => {
     switch (status) {

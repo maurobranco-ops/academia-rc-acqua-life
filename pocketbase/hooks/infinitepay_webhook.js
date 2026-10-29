@@ -1719,19 +1719,27 @@ routerAdd('POST', '/backend/v1/charges/{id}/cancel', (e) => {
       charge.set('status', 'cancelada')
       txApp.save(charge)
 
-      // Buscar payment vinculado por charge_id
+      // Buscar todos os pagamentos vinculados (por charge_id, order_nsu ou infinipay_transaction_id)
       try {
+        const filterParts = [`charge_id = '${charge.id}'`]
+        if (orderNsu) filterParts.push(`order_nsu = '${orderNsu}'`)
+        if (infinipayPaymentId)
+          filterParts.push(`infinipay_transaction_id = '${infinipayPaymentId}'`)
+
         const pmts = txApp.findRecordsByFilter(
           'payments',
-          `charge_id = '${charge.id}'`,
+          filterParts.join(' || '),
           '-created',
-          1,
+          50,
           0,
         )
         if (pmts && pmts.length > 0) {
-          linkedPayment = pmts[0]
-          linkedPayment.set('status', 'cancelado')
-          txApp.save(linkedPayment)
+          for (let pi = 0; pi < pmts.length; pi++) {
+            const pRec = pmts[pi]
+            pRec.set('status', 'cancelado')
+            txApp.save(pRec)
+            if (!linkedPayment) linkedPayment = pRec
+          }
         }
       } catch (pErr) {
         console.log('[Cancel Charge] Aviso ao buscar payment vinculado:', pErr)
