@@ -19,6 +19,10 @@ import {
   UserCheck,
   Ban,
   AlertTriangle,
+  Phone,
+  PhoneOff,
+  AlertCircle,
+  MessageCircle,
 } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { getStudentPhotoUrl, normalizeName } from '@/lib/studentPhoto'
@@ -99,6 +103,9 @@ export default function Charges() {
   const [cancelModalOpen, setCancelModalOpen] = useState(false)
   const [selectedChargeToCancel, setSelectedChargeToCancel] = useState<ChargeRecord | null>(null)
   const [cancelling, setCancelling] = useState(false)
+
+  // Reenviar WhatsApp do proprietário
+  const [sendingWaId, setSendingWaId] = useState<string | null>(null)
 
   const loadData = async () => {
     try {
@@ -224,6 +231,7 @@ export default function Charges() {
       })
 
       const waSent = (created as { whatsapp_sent?: boolean }).whatsapp_sent
+      const waStatus = (created as { whatsapp_status?: string }).whatsapp_status
       const waError = (created as { whatsapp_error?: string }).whatsapp_error
 
       let feedbackMsg = generateInfinitepayLink
@@ -231,13 +239,16 @@ export default function Charges() {
         : 'Cobrança cadastrada com sucesso.'
 
       if (waSent) {
-        feedbackMsg += ' Notificação enviada pelo WhatsApp do proprietário.'
+        feedbackMsg += ' Notificação enviada automaticamente pelo WhatsApp do proprietário!'
+      } else if (waStatus === 'sem_telefone') {
+        feedbackMsg +=
+          ' Aviso: aluno/responsável sem telefone cadastrado — cadastre para envio automático.'
       } else if (waError) {
-        feedbackMsg += ` WhatsApp: ${waError}.`
+        feedbackMsg += ` Aviso de envio WhatsApp: ${waError}.`
       }
 
       toast({
-        title: 'Cobrança Gerada com Sucesso!',
+        title: waSent ? 'Cobrança Gerada e Enviada via WhatsApp!' : 'Cobrança Gerada com Sucesso!',
         description: feedbackMsg,
       })
       setNewModalOpen(false)
@@ -355,19 +366,56 @@ export default function Charges() {
     toast({ title: 'Link de pagamento copiado para a área de transferência!' })
   }
 
-  const handleSendWhatsApp = (charge: ChargeRecord) => {
+  const handleSendWhatsAppOwner = async (charge: ChargeRecord) => {
+    setSendingWaId(charge.id)
+    try {
+      const res = await academyService.sendChargeWhatsApp(charge.id)
+      toast({
+        title: 'Mensagem WhatsApp Enviada!',
+        description: res.message || 'Notificação enviada pela conta conectada do proprietário.',
+      })
+      loadData()
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Falha ao disparar mensagem'
+      toast({
+        title: 'Erro ao enviar WhatsApp',
+        description: msg,
+        variant: 'destructive',
+      })
+      loadData()
+    } finally {
+      setSendingWaId(null)
+    }
+  }
+
+  const handleSendWhatsAppManual = (charge: ChargeRecord) => {
     const student = students.find((s) => s.id === charge.student_id)
-    const phone = student?.phone ? student.phone.replace(/\D/g, '') : ''
+    const rawPhone = student?.guardian_phone || student?.whatsapp || student?.phone || ''
+    const phone = rawPhone ? rawPhone.replace(/\D/g, '') : ''
     const studentName = student?.name || 'Prezado(a)'
+    const guardianName = student?.guardian_name || ''
+    const greeting = guardianName ? guardianName : studentName
     const dueFormatted = new Date(charge.due_date).toLocaleDateString('pt-BR')
     const link =
       charge.payment_link || `https://pay.infinitepay.io/link/${charge.infinipay_payment_id}`
 
+    let discountText = ''
+    if (charge.discount_amount && charge.discount_amount > 0) {
+      const net = Math.max(0, charge.amount - charge.discount_amount)
+      discountText = `\n💡 Desconto pontualidade: Ganhe R$ 10,00 de desconto (pagando R$ ${net.toFixed(2)}) se pago até o vencimento (${dueFormatted})!\n`
+    } else {
+      discountText = `\n💡 Desconto pontualidade: Ganhe R$ 10,00 de desconto por aluno da família se pago até o vencimento!\n`
+    }
+
     const message = encodeURIComponent(
-      `Olá, ${studentName}! Aqui é da Academia Aquática. 🏊‍♂️\n\n` +
-        `Sua fatura referente a "${charge.description}" no valor de R$ ${charge.amount.toFixed(2)} com vencimento em ${dueFormatted} já está disponível.\n\n` +
-        `Pague com PIX ou Cartão pelo link Infinitepay com segurança e aprovação instantânea:\n${link}\n\n` +
-        `Qualquer dúvida estamos à disposição!`,
+      `🏊‍♂️ *RC Acqua Life — Mensalidade Escolar*\n\n` +
+        `Olá, *${greeting}*!\n\n` +
+        `A fatura de *${studentName}* referente a "${charge.description}" no valor de *R$ ${charge.amount.toFixed(2)}* com vencimento em *${dueFormatted}* já está disponível para pagamento.\n` +
+        discountText +
+        `\n💳 *Link de Pagamento (PIX e Cartão):*\n${link}\n\n` +
+        `O comprovante é compensado automaticamente e você não precisa nos enviar o recibo.\n` +
+        `Em caso de dúvidas, basta responder esta mensagem.\n\n` +
+        `_Atenciosamente,_\n*RC Acqua Life*`,
     )
 
     const whatsappUrl = phone
@@ -446,6 +494,13 @@ export default function Charges() {
         </div>
 
         <div className="text-right flex items-center gap-3">
+          <div className="bg-white/10 px-3 py-1.5 rounded-xl border border-white/20 text-xs">
+            <span className="text-slate-300 block text-[10px]">WhatsApp Conectado</span>
+            <span className="font-bold text-xs flex items-center gap-1 text-emerald-300">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block animate-pulse" />
+              Disparo Automático Ativo
+            </span>
+          </div>
           <div className="bg-white/10 px-3 py-1.5 rounded-xl border border-white/20 text-xs">
             <span className="text-slate-300 block text-[10px]">Total de Cobranças</span>
             <span className="font-bold font-mono text-sm">{charges.length} emitidas</span>
@@ -593,15 +648,71 @@ export default function Charges() {
                     ) : null}
                   </div>
 
+                  {/* WhatsApp Status Badge & Information */}
+                  <div className="flex flex-col md:items-end justify-center min-w-[150px]">
+                    {charge.whatsapp_sent ? (
+                      <div className="flex items-center gap-1.5 text-xs text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200">
+                        <MessageCircle className="w-3.5 h-3.5 text-emerald-600" />
+                        <span className="font-semibold">Enviado por WhatsApp</span>
+                        {charge.whatsapp_sent_at && (
+                          <span className="text-[10px] text-emerald-600 ml-1">
+                            ({new Date(charge.whatsapp_sent_at).toLocaleDateString('pt-BR')})
+                          </span>
+                        )}
+                      </div>
+                    ) : charge.whatsapp_status === 'sem_telefone' ? (
+                      <div
+                        className="flex items-center gap-1.5 text-xs text-amber-700 bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-200"
+                        title="Aluno/responsável sem telefone cadastrado"
+                      >
+                        <PhoneOff className="w-3.5 h-3.5 text-amber-600" />
+                        <span className="font-semibold">Sem telefone</span>
+                      </div>
+                    ) : charge.whatsapp_status === 'falha' ? (
+                      <div
+                        className="flex items-center gap-1.5 text-xs text-rose-700 bg-rose-50 px-2.5 py-1 rounded-lg border border-rose-200"
+                        title={charge.whatsapp_error || 'Falha no envio da mensagem'}
+                      >
+                        <AlertCircle className="w-3.5 h-3.5 text-rose-600" />
+                        <span className="font-semibold">Falha WhatsApp</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1.5 text-xs text-slate-500 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200">
+                        <MessageCircle className="w-3.5 h-3.5 text-slate-400" />
+                        <span>Envio pendente</span>
+                      </div>
+                    )}
+                    {charge.whatsapp_phone && (
+                      <span className="text-[10px] text-slate-400 mt-0.5 font-mono">
+                        {charge.whatsapp_phone}
+                      </span>
+                    )}
+                    {charge.whatsapp_error && charge.whatsapp_status !== 'sem_telefone' && (
+                      <span
+                        className="text-[10px] text-rose-600 mt-0.5 truncate max-w-[200px]"
+                        title={charge.whatsapp_error}
+                      >
+                        {charge.whatsapp_error}
+                      </span>
+                    )}
+                  </div>
+
                   {/* Right: Actions */}
                   <div className="flex flex-wrap items-center gap-2 pt-2 md:pt-0 border-t md:border-t-0 border-slate-100">
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => handleSendWhatsApp(charge)}
+                      disabled={sendingWaId === charge.id}
+                      onClick={() => handleSendWhatsAppOwner(charge)}
+                      title="Disparar mensagem pelo WhatsApp conectado do proprietário"
                       className="h-8 text-xs font-semibold text-emerald-700 border-emerald-200 hover:bg-emerald-50 rounded-lg flex items-center gap-1.5"
                     >
-                      <Share2 className="w-3.5 h-3.5" /> WhatsApp
+                      {sendingWaId === charge.id ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <MessageCircle className="w-3.5 h-3.5" />
+                      )}
+                      {charge.whatsapp_sent ? 'Reenviar WhatsApp' : 'Enviar WhatsApp'}
                     </Button>
 
                     <Button
@@ -653,6 +764,11 @@ export default function Charges() {
                       <DropdownMenuContent align="end" className="text-xs">
                         <DropdownMenuItem onClick={() => window.open(link, '_blank')}>
                           <ExternalLink className="w-3.5 h-3.5 mr-2" /> Abrir Checkout Infinitepay
+                        </DropdownMenuItem>
+
+                        <DropdownMenuItem onClick={() => handleSendWhatsAppManual(charge)}>
+                          <Share2 className="w-3.5 h-3.5 mr-2 text-emerald-600" /> Abrir no WhatsApp
+                          Web (manual)
                         </DropdownMenuItem>
 
                         {charge.status === 'paga' && (

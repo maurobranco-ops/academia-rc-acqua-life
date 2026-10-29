@@ -341,7 +341,11 @@ routerAdd('POST', '/backend/v1/infinitepay/create-charge', (e) => {
 
   // Envio automático via WhatsApp do proprietário (owner connector)
   let whatsappSent = false
+  let whatsappStatus = 'pendente'
   let whatsappError = ''
+  let whatsappSentAt = null
+  let fullPhone = ''
+
   try {
     const rawDueDate = String(dueDate).split('T')[0]
     const dueParts = rawDueDate.split('-')
@@ -358,30 +362,42 @@ routerAdd('POST', '/backend/v1/infinitepay/create-charge', (e) => {
     const greetingName = guardianName ? guardianName : studentName
 
     if (!targetPhone) {
-      whatsappError = 'Aluno/responsável sem telefone cadastrado. Envio pulado.'
+      whatsappStatus = 'sem_telefone'
+      whatsappError = 'Aluno/responsável sem telefone cadastrado'
       console.log(
         `[WhatsApp Owner] Aluno ${studentName} (#${studentId}) sem telefone cadastrado. Pulando envio.`,
       )
     } else {
       const cleanPhone = targetPhone.replace(/\D/g, '')
-      const fullPhone = cleanPhone.startsWith('55') ? cleanPhone : '55' + cleanPhone
+      fullPhone = cleanPhone.startsWith('55') ? cleanPhone : '55' + cleanPhone
+
+      // Mensagem profissional em português conforme requisitos do projeto
+      let discountNotice = ''
+      if (discountAmount > 0) {
+        const netAmount = Math.max(0, amount - discountAmount)
+        discountNotice = `\n💡 *Desconto pontualidade:* Ganhe R$ 10,00 de desconto (pagando R$ ${netAmount.toFixed(2)}) se pago até o vencimento (${dueFormatted})!\n`
+      } else {
+        discountNotice = `\n💡 *Desconto pontualidade:* Ganhe R$ 10,00 de desconto por aluno da família se pago até o vencimento!\n`
+      }
 
       const messageText =
-        `Olá, ${greetingName}! Aqui é da RC Acqua Life. 🏊‍♂️\n\n` +
-        `A fatura da mensalidade de ${studentName} no valor de R$ ${amount.toFixed(2)} com vencimento em ${dueFormatted} já está disponível.\n\n` +
-        `Você pode pagar com PIX ou Cartão pelo link InfinitePay abaixo:\n` +
-        `${paymentLink}\n\n` +
-        `Em caso de dúvidas, estamos à disposição!`
+        `🏊‍♂️ *RC Acqua Life — Mensalidade Escolar*\n\n` +
+        `Olá, *${greetingName}*!\n\n` +
+        `A fatura de *${studentName}* referente a "${description}" no valor de *R$ ${amount.toFixed(2)}* com vencimento em *${dueFormatted}* já está disponível para pagamento.\n` +
+        discountNotice +
+        `\n💳 *Link de Pagamento (PIX e Cartão):*\n${paymentLink}\n\n` +
+        `O comprovante é compensado automaticamente e você não precisa nos enviar o recibo.\n` +
+        `Em caso de dúvidas, basta responder esta mensagem.\n\n` +
+        `_Atenciosamente,_\n*RC Acqua Life*`
 
       console.log(
         `[WhatsApp Owner] Tentando envio para ${studentName} (${fullPhone}) via $connectors.executeAsOwner...`,
       )
 
       if (typeof $connectors !== 'undefined' && $connectors && $connectors.executeAsOwner) {
-        // Tenta obter os números da conta para achar o phone_number_id se necessário
         let phoneId = ''
         try {
-          const numRes = $connectors.executeAsOwner('whatsapp', 'WHATSAPP_GET_PHONE_NUMBERS', {})
+          const numRes = $connectors.executeAsOwner('WHATSAPP_GET_PHONE_NUMBERS', {})
           if (numRes && numRes.successful && numRes.data) {
             const list = numRes.data.data || numRes.data.phone_numbers || []
             if (list.length > 0) {
@@ -398,26 +414,55 @@ routerAdd('POST', '/backend/v1/infinitepay/create-charge', (e) => {
         }
         if (phoneId) msgParams.phone_number_id = phoneId
 
-        const sendRes = $connectors.executeAsOwner('whatsapp', 'WHATSAPP_SEND_MESSAGE', msgParams)
+        let sendRes = null
+        try {
+          sendRes = $connectors.executeAsOwner('WHATSAPP_SEND_MESSAGE', msgParams)
+        } catch (sendEx) {
+          sendRes = { successful: false, error: sendEx.message || String(sendEx) }
+        }
 
         if (sendRes && sendRes.successful) {
           whatsappSent = true
+          whatsappStatus = 'enviado'
+          whatsappSentAt = new Date().toISOString()
+          whatsappError = ''
           console.log(`[WhatsApp Owner] Mensagem enviada com sucesso para ${studentName}!`)
         } else {
+          whatsappStatus = 'falha'
           const errDetail =
             (sendRes && sendRes.error) ||
-            'Conta WhatsApp do proprietário não conectada ou sem permissão'
+            'Conta WhatsApp do proprietário não autorizada no painel ou desconectada'
           whatsappError = String(errDetail)
-          console.log(`[WhatsApp Owner] Aviso no envio para ${studentName}:`, errDetail)
+          console.log(`[WhatsApp Owner] Falha no envio para ${studentName}:`, errDetail)
         }
       } else {
-        whatsappError = 'Módulo $connectors não disponível no ambiente'
+        whatsappStatus = 'falha'
+        whatsappError = 'Módulo $connectors indisponível no ambiente'
         console.log('[WhatsApp Owner] $connectors indisponível no ambiente pb_hooks')
       }
     }
   } catch (waErr) {
+    whatsappStatus = 'falha'
     whatsappError = waErr.message || String(waErr)
     console.log('[WhatsApp Owner] Exceção capturada ao tentar enviar WhatsApp:', waErr)
+  }
+
+  // Atualizar registro de charges com resultado do envio para persistência e visualização na UI
+  try {
+    chargeRecord.set('whatsapp_sent', whatsappSent)
+    chargeRecord.set('whatsapp_status', whatsappStatus)
+    if (whatsappSentAt) {
+      chargeRecord.set('whatsapp_sent_at', whatsappSentAt)
+    }
+    if (whatsappError) {
+      chargeRecord.set('whatsapp_error', whatsappError)
+    }
+    if (fullPhone) {
+      chargeRecord.set('whatsapp_phone', fullPhone)
+    }
+    $app.save(chargeRecord)
+  } catch (updErr) {
+    console.log('[Create Charge] Erro ao atualizar status WhatsApp em charges:', updErr)
   }
 
   return e.json(200, {
@@ -435,8 +480,14 @@ routerAdd('POST', '/backend/v1/infinitepay/create-charge', (e) => {
       payment_link: paymentLink,
       order_nsu: orderNsu,
       invoice_slug: invoiceSlug,
+      whatsapp_sent: whatsappSent,
+      whatsapp_status: whatsappStatus,
+      whatsapp_sent_at: whatsappSentAt,
+      whatsapp_error: whatsappError || null,
+      whatsapp_phone: fullPhone || null,
     },
     whatsapp_sent: whatsappSent,
+    whatsapp_status: whatsappStatus,
     whatsapp_error: whatsappError || null,
     warning: apiWarning || null,
   })
@@ -1315,54 +1366,94 @@ routerAdd('POST', '/backend/v1/recurring-billing/run-now', (e) => {
         const guardianName = st.getString('guardian_name') || ''
         const greetingName = guardianName ? guardianName : studentName
 
+        let waSentRec = false
+        let waStatusRec = 'pendente'
+        let waErrorRec = ''
+        let waSentAtRec = null
+        let fullPhoneRec = ''
+
         if (!targetPhone) {
+          waStatusRec = 'sem_telefone'
+          waErrorRec = 'Aluno/responsável sem telefone cadastrado'
           console.log(
             `[Cobrança Automática WhatsApp] Aluno ${studentName} sem telefone. Pulando envio.`,
           )
         } else {
           const cleanPhone = targetPhone.replace(/\D/g, '')
-          const fullPhone = cleanPhone.startsWith('55') ? cleanPhone : '55' + cleanPhone
+          fullPhoneRec = cleanPhone.startsWith('55') ? cleanPhone : '55' + cleanPhone
+
+          let discountNotice = ''
+          if (discountAmount > 0) {
+            const netAmount = Math.max(0, finalAmount - discountAmount)
+            discountNotice = `\n💡 *Desconto pontualidade:* Ganhe R$ 10,00 de desconto (pagando R$ ${netAmount.toFixed(2)}) se pago até o vencimento (${dueFormatted})!\n`
+          } else {
+            discountNotice = `\n💡 *Desconto pontualidade:* Ganhe R$ 10,00 de desconto por aluno da família se pago até o vencimento!\n`
+          }
 
           const messageText =
-            `Olá, ${greetingName}! Aqui é da RC Acqua Life. 🏊‍♂️\n\n` +
-            `A fatura da mensalidade de ${studentName} no valor de R$ ${finalAmount.toFixed(2)} com vencimento em ${dueFormatted} já está disponível.\n\n` +
-            `Você pode pagar com PIX ou Cartão pelo link InfinitePay abaixo:\n` +
-            `${paymentLink}\n\n` +
-            `Em caso de dúvidas, estamos à disposição!`
+            `🏊‍♂️ *RC Acqua Life — Mensalidade Escolar*\n\n` +
+            `Olá, *${greetingName}*!\n\n` +
+            `A fatura de *${studentName}* referente a "${description}" no valor de *R$ ${finalAmount.toFixed(2)}* com vencimento em *${dueFormatted}* já está disponível para pagamento.\n` +
+            discountNotice +
+            `\n💳 *Link de Pagamento (PIX e Cartão):*\n${paymentLink}\n\n` +
+            `O comprovante é compensado automaticamente e você não precisa nos enviar o recibo.\n` +
+            `Em caso de dúvidas, basta responder esta mensagem.\n\n` +
+            `_Atenciosamente,_\n*RC Acqua Life*`
 
           if (typeof $connectors !== 'undefined' && $connectors && $connectors.executeAsOwner) {
             let phoneId = ''
             try {
-              const numRes = $connectors.executeAsOwner(
-                'whatsapp',
-                'WHATSAPP_GET_PHONE_NUMBERS',
-                {},
-              )
+              const numRes = $connectors.executeAsOwner('WHATSAPP_GET_PHONE_NUMBERS', {})
               if (numRes && numRes.successful && numRes.data) {
                 const list = numRes.data.data || numRes.data.phone_numbers || []
                 if (list.length > 0) phoneId = list[0].id || list[0].phone_number_id || ''
               }
             } catch (_) {}
 
-            const msgParams = { to_number: fullPhone, text: messageText }
+            const msgParams = { to_number: fullPhoneRec, text: messageText }
             if (phoneId) msgParams.phone_number_id = phoneId
 
-            const sendRes = $connectors.executeAsOwner(
-              'whatsapp',
-              'WHATSAPP_SEND_MESSAGE',
-              msgParams,
-            )
+            let sendRes = null
+            try {
+              sendRes = $connectors.executeAsOwner('WHATSAPP_SEND_MESSAGE', msgParams)
+            } catch (exSend) {
+              sendRes = { successful: false, error: exSend.message || String(exSend) }
+            }
+
             if (sendRes && sendRes.successful) {
+              waSentRec = true
+              waStatusRec = 'enviado'
+              waSentAtRec = new Date().toISOString()
               console.log(
                 `[Cobrança Automática WhatsApp] Mensagem enviada com sucesso para ${studentName}!`,
               )
             } else {
+              waStatusRec = 'falha'
+              waErrorRec = String(
+                (sendRes && sendRes.error) ||
+                  'Conta WhatsApp do proprietário não autorizada no painel ou desconectada',
+              )
               console.log(
                 `[Cobrança Automática WhatsApp] Falha ou aviso ao enviar para ${studentName}:`,
-                sendRes ? sendRes.error : 'Conta não conectada',
+                waErrorRec,
               )
             }
+          } else {
+            waStatusRec = 'falha'
+            waErrorRec = 'Módulo $connectors indisponível no ambiente'
           }
+        }
+
+        // Persistir na cobrança
+        try {
+          chargeRecord.set('whatsapp_sent', waSentRec)
+          chargeRecord.set('whatsapp_status', waStatusRec)
+          if (waSentAtRec) chargeRecord.set('whatsapp_sent_at', waSentAtRec)
+          if (waErrorRec) chargeRecord.set('whatsapp_error', waErrorRec)
+          if (fullPhoneRec) chargeRecord.set('whatsapp_phone', fullPhoneRec)
+          $app.save(chargeRecord)
+        } catch (updChargeErr) {
+          console.log('[Cobrança Automática WhatsApp] Erro ao persistir status:', updChargeErr)
         }
       } catch (waRecErr) {
         console.log(
@@ -1711,50 +1802,89 @@ cronAdd('daily_recurring_billing', '0 6 * * *', () => {
         const guardianName = st.getString('guardian_name') || ''
         const greetingName = guardianName ? guardianName : studentName
 
+        let waSentCron = false
+        let waStatusCron = 'pendente'
+        let waErrorCron = ''
+        let waSentAtCron = null
+        let fullPhoneCron = ''
+
         if (!targetPhone) {
+          waStatusCron = 'sem_telefone'
+          waErrorCron = 'Aluno/responsável sem telefone cadastrado'
           console.log(`[Cron WhatsApp] Aluno ${studentName} sem telefone. Pulando envio.`)
         } else {
           const cleanPhone = targetPhone.replace(/\D/g, '')
-          const fullPhone = cleanPhone.startsWith('55') ? cleanPhone : '55' + cleanPhone
+          fullPhoneCron = cleanPhone.startsWith('55') ? cleanPhone : '55' + cleanPhone
+
+          let discountNotice = ''
+          if (discountAmount > 0) {
+            const netAmount = Math.max(0, finalAmount - discountAmount)
+            discountNotice = `\n💡 *Desconto pontualidade:* Ganhe R$ 10,00 de desconto (pagando R$ ${netAmount.toFixed(2)}) se pago até o vencimento (${dueFormatted})!\n`
+          } else {
+            discountNotice = `\n💡 *Desconto pontualidade:* Ganhe R$ 10,00 de desconto por aluno da família se pago até o vencimento!\n`
+          }
 
           const messageText =
-            `Olá, ${greetingName}! Aqui é da RC Acqua Life. 🏊‍♂️\n\n` +
-            `A fatura da mensalidade de ${studentName} no valor de R$ ${finalAmount.toFixed(2)} com vencimento em ${dueFormatted} já está disponível.\n\n` +
-            `Você pode pagar com PIX ou Cartão pelo link InfinitePay abaixo:\n` +
-            `${paymentLink}\n\n` +
-            `Em caso de dúvidas, estamos à disposição!`
+            `🏊‍♂️ *RC Acqua Life — Mensalidade Escolar*\n\n` +
+            `Olá, *${greetingName}*!\n\n` +
+            `A fatura de *${studentName}* referente a "${description}" no valor de *R$ ${finalAmount.toFixed(2)}* com vencimento em *${dueFormatted}* já está disponível para pagamento.\n` +
+            discountNotice +
+            `\n💳 *Link de Pagamento (PIX e Cartão):*\n${paymentLink}\n\n` +
+            `O comprovante é compensado automaticamente e você não precisa nos enviar o recibo.\n` +
+            `Em caso de dúvidas, basta responder esta mensagem.\n\n` +
+            `_Atenciosamente,_\n*RC Acqua Life*`
 
           if (typeof $connectors !== 'undefined' && $connectors && $connectors.executeAsOwner) {
             let phoneId = ''
             try {
-              const numRes = $connectors.executeAsOwner(
-                'whatsapp',
-                'WHATSAPP_GET_PHONE_NUMBERS',
-                {},
-              )
+              const numRes = $connectors.executeAsOwner('WHATSAPP_GET_PHONE_NUMBERS', {})
               if (numRes && numRes.successful && numRes.data) {
                 const list = numRes.data.data || numRes.data.phone_numbers || []
                 if (list.length > 0) phoneId = list[0].id || list[0].phone_number_id || ''
               }
             } catch (_) {}
 
-            const msgParams = { to_number: fullPhone, text: messageText }
+            const msgParams = { to_number: fullPhoneCron, text: messageText }
             if (phoneId) msgParams.phone_number_id = phoneId
 
-            const sendRes = $connectors.executeAsOwner(
-              'whatsapp',
-              'WHATSAPP_SEND_MESSAGE',
-              msgParams,
-            )
+            let sendRes = null
+            try {
+              sendRes = $connectors.executeAsOwner('WHATSAPP_SEND_MESSAGE', msgParams)
+            } catch (exCron) {
+              sendRes = { successful: false, error: exCron.message || String(exCron) }
+            }
+
             if (sendRes && sendRes.successful) {
+              waSentCron = true
+              waStatusCron = 'enviado'
+              waSentAtCron = new Date().toISOString()
               console.log(`[Cron WhatsApp] Mensagem enviada com sucesso para ${studentName}!`)
             } else {
+              waStatusCron = 'falha'
+              waErrorCron = String(
+                (sendRes && sendRes.error) ||
+                  'Conta WhatsApp do proprietário não autorizada no painel ou desconectada',
+              )
               console.log(
                 `[Cron WhatsApp] Falha ou aviso ao enviar para ${studentName}:`,
-                sendRes ? sendRes.error : 'Conta não conectada',
+                waErrorCron,
               )
             }
+          } else {
+            waStatusCron = 'falha'
+            waErrorCron = 'Módulo $connectors indisponível no ambiente'
           }
+        }
+
+        try {
+          chargeRecord.set('whatsapp_sent', waSentCron)
+          chargeRecord.set('whatsapp_status', waStatusCron)
+          if (waSentAtCron) chargeRecord.set('whatsapp_sent_at', waSentAtCron)
+          if (waErrorCron) chargeRecord.set('whatsapp_error', waErrorCron)
+          if (fullPhoneCron) chargeRecord.set('whatsapp_phone', fullPhoneCron)
+          $app.save(chargeRecord)
+        } catch (updCronErr) {
+          console.log('[Cron WhatsApp] Erro ao salvar status em charges:', updCronErr)
         }
       } catch (waCronErr) {
         console.log(`[Cron WhatsApp] Erro não impeditivo para ${studentName}:`, waCronErr)
@@ -1994,5 +2124,179 @@ routerAdd('POST', '/backend/v1/charges/{id}/cancel', (e) => {
     order_nsu: orderNsu,
     status: 'cancelada',
     payment_status: linkedPayment ? 'cancelado' : null,
+  })
+})
+
+// -------------------------------------------------------------
+// 7. Enviar ou Reenviar Notificação WhatsApp da Cobrança via Conta do Proprietário
+// POST /backend/v1/charges/{id}/send-whatsapp
+// -------------------------------------------------------------
+routerAdd('POST', '/backend/v1/charges/{id}/send-whatsapp', (e) => {
+  const info = e.requestInfo()
+
+  // Validação de autenticação
+  if (!info.auth && !info.hasSuperuserAuth) {
+    return e.json(401, {
+      success: false,
+      message: 'Não autorizado. Faça login para enviar mensagens.',
+    })
+  }
+
+  const chargeId = String(e.request.pathValue('id') || '').trim()
+  if (!chargeId) {
+    return e.json(400, {
+      success: false,
+      message: 'ID da cobrança é obrigatório.',
+    })
+  }
+
+  let charge = null
+  try {
+    charge = $app.findRecordById('charges', chargeId)
+  } catch (err) {
+    return e.json(404, {
+      success: false,
+      message: 'Cobrança não encontrada no sistema.',
+    })
+  }
+
+  const studentId = charge.getString('student_id')
+  let student = null
+  try {
+    student = $app.findRecordById('students', studentId)
+  } catch (err) {
+    return e.json(404, {
+      success: false,
+      message: 'Aluno vinculado à cobrança não encontrado.',
+    })
+  }
+
+  const targetPhone =
+    student.getString('guardian_phone') ||
+    student.getString('whatsapp') ||
+    student.getString('phone') ||
+    ''
+
+  const studentName = student.getString('name') || 'Aluno'
+  const guardianName = student.getString('guardian_name') || ''
+  const greetingName = guardianName ? guardianName : studentName
+
+  if (!targetPhone) {
+    const errorMsg = 'Aluno/responsável sem telefone cadastrado'
+    try {
+      charge.set('whatsapp_status', 'sem_telefone')
+      charge.set('whatsapp_error', errorMsg)
+      $app.save(charge)
+    } catch (_) {}
+
+    return e.json(400, {
+      success: false,
+      whatsapp_status: 'sem_telefone',
+      message: `O aluno ${studentName} não possui telefone nem WhatsApp cadastrado. Atualize o cadastro do aluno antes de reenviar.`,
+    })
+  }
+
+  const cleanPhone = targetPhone.replace(/\D/g, '')
+  const fullPhone = cleanPhone.startsWith('55') ? cleanPhone : '55' + cleanPhone
+
+  const amount = charge.getFloat('amount') || 0
+  const discountAmount = charge.getFloat('discount_amount') || 0
+  const rawDueDate = (charge.getString('due_date') || '').split('T')[0]
+  const dueParts = rawDueDate.split('-')
+  const dueFormatted =
+    dueParts.length === 3 ? `${dueParts[2]}/${dueParts[1]}/${dueParts[0]}` : rawDueDate
+  const description = charge.getString('description') || 'Mensalidade'
+  const paymentLink =
+    charge.getString('payment_link') ||
+    `https://pay.infinitepay.io/link/${charge.getString('infinipay_payment_id') || charge.id}`
+
+  let discountNotice = ''
+  if (discountAmount > 0) {
+    const netAmount = Math.max(0, amount - discountAmount)
+    discountNotice = `\n💡 *Desconto pontualidade:* Ganhe R$ 10,00 de desconto (pagando R$ ${netAmount.toFixed(2)}) se pago até o vencimento (${dueFormatted})!\n`
+  } else {
+    discountNotice = `\n💡 *Desconto pontualidade:* Ganhe R$ 10,00 de desconto por aluno da família se pago até o vencimento!\n`
+  }
+
+  const messageText =
+    `🏊‍♂️ *RC Acqua Life — Mensalidade Escolar*\n\n` +
+    `Olá, *${greetingName}*!\n\n` +
+    `A fatura de *${studentName}* referente a "${description}" no valor de *R$ ${amount.toFixed(2)}* com vencimento em *${dueFormatted}* já está disponível para pagamento.\n` +
+    discountNotice +
+    `\n💳 *Link de Pagamento (PIX e Cartão):*\n${paymentLink}\n\n` +
+    `O comprovante é compensado automaticamente e você não precisa nos enviar o recibo.\n` +
+    `Em caso de dúvidas, basta responder esta mensagem.\n\n` +
+    `_Atenciosamente,_\n*RC Acqua Life*`
+
+  let whatsappSent = false
+  let whatsappStatus = 'falha'
+  let whatsappError = ''
+  let whatsappSentAt = null
+
+  if (typeof $connectors !== 'undefined' && $connectors && $connectors.executeAsOwner) {
+    let phoneId = ''
+    try {
+      const numRes = $connectors.executeAsOwner('WHATSAPP_GET_PHONE_NUMBERS', {})
+      if (numRes && numRes.successful && numRes.data) {
+        const list = numRes.data.data || numRes.data.phone_numbers || []
+        if (list.length > 0) phoneId = list[0].id || list[0].phone_number_id || ''
+      }
+    } catch (_) {}
+
+    const msgParams = { to_number: fullPhone, text: messageText }
+    if (phoneId) msgParams.phone_number_id = phoneId
+
+    let sendRes = null
+    try {
+      sendRes = $connectors.executeAsOwner('WHATSAPP_SEND_MESSAGE', msgParams)
+    } catch (exManual) {
+      sendRes = { successful: false, error: exManual.message || String(exManual) }
+    }
+
+    if (sendRes && sendRes.successful) {
+      whatsappSent = true
+      whatsappStatus = 'enviado'
+      whatsappSentAt = new Date().toISOString()
+      whatsappError = ''
+    } else {
+      whatsappStatus = 'falha'
+      whatsappError = String(
+        (sendRes && sendRes.error) ||
+          'Conta WhatsApp do proprietário não autorizada no painel ou desconectada',
+      )
+    }
+  } else {
+    whatsappStatus = 'falha'
+    whatsappError = 'Módulo $connectors indisponível no ambiente'
+  }
+
+  try {
+    charge.set('whatsapp_sent', whatsappSent)
+    charge.set('whatsapp_status', whatsappStatus)
+    if (whatsappSentAt) charge.set('whatsapp_sent_at', whatsappSentAt)
+    if (whatsappError) charge.set('whatsapp_error', whatsappError)
+    if (fullPhone) charge.set('whatsapp_phone', fullPhone)
+    $app.save(charge)
+  } catch (errUpd) {
+    console.log('[Send WhatsApp Direct] Erro ao salvar status em charge:', errUpd)
+  }
+
+  if (!whatsappSent) {
+    return e.json(400, {
+      success: false,
+      charge_id: charge.id,
+      whatsapp_status: whatsappStatus,
+      whatsapp_error: whatsappError,
+      message: `Não foi possível enviar a mensagem pelo WhatsApp: ${whatsappError}`,
+    })
+  }
+
+  return e.json(200, {
+    success: true,
+    charge_id: charge.id,
+    whatsapp_status: whatsappStatus,
+    whatsapp_sent_at: whatsappSentAt,
+    whatsapp_phone: fullPhone,
+    message: `Mensagem de cobrança enviada com sucesso para ${fullPhone}!`,
   })
 })

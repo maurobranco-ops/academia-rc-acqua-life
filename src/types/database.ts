@@ -90,6 +90,11 @@ export interface ChargeRecord extends RecordModel {
   payment_link?: string
   order_nsu?: string
   invoice_slug?: string
+  whatsapp_sent?: boolean
+  whatsapp_sent_at?: string
+  whatsapp_status?: 'enviado' | 'falha' | 'sem_telefone' | 'pendente' | string
+  whatsapp_error?: string
+  whatsapp_phone?: string
   expand?: {
     student_id?: StudentRecord
   }

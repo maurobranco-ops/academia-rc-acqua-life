@@ -342,12 +342,14 @@ export const academyService = {
         const record = await pb.collection('charges').getOne<ChargeRecord>(resJson.charge.id, {
           expand: 'student_id',
         })
-        const enhanced = record as ChargeRecord & {
-          whatsapp_sent?: boolean
-          whatsapp_error?: string
-        }
+        const enhanced = record as ChargeRecord
         if (resJson.whatsapp_sent !== undefined) enhanced.whatsapp_sent = resJson.whatsapp_sent
+        if (resJson.whatsapp_status !== undefined)
+          enhanced.whatsapp_status = resJson.whatsapp_status
         if (resJson.whatsapp_error !== undefined) enhanced.whatsapp_error = resJson.whatsapp_error
+        if (resJson.whatsapp_sent_at !== undefined)
+          enhanced.whatsapp_sent_at = resJson.whatsapp_sent_at
+        if (resJson.whatsapp_phone !== undefined) enhanced.whatsapp_phone = resJson.whatsapp_phone
         return enhanced
       }
     }
@@ -467,6 +469,33 @@ export const academyService = {
     }
     return updated
   },
+  async sendChargeWhatsApp(chargeId: string): Promise<{
+    success: boolean
+    message: string
+    charge_id?: string
+    whatsapp_status?: string
+    whatsapp_sent_at?: string
+    whatsapp_phone?: string
+  }> {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    }
+    if (pb.authStore.token) {
+      headers.Authorization = `Bearer ${pb.authStore.token}`
+    }
+
+    const response = await fetch(`${pb.baseUrl}/backend/v1/charges/${chargeId}/send-whatsapp`, {
+      method: 'POST',
+      headers,
+    })
+
+    const data = await response.json().catch(() => ({}))
+    if (!response.ok) {
+      throw new Error(data.message || `Erro HTTP ${response.status} ao enviar WhatsApp`)
+    }
+    return data
+  },
+
   async cancelCharge(chargeId: string): Promise<{
     success: boolean
     message: string
