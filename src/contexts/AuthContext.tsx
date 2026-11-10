@@ -16,6 +16,7 @@ interface AuthContextType {
   requestEmailChange: (newEmail: string) => Promise<void>
   confirmEmailChange: (token: string, password: string) => Promise<void>
   refreshUser: () => Promise<void>
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -107,6 +108,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }
 
+  const changePassword = async (currentPassword: string, newPassword: string) => {
+    if (!pb.authStore.isValid || !pb.authStore.record?.id) {
+      throw new Error('Você precisa estar logado para alterar a senha.')
+    }
+    await pb.collection('users').update(pb.authStore.record.id, {
+      password: newPassword,
+      passwordConfirm: newPassword,
+      oldPassword: currentPassword,
+    })
+    // Ensure the auth store record is refreshed after the update
+    await pb.collection('users').authRefresh()
+  }
+
   const value = useMemo(
     () => ({
       user,
@@ -122,6 +136,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       requestEmailChange,
       confirmEmailChange,
       refreshUser,
+      changePassword,
     }),
     [user, token, isLoading],
   )

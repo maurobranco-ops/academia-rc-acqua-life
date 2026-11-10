@@ -18,6 +18,7 @@ import {
   ChevronLeft,
   ChevronRight,
   AlertTriangle,
+  KeyRound,
 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { academyService } from '@/services/academy'
@@ -26,6 +27,7 @@ import { getStudentPhotoUrl } from '@/lib/studentPhoto'
 import { cn } from '@/lib/utils'
 import { Input } from '@/components/ui/input'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import ChangePasswordDialog from '@/components/ChangePasswordDialog'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -54,6 +56,7 @@ export default function Layout() {
 
   const [collapsed, setCollapsed] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [allStudents, setAllStudents] = useState<StudentRecord[]>([])
   const [filteredStudents, setFilteredStudents] = useState<StudentRecord[]>([])
@@ -104,6 +107,11 @@ export default function Layout() {
     setSearchTerm('')
     setFilteredStudents([])
     navigate(`/alunos/${id}`)
+  }
+
+  const openChangePassword = () => {
+    setMobileMenuOpen(false)
+    setChangePasswordOpen(true)
   }
 
   return (
@@ -186,34 +194,55 @@ export default function Layout() {
               collapsed ? 'justify-center' : 'justify-between',
             )}
           >
-            <div className="flex items-center gap-2.5 truncate">
-              <Avatar className="w-9 h-9 border border-[#D4AF37]/50">
-                <AvatarFallback className="bg-[#17A2B8] text-white font-bold text-xs">
-                  {user?.name ? user.name.slice(0, 2).toUpperCase() : 'AD'}
-                </AvatarFallback>
-              </Avatar>
-              {!collapsed && (
-                <div className="truncate">
-                  <p className="text-xs font-semibold text-white truncate">
-                    {user?.name || 'Administrador'}
-                  </p>
-                  <p className="text-[11px] text-slate-400 truncate">
-                    {user?.email || 'admin@aquagestao.com'}
-                  </p>
-                </div>
-              )}
-            </div>
-
-            {!collapsed && (
-              <button
-                onClick={logout}
-                className="p-2 text-slate-400 hover:text-red-400 hover:bg-white/5 rounded-lg transition"
-                title="Sair da conta"
-                aria-label="Sair da conta"
-              >
-                <LogOut className="w-4 h-4" />
-              </button>
-            )}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  className={cn(
+                    'flex items-center gap-2.5 truncate w-full rounded-xl hover:bg-white/5 transition p-1 text-left',
+                    collapsed && 'justify-center',
+                  )}
+                  title="Menu do usuário"
+                  aria-label="Abrir menu do usuário"
+                >
+                  <Avatar className="w-9 h-9 border border-[#D4AF37]/50">
+                    <AvatarFallback className="bg-[#17A2B8] text-white font-bold text-xs">
+                      {user?.name ? user.name.slice(0, 2).toUpperCase() : 'AD'}
+                    </AvatarFallback>
+                  </Avatar>
+                  {!collapsed && (
+                    <div className="truncate flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-white truncate">
+                        {user?.name || 'Administrador'}
+                      </p>
+                      <p className="text-[11px] text-slate-400 truncate">
+                        {user?.email || 'admin@aquagestao.com'}
+                      </p>
+                    </div>
+                  )}
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent side="top" align="start" className="w-56 rounded-xl shadow-xl">
+                <DropdownMenuLabel className="text-xs font-semibold text-[#0F1B3D] truncate">
+                  {user?.email || 'admin@aquagestao.com'}
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={() => setChangePasswordOpen(true)}
+                  className="cursor-pointer gap-2 text-sm"
+                >
+                  <KeyRound className="w-4 h-4 text-[#17A2B8]" />
+                  Alterar Senha
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={logout}
+                  className="cursor-pointer gap-2 text-sm text-red-600 focus:text-red-600 focus:bg-red-50"
+                >
+                  <LogOut className="w-4 h-4" />
+                  Sair da conta
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       </aside>
@@ -289,27 +318,36 @@ export default function Layout() {
               })}
             </nav>
 
-            <div className="p-4 border-t border-[#1B2A5B] bg-[#0A122A] flex items-center justify-between">
-              <div className="flex items-center gap-2 truncate">
-                <Avatar className="w-8 h-8">
-                  <AvatarFallback className="bg-[#17A2B8] text-white text-xs">
-                    {user?.name?.slice(0, 2).toUpperCase() || 'AD'}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="truncate">
-                  <p className="text-xs font-semibold text-white truncate">
-                    {user?.name || 'Administrador'}
-                  </p>
-                </div>
-              </div>
+            <div className="p-4 border-t border-[#1B2A5B] bg-[#0A122A]">
               <button
-                onClick={logout}
-                className="p-2 text-slate-300 hover:text-red-400"
-                title="Sair"
-                aria-label="Sair"
+                onClick={openChangePassword}
+                className="w-full flex items-center gap-3 px-2 py-2.5 rounded-xl text-slate-300 hover:bg-white/5 hover:text-white transition text-sm font-medium"
               >
-                <LogOut className="w-4 h-4" />
+                <KeyRound className="w-4 h-4 text-[#D4AF37]" />
+                Alterar Senha
               </button>
+              <div className="flex items-center justify-between mt-1">
+                <div className="flex items-center gap-2 truncate">
+                  <Avatar className="w-8 h-8">
+                    <AvatarFallback className="bg-[#17A2B8] text-white text-xs">
+                      {user?.name?.slice(0, 2).toUpperCase() || 'AD'}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="truncate">
+                    <p className="text-xs font-semibold text-white truncate">
+                      {user?.name || 'Administrador'}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={logout}
+                  className="p-2 text-slate-300 hover:text-red-400"
+                  title="Sair"
+                  aria-label="Sair"
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -448,6 +486,9 @@ export default function Layout() {
         <main className="flex-1 p-4 md:p-8 max-w-[1400px] w-full mx-auto">
           <Outlet />
         </main>
+
+        {/* Change Password Dialog */}
+        <ChangePasswordDialog open={changePasswordOpen} onOpenChange={setChangePasswordOpen} />
 
         {/* Global Minimal Footer */}
         <footer className="border-t border-[#E0E4EA] bg-white py-4 px-6 text-center text-xs text-[#6C757D]">
