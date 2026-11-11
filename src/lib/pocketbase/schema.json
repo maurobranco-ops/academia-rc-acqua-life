@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-11T00:15:46.457Z",
+  "generatedAt": "2026-11-11T00:43:57.291Z",
   "collections": [
     {
       "name": "users",
@@ -597,13 +597,39 @@
           "type": "text",
           "required": false,
           "system": false
+        },
+        {
+          "name": "infinipay_order_nsu",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "infinipay_slug",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "infinipay_receipt_url",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "infinipay_paid_amount",
+          "type": "number",
+          "required": false,
+          "system": false
         }
       ],
       "indexes": [
         "CREATE INDEX idx_charges_student_id ON charges (student_id)",
         "CREATE INDEX idx_charges_status ON charges (status)",
         "CREATE INDEX `idx_charges_order_nsu` ON `charges` (order_nsu)",
-        "CREATE INDEX `idx_charges_infinipay_payment_id` ON `charges` (infinipay_payment_id)"
+        "CREATE INDEX `idx_charges_infinipay_payment_id` ON `charges` (infinipay_payment_id)",
+        "CREATE INDEX `idx_charges_infinipay_order_nsu` ON `charges` (infinipay_order_nsu)",
+        "CREATE INDEX `idx_charges_infinipay_slug` ON `charges` (infinipay_slug)"
       ]
     },
     {
@@ -713,6 +739,24 @@
           "type": "text",
           "required": false,
           "system": false
+        },
+        {
+          "name": "infinipay_order_nsu",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "infinipay_slug",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "receipt_url",
+          "type": "text",
+          "required": false,
+          "system": false
         }
       ],
       "indexes": [
@@ -720,7 +764,8 @@
         "CREATE INDEX idx_payments_charge_id ON payments (charge_id)",
         "CREATE INDEX idx_payments_status ON payments (status)",
         "CREATE INDEX `idx_payments_order_nsu` ON `payments` (order_nsu)",
-        "CREATE INDEX `idx_payments_infinipay_trans` ON `payments` (infinipay_transaction_id)"
+        "CREATE INDEX `idx_payments_infinipay_trans` ON `payments` (infinipay_transaction_id)",
+        "CREATE INDEX `idx_payments_infinipay_order_nsu` ON `payments` (infinipay_order_nsu)"
       ]
     },
     {

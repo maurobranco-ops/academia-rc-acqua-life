@@ -188,6 +188,8 @@ routerAdd('POST', '/backend/v1/infinitepay/create-charge', (e) => {
   let infinitepayPaymentId = ''
   let paymentLink = ''
   let invoiceSlug = ''
+  let infinipayOrderNsu = ''
+  let infinipaySlug = ''
   let apiWarning = ''
 
   const orderNsu =
@@ -202,6 +204,10 @@ routerAdd('POST', '/backend/v1/infinitepay/create-charge', (e) => {
         message:
           'Credenciais InfinitePay não configuradas. Acesse Configurações → Integração Infinitepay.',
       })
+    }
+    // Fallback: se por algum motivo não há chave mas há handle, seguir mesmo assim
+    if (!apiKey && handle) {
+      console.log('[Create Charge] Sem X-Api-Key, usando apenas handle ' + handle)
     }
 
     const priceCents = Math.round(amount * 100)
@@ -267,10 +273,39 @@ routerAdd('POST', '/backend/v1/infinitepay/create-charge', (e) => {
           respData = JSON.parse(res.raw)
         } catch (_) {}
 
+        // LOG COMPLETO da resposta REAL da InfinitePay na criação (diagnóstico de identificadores)
+        console.log(
+          '[Create Charge] Resposta completa da API InfinitePay (links):',
+          typeof res.raw === 'string' ? res.raw : JSON.stringify(res.raw),
+        )
+
         if (respData) {
+          console.log(
+            '[Create Charge] Campos de identificador na resposta:',
+            JSON.stringify({
+              url: respData.url,
+              link: respData.link,
+              checkout_url: respData.checkout_url,
+              invoice_slug: respData.invoice_slug,
+              slug: respData.slug,
+              slu: respData.slu,
+              nsu: respData.nsu,
+              order_nsu: respData.order_nsu,
+              id: respData.id,
+              uuid: respData.uuid,
+            }),
+          )
           paymentLink = respData.url || respData.link || respData.checkout_url || ''
-          invoiceSlug = respData.invoice_slug || respData.slug || ''
-          infinitepayPaymentId = invoiceSlug || respData.order_nsu || orderNsu
+          invoiceSlug = respData.invoice_slug || respData.slug || respData.slu || ''
+          // Identificadores PRÓPRIOS da InfinitePay (UUID/slu) — nunca o rc_* nosso
+          infinipayOrderNsu = String(
+            respData.order_nsu || respData.nsu || respData.uuid || respData.id || '',
+          ).trim()
+          if (infinipayOrderNsu === orderNsu) infinipayOrderNsu = ''
+          infinipaySlug = String(
+            respData.invoice_slug || respData.slug || respData.slu || '',
+          ).trim()
+          infinitepayPaymentId = infinipayOrderNsu || invoiceSlug || orderNsu
         }
       } else {
         console.log('[InfinitePay API] Erro status:', res.statusCode, 'body:', res.raw)
@@ -312,6 +347,13 @@ routerAdd('POST', '/backend/v1/infinitepay/create-charge', (e) => {
     if (invoiceSlug) {
       chargeRecord.set('invoice_slug', invoiceSlug)
     }
+    // Identificadores PRÓPRIOS da InfinitePay (UUID deles) — o webhook casa por esses campos
+    if (infinipayOrderNsu) {
+      chargeRecord.set('infinipay_order_nsu', infinipayOrderNsu)
+    }
+    if (infinipaySlug) {
+      chargeRecord.set('infinipay_slug', infinipaySlug)
+    }
     $app.save(chargeRecord)
 
     // Persistir em `payments`
@@ -329,6 +371,12 @@ routerAdd('POST', '/backend/v1/infinitepay/create-charge', (e) => {
     paymentRecord.set('order_nsu', orderNsu)
     if (invoiceSlug) {
       paymentRecord.set('invoice_slug', invoiceSlug)
+    }
+    if (infinipayOrderNsu) {
+      paymentRecord.set('infinipay_order_nsu', infinipayOrderNsu)
+    }
+    if (infinipaySlug) {
+      paymentRecord.set('infinipay_slug', infinipaySlug)
     }
     $app.save(paymentRecord)
   } catch (dbErr) {
@@ -498,6 +546,8 @@ routerAdd('POST', '/backend/v1/infinitepay/create-charge', (e) => {
       payment_link: paymentLink,
       order_nsu: orderNsu,
       invoice_slug: invoiceSlug,
+      infinipay_order_nsu: infinipayOrderNsu || null,
+      infinipay_slug: infinipaySlug || null,
       whatsapp_sent: whatsappSent,
       whatsapp_status: whatsappStatus,
       whatsapp_sent_at: whatsappSentAt,
@@ -626,6 +676,29 @@ routerAdd('POST', '/backend/v1/infinitepay/webhook', (e) => {
       '',
   ).trim()
 
+  // Valor pago (em centavos), recibo e método de captura — usados na baixa e no fallback por valor
+  const paidAmountCents = Math.round(
+    Number(
+      body.paid_amount ||
+        innerData.paid_amount ||
+        innerTransaction.paid_amount ||
+        innerTransaction.amount ||
+        innerData.amount ||
+        body.amount ||
+        0,
+    ),
+  )
+  const receiptUrl = String(
+    body.receipt_url ||
+      innerData.receipt_url ||
+      innerTransaction.receipt_url ||
+      (innerTransaction.receipt && innerTransaction.receipt.url) ||
+      '',
+  ).trim()
+  const captureMethodPayload = String(
+    body.capture_method || innerData.capture_method || innerTransaction.capture_method || '',
+  ).toLowerCase()
+
   const rawEventType = String(
     body.event_type ||
       body.event ||
@@ -639,10 +712,16 @@ routerAdd('POST', '/backend/v1/infinitepay/webhook', (e) => {
     .toLowerCase()
 
   if (!orderNsu && !paymentId && !invoiceSlug && !transactionNsu) {
-    console.log('[Webhook] Payload sem identificadores válidos:', JSON.stringify(body))
-    return e.json(400, {
+    // NUNCA retornar 400 à InfinitePay — 400 gera retries infinitos. Log e 200.
+    console.log(
+      '[Webhook] Payload SEM identificadores válidos (order_nsu/payment_id/slug/nsu). Nenhuma cobrança afetada, respondendo 200 para a InfinitePay não retentar. Payload:',
+      JSON.stringify(body),
+    )
+    return e.json(200, {
       success: false,
-      error: 'Missing order_nsu / payment identifier in webhook payload',
+      ignored: true,
+      reason: 'missing_identifiers',
+      message: 'Payload sem identificadores válidos — registrado no log e ignorado',
     })
   }
 
@@ -749,13 +828,39 @@ routerAdd('POST', '/backend/v1/infinitepay/webhook', (e) => {
     try {
       const bySlug = $app.findRecordsByFilter(
         'charges',
-        `invoice_slug = '${invoiceSlug}' || infinipay_payment_id = '${invoiceSlug}' || payment_link ~ '${invoiceSlug}'`,
+        `infinipay_slug = '${invoiceSlug}' || invoice_slug = '${invoiceSlug}' || infinipay_payment_id = '${invoiceSlug}'`,
         '-created',
         1,
         0,
       )
       if (bySlug && bySlug.length > 0) {
         matchedCharge = bySlug[0]
+      }
+    } catch (_) {}
+  }
+
+  // Novo: casar pelos identificadores PRÓPRIOS da InfinitePay persistidos na criação
+  if (!matchedCharge && (orderNsu || invoiceSlug || transactionNsu)) {
+    const idCandidates = [orderNsu, invoiceSlug, transactionNsu].filter((v) => v)
+    try {
+      const orParts = []
+      for (const cand of idCandidates) {
+        orParts.push(
+          `infinipay_order_nsu = '${cand}' || infinipay_slug = '${cand}' || infinipay_payment_id = '${cand}'`,
+        )
+      }
+      const byInfinipay = $app.findRecordsByFilter(
+        'charges',
+        orParts.join(' || '),
+        '-created',
+        1,
+        0,
+      )
+      if (byInfinipay && byInfinipay.length > 0) {
+        matchedCharge = byInfinipay[0]
+        console.log(
+          `[Webhook] Casamento por identificadores infinipay_* (order_nsu=${orderNsu}, slug=${invoiceSlug}) → charge ${matchedCharge.id}`,
+        )
       }
     } catch (_) {}
   }
@@ -794,8 +899,11 @@ routerAdd('POST', '/backend/v1/infinitepay/webhook', (e) => {
     try {
       const filters = []
       if (orderNsu)
-        filters.push(`order_nsu = '${orderNsu}' || infinipay_transaction_id = '${orderNsu}'`)
-      if (invoiceSlug) filters.push(`invoice_slug = '${invoiceSlug}'`)
+        filters.push(
+          `order_nsu = '${orderNsu}' || infinipay_transaction_id = '${orderNsu}' || infinipay_order_nsu = '${orderNsu}'`,
+        )
+      if (invoiceSlug)
+        filters.push(`invoice_slug = '${invoiceSlug}' || infinipay_slug = '${invoiceSlug}'`)
       if (paymentId) filters.push(`infinipay_transaction_id = '${paymentId}'`)
       if (filters.length > 0) {
         const pmts = $app.findRecordsByFilter('payments', filters.join(' || '), '-created', 1, 0)
@@ -813,13 +921,107 @@ routerAdd('POST', '/backend/v1/infinitepay/webhook', (e) => {
     } catch (_) {}
   }
 
-  if (!matchedCharge) {
+  // -----------------------------------------------------------
+  // FALLBACK: casar por valor pago (centavos) em cobranças em_aberto dos últimos 30 dias
+  // Só dá baixa se houver EXATAMENTE UMA correspondência; nunca retorna 400.
+  // -----------------------------------------------------------
+  if (!matchedCharge && targetChargeStatus === 'paga') {
+    if (paidAmountCents > 0) {
+      try {
+        const limitDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+          .toISOString()
+          .split('T')[0]
+        const candidates = $app.findRecordsByFilter(
+          'charges',
+          `status = 'em_aberto' && created >= '${limitDate}'`,
+          '-created',
+          200,
+          0,
+        )
+        const valueMatches = []
+        for (const c of candidates) {
+          const nominalCents = Math.round((c.getFloat('amount') || 0) * 100)
+          const discountCents = Math.round((c.getFloat('discount_amount') || 0) * 100)
+          const netCents = Math.max(0, nominalCents - discountCents)
+          if (paidAmountCents === nominalCents || paidAmountCents === netCents) {
+            valueMatches.push(c)
+          }
+        }
+
+        if (valueMatches.length === 1) {
+          matchedCharge = valueMatches[0]
+          console.log(
+            `[Webhook] FALLBACK por valor: paid_amount=${paidAmountCents} centavos casou com EXATAMENTE UMA cobrança em_aberto (${matchedCharge.id}) criada nos últimos 30 dias. Dando baixa por fallback.`,
+          )
+          try {
+            const pmts = $app.findRecordsByFilter(
+              'payments',
+              `charge_id = '${matchedCharge.id}'`,
+              '-created',
+              1,
+              0,
+            )
+            if (pmts && pmts.length > 0) {
+              matchedPayment = pmts[0]
+            }
+          } catch (_) {}
+        } else if (valueMatches.length > 1) {
+          console.log(
+            `[Webhook] Sem correspondência única: paid_amount=${paidAmountCents} centavos casou com ${valueMatches.length} cobranças em_aberto dos últimos 30 dias (${valueMatches
+              .map((c) => c.id)
+              .join(
+                ', ',
+              )}). NENHUMA recebe baixa por segurança. Respondendo 200 para a InfinitePay não retentar.`,
+          )
+        } else {
+          console.log(
+            `[Webhook] Sem correspondência: nenhum identificador casou (order_nsu=${orderNsu}, slug=${invoiceSlug}, paymentId=${paymentId}) e nenhuma cobrança em_aberto dos últimos 30 dias tem valor ${paidAmountCents} centavos. Respondendo 200 (sem retries).`,
+          )
+        }
+      } catch (fbErr) {
+        console.log('[Webhook] Erro no fallback por valor:', fbErr)
+      }
+    } else {
+      console.log(
+        `[Webhook] Sem correspondência: nenhum identificador casou (order_nsu=${orderNsu}, slug=${invoiceSlug}, paymentId=${paymentId}) e o payload não trouxe paid_amount para fallback. Respondendo 200 (sem retries).`,
+      )
+    }
+
+    if (!matchedCharge) {
+      // Registrar o evento órfão na auditoria (best effort) — sem cobrança vinculada
+      try {
+        const webhookEventsCol = $app.findCollectionByNameOrId('webhook_events')
+        const evtRecord = new Record(webhookEventsCol)
+        evtRecord.set(
+          'event_key',
+          `orphan_${normalizedEvent}_${orderNsu || transactionNsu || invoiceSlug || paymentId}`,
+        )
+        evtRecord.set('event_type', normalizedEvent)
+        evtRecord.set('order_nsu', orderNsu)
+        evtRecord.set('transaction_nsu', transactionNsu)
+        evtRecord.set('invoice_slug', invoiceSlug)
+        evtRecord.set('status', 'sem_correspondencia')
+        evtRecord.set('payload', body)
+        $app.save(evtRecord)
+      } catch (_) {}
+
+      return e.json(200, {
+        success: false,
+        ignored: true,
+        reason: 'no_matching_charge',
+        message:
+          'Nenhuma cobrança correspondente (identificadores e fallback por valor) — logado para auditoria; respondendo 200 para a InfinitePay não retentar.',
+      })
+    }
+  } else if (!matchedCharge) {
+    // Evento não-pago (created/canceled/refunded/failed) sem cobrança: apenas loga e 200.
     console.log(
-      `[Webhook] Cobrança não encontrada para order_nsu=${orderNsu}, slug=${invoiceSlug}, paymentId=${paymentId}`,
+      `[Webhook] Evento '${normalizedEvent}' sem cobrança correspondente (order_nsu=${orderNsu}, slug=${invoiceSlug}, paymentId=${paymentId}). Nada a fazer; respondendo 200.`,
     )
-    return e.json(400, {
+    return e.json(200, {
       success: false,
-      error: `Charge not found for order_nsu: ${orderNsu || paymentId}`,
+      ignored: true,
+      reason: 'no_matching_charge',
     })
   }
 
@@ -933,11 +1135,14 @@ routerAdd('POST', '/backend/v1/infinitepay/webhook', (e) => {
 
       if (explicitlyUnpaid) {
         console.log(
-          `[Webhook] /payment_check indicou pagamento NÃO confirmado para cobrança ${matchedCharge.id}. Mantida em aberto.`,
+          `[Webhook] /payment_check indicou pagamento NÃO confirmado para cobrança ${matchedCharge.id}. Mantida em aberto. Respondendo 200 (nunca 400) para a InfinitePay não retentar.`,
         )
-        return e.json(400, {
+        return e.json(200, {
           success: false,
-          error: 'Payment check indicates payment not confirmed. Charge kept pending verification.',
+          ignored: true,
+          reason: 'payment_check_not_confirmed',
+          charge_id: matchedCharge.id,
+          message: 'Pagamento não confirmado pelo payment_check; cobrança mantida em aberto.',
         })
       }
 
@@ -989,6 +1194,19 @@ routerAdd('POST', '/backend/v1/infinitepay/webhook', (e) => {
       if (invoiceSlug && !matchedCharge.getString('invoice_slug')) {
         matchedCharge.set('invoice_slug', invoiceSlug)
       }
+      // Persistir identificadores da InfinitePay e dados do comprovante na baixa
+      if (orderNsu && !matchedCharge.getString('infinipay_order_nsu')) {
+        matchedCharge.set('infinipay_order_nsu', orderNsu)
+      }
+      if (invoiceSlug && !matchedCharge.getString('infinipay_slug')) {
+        matchedCharge.set('infinipay_slug', invoiceSlug)
+      }
+      if (receiptUrl) {
+        matchedCharge.set('infinipay_receipt_url', receiptUrl)
+      }
+      if (paidAmountCents > 0) {
+        matchedCharge.set('infinipay_paid_amount', paidAmountCents)
+      }
       $app.save(matchedCharge)
     } catch (err) {
       console.log('[Webhook] Erro ao salvar charge como paga:', err)
@@ -1006,6 +1224,15 @@ routerAdd('POST', '/backend/v1/infinitepay/webhook', (e) => {
         }
         if (invoiceSlug && !matchedPayment.getString('invoice_slug')) {
           matchedPayment.set('invoice_slug', invoiceSlug)
+        }
+        if (receiptUrl && !matchedPayment.getString('receipt_url')) {
+          matchedPayment.set('receipt_url', receiptUrl)
+        }
+        if (orderNsu && !matchedPayment.getString('infinipay_order_nsu')) {
+          matchedPayment.set('infinipay_order_nsu', orderNsu)
+        }
+        if (invoiceSlug && !matchedPayment.getString('infinipay_slug')) {
+          matchedPayment.set('infinipay_slug', invoiceSlug)
         }
         $app.save(matchedPayment)
       } catch (err) {

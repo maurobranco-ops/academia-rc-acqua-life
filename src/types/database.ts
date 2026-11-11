@@ -90,6 +90,10 @@ export interface ChargeRecord extends RecordModel {
   payment_link?: string
   order_nsu?: string
   invoice_slug?: string
+  infinipay_order_nsu?: string
+  infinipay_slug?: string
+  infinipay_receipt_url?: string
+  infinipay_paid_amount?: number
   whatsapp_sent?: boolean
   whatsapp_sent_at?: string
   whatsapp_status?: 'enviado' | 'falha' | 'sem_telefone' | 'pendente' | string
@@ -114,6 +118,9 @@ export interface PaymentRecord extends RecordModel {
   infinipay_transaction_id?: string
   order_nsu?: string
   invoice_slug?: string
+  infinipay_order_nsu?: string
+  infinipay_slug?: string
+  receipt_url?: string
   expand?: {
     student_id?: StudentRecord
     plan_id?: PlanRecord
