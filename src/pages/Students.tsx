@@ -52,6 +52,7 @@ import type {
   ClassRecord,
 } from '@/types/database'
 import { useToast } from '@/hooks/use-toast'
+import { maskCpf, maskPhone, isValidCpf, isValidEmail } from '@/lib/formatters'
 
 export default function Students() {
   const navigate = useNavigate()
@@ -101,6 +102,17 @@ export default function Students() {
   const [formValidadePagto, setFormValidadePagto] = useState<string>('')
   const [formStatus, setFormStatus] = useState<'ativo' | 'inativo'>('ativo')
   const [submitting, setSubmitting] = useState(false)
+
+  // Erros de validação do formulário (exibidos abaixo de cada campo)
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({})
+
+  // Reaplica máscara quando um aluno existente é carregado no modal de edição
+  const reapplyMasksOnEdit = (st: StudentRecord) => {
+    setFormCpf(maskCpf(st.cpf || ''))
+    setFormPhone(maskPhone(st.phone || ''))
+    setFormGuardianCpf(maskCpf(st.guardian_cpf || ''))
+    setFormGuardianPhone(maskPhone(st.guardian_phone || ''))
+  }
 
   const loadData = async () => {
     try {
@@ -167,6 +179,7 @@ export default function Students() {
     setFormDueDay('5')
     setFormValidadePagto('')
     setFormStatus('ativo')
+    setFormErrors({})
     setStudentModalOpen(true)
   }
 
@@ -174,9 +187,8 @@ export default function Students() {
     setSelectedStudent(st)
     setFormName(st.name)
     setFormEmail(st.email || '')
-    setFormPhone(st.phone || '')
-    setFormCpf(st.cpf || '')
     setFormBirthDate(st.birth_date ? st.birth_date.substring(0, 10) : '')
+    reapplyMasksOnEdit(st)
     setFormAddress(st.address || '')
     setFormPlanId(st.plan_id || '')
     const enrolledClass = enrollments.find((e) => e.student_id === st.id)
@@ -231,6 +243,35 @@ export default function Students() {
       return
     }
 
+    // Validação: CPF/e-mail/telefone são validados SOMENTE quando preenchidos.
+    // Campos vazios passam (dados importados do Bubble podem vir incompletos).
+    const errors: Record<string, string> = {}
+    const cpfValue = formCpf.trim()
+    if (cpfValue && !isValidCpf(cpfValue)) {
+      errors.cpf = 'CPF inválido'
+    }
+    const guardianCpfValue = formGuardianCpf.trim()
+    if (guardianCpfValue && !isValidCpf(guardianCpfValue)) {
+      errors.guardianCpf = 'CPF do responsável inválido'
+    }
+    const emailValue = formEmail.trim()
+    if (emailValue && !isValidEmail(emailValue)) {
+      errors.email = 'Digite um e-mail válido'
+    }
+    const guardianEmailValue = formGuardianEmail.trim()
+    if (guardianEmailValue && !isValidEmail(guardianEmailValue)) {
+      errors.guardianEmail = 'Digite um e-mail válido'
+    }
+    setFormErrors(errors)
+    if (Object.keys(errors).length > 0) {
+      toast({
+        title: 'Dados de contato inválidos',
+        description: 'Corrija os campos destacados antes de salvar.',
+        variant: 'destructive',
+      })
+      return
+    }
+
     setSubmitting(true)
     try {
       const parsedMonthlyFee = formMonthlyFee.trim()
@@ -243,9 +284,9 @@ export default function Students() {
 
       const payload: Partial<StudentRecord> = {
         name: formName,
-        email: formEmail,
-        phone: formPhone,
-        cpf: formCpf,
+        email: formEmail.trim(),
+        phone: formPhone.trim(),
+        cpf: formCpf.trim(),
         birth_date: formBirthDate ? `${formBirthDate} 00:00:00.000Z` : undefined,
         address: formAddress,
         plan_id: formPlanId,
@@ -1424,9 +1465,18 @@ export default function Students() {
                     <Input
                       placeholder="000.000.000-00"
                       value={formGuardianCpf}
-                      onChange={(e) => setFormGuardianCpf(e.target.value)}
-                      className="h-8 text-xs focus-visible:ring-[#D4AF37]"
+                      onChange={(e) => setFormGuardianCpf(maskCpf(e.target.value))}
+                      className={
+                        formErrors.guardianCpf
+                          ? 'border-red-500 focus-visible:ring-red-500'
+                          : 'focus-visible:ring-[#D4AF37]'
+                      }
                     />
+                    {formErrors.guardianCpf && (
+                      <p className="text-[10px] text-red-600 font-medium">
+                        {formErrors.guardianCpf}
+                      </p>
+                    )}
                   </div>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
@@ -1435,9 +1485,9 @@ export default function Students() {
                       Celular / WhatsApp do Resp.
                     </Label>
                     <Input
-                      placeholder="(83) 9 9999-9999"
+                      placeholder="(84) 98830-9717"
                       value={formGuardianPhone}
-                      onChange={(e) => setFormGuardianPhone(e.target.value)}
+                      onChange={(e) => setFormGuardianPhone(maskPhone(e.target.value))}
                       className="h-8 text-xs focus-visible:ring-[#D4AF37]"
                     />
                   </div>
@@ -1446,12 +1496,22 @@ export default function Students() {
                       E-mail do Responsável
                     </Label>
                     <Input
-                      type="email"
+                      type="text"
+                      inputMode="email"
                       placeholder="responsavel@email.com"
                       value={formGuardianEmail}
                       onChange={(e) => setFormGuardianEmail(e.target.value)}
-                      className="h-8 text-xs focus-visible:ring-[#D4AF37]"
+                      className={
+                        formErrors.guardianEmail
+                          ? 'border-red-500 focus-visible:ring-red-500'
+                          : 'focus-visible:ring-[#D4AF37]'
+                      }
                     />
+                    {formErrors.guardianEmail && (
+                      <p className="text-[10px] text-red-600 font-medium">
+                        {formErrors.guardianEmail}
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1460,19 +1520,27 @@ export default function Students() {
                 <div className="space-y-1">
                   <Label className="font-semibold text-[#1E2A3A]">E-mail</Label>
                   <Input
-                    type="email"
+                    type="text"
+                    inputMode="email"
                     placeholder="aluno@email.com"
                     value={formEmail}
                     onChange={(e) => setFormEmail(e.target.value)}
-                    className="focus-visible:ring-[#D4AF37]"
+                    className={
+                      formErrors.email
+                        ? 'border-red-500 focus-visible:ring-red-500'
+                        : 'focus-visible:ring-[#D4AF37]'
+                    }
                   />
+                  {formErrors.email && (
+                    <p className="text-[10px] text-red-600 font-medium">{formErrors.email}</p>
+                  )}
                 </div>
                 <div className="space-y-1">
                   <Label className="font-semibold text-[#1E2A3A]">Telefone / WhatsApp</Label>
                   <Input
-                    placeholder="(11) 98765-4321"
+                    placeholder="(84) 98830-9717"
                     value={formPhone}
-                    onChange={(e) => setFormPhone(e.target.value)}
+                    onChange={(e) => setFormPhone(maskPhone(e.target.value))}
                     className="focus-visible:ring-[#D4AF37]"
                   />
                 </div>
@@ -1484,9 +1552,16 @@ export default function Students() {
                   <Input
                     placeholder="000.000.000-00"
                     value={formCpf}
-                    onChange={(e) => setFormCpf(e.target.value)}
-                    className="focus-visible:ring-[#D4AF37]"
+                    onChange={(e) => setFormCpf(maskCpf(e.target.value))}
+                    className={
+                      formErrors.cpf
+                        ? 'border-red-500 focus-visible:ring-red-500'
+                        : 'focus-visible:ring-[#D4AF37]'
+                    }
                   />
+                  {formErrors.cpf && (
+                    <p className="text-[10px] text-red-600 font-medium">{formErrors.cpf}</p>
+                  )}
                 </div>
                 <div className="space-y-1">
                   <Label className="font-semibold text-[#1E2A3A]">Data de Nascimento</Label>

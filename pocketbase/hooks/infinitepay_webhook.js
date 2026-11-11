@@ -151,7 +151,14 @@ routerAdd('POST', '/backend/v1/infinitepay/create-charge', (e) => {
   const body = info.body || {}
 
   const studentId = body.student_id
-  const description = body.description || 'Mensalidade'
+  // Descrição exibida no checkout: sempre rotulada como mensalidade RC Acqua Life
+  // (a InfinitePay não aceita logo/imagem no checkout — só a description do item aparece)
+  const rawDescription = String(body.description || 'Mensalidade').trim()
+  const description =
+    rawDescription.toLowerCase().includes('mensalidade') ||
+    rawDescription.toLowerCase().includes('rc acqua')
+      ? rawDescription
+      : `Mensalidade RC Acqua Life — ${rawDescription}`
   const amount = Number(body.amount || 0)
   const discountAmount = Number(body.discount_amount || 0)
   const dueDate = body.due_date
@@ -245,7 +252,9 @@ routerAdd('POST', '/backend/v1/infinitepay/create-charge', (e) => {
         {
           quantity: 1,
           price: priceCents,
-          description: description,
+          // Único campo de exibição aceito pela InfinitePay (docs oficial):
+          // a página de pagamento mostra a description + valor. Sem logo/imagem.
+          description: `${description} (RC Acqua Life)`,
         },
       ],
       customer: customerPayload,
