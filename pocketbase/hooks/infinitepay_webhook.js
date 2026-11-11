@@ -530,6 +530,20 @@ routerAdd('POST', '/backend/v1/infinitepay/webhook', (e) => {
   const body = info.body || {}
   const headers = info.headers || {}
 
+  // LOG de diagnóstico: payload cru recebido da InfinitePay (antes de qualquer validação)
+  try {
+    console.log('[Webhook] Payload bruto recebido:', JSON.stringify(body))
+    console.log(
+      '[Webhook] Headers relevantes:',
+      JSON.stringify({
+        'content-type': headers['content-type'],
+        'x-infinitepay-signature': headers['x-infinitepay-signature'],
+        'x-signature': headers['x-signature'],
+        'user-agent': headers['user-agent'],
+      }),
+    )
+  } catch (_) {}
+
   // 3.1 Validação de segurança/assinatura
   let configuredSecret = readSetting('infinitepay_webhook_secret')
   if (!configuredSecret) {
@@ -574,19 +588,40 @@ routerAdd('POST', '/backend/v1/infinitepay/webhook', (e) => {
 
   // 3.2 Extração dos dados do payload da InfinitePay
   const innerData = body.data || {}
+  const innerTransaction = innerData.transaction || body.transaction || {}
   const invoiceSlug = String(
-    body.invoice_slug || innerData.invoice_slug || body.slug || innerData.slug || '',
+    body.invoice_slug ||
+      innerData.invoice_slug ||
+      body.slug ||
+      innerData.slug ||
+      body.link_slug ||
+      body.checkout_slug ||
+      body.invoice_id ||
+      innerData.invoice_id ||
+      '',
   ).trim()
-  const orderNsu = String(body.order_nsu || innerData.order_nsu || '').trim()
+  const orderNsu = String(
+    body.order_nsu || innerData.order_nsu || body.order_id || innerData.order_id || '',
+  ).trim()
   const transactionNsu = String(
-    body.transaction_nsu || innerData.transaction_nsu || body.nsu || innerData.nsu || '',
+    body.transaction_nsu ||
+      innerData.transaction_nsu ||
+      body.nsu ||
+      innerData.nsu ||
+      innerTransaction.nsu ||
+      body.transaction_id ||
+      innerData.transaction_id ||
+      '',
   ).trim()
   const paymentId = String(
     body.payment_id ||
       innerData.payment_id ||
       body.id ||
       innerData.id ||
+      body.uuid ||
+      innerData.uuid ||
       orderNsu ||
+      transactionNsu ||
       invoiceSlug ||
       '',
   ).trim()
@@ -758,7 +793,8 @@ routerAdd('POST', '/backend/v1/infinitepay/webhook', (e) => {
   if (!matchedPayment) {
     try {
       const filters = []
-      if (orderNsu) filters.push(`order_nsu = '${orderNsu}'`)
+      if (orderNsu)
+        filters.push(`order_nsu = '${orderNsu}' || infinipay_transaction_id = '${orderNsu}'`)
       if (invoiceSlug) filters.push(`invoice_slug = '${invoiceSlug}'`)
       if (paymentId) filters.push(`infinipay_transaction_id = '${paymentId}'`)
       if (filters.length > 0) {
@@ -767,6 +803,13 @@ routerAdd('POST', '/backend/v1/infinitepay/webhook', (e) => {
           matchedPayment = pmts[0]
         }
       }
+    } catch (_) {}
+  }
+
+  // Última tentativa de casamento: derivar a cobrança a partir do pagamento encontrado
+  if (!matchedCharge && matchedPayment) {
+    try {
+      matchedCharge = $app.findRecordById('charges', matchedPayment.getString('charge_id'))
     } catch (_) {}
   }
 
@@ -812,10 +855,19 @@ routerAdd('POST', '/backend/v1/infinitepay/webhook', (e) => {
         matchedCharge.getString('order_nsu') ||
         matchedCharge.getString('infinipay_payment_id'),
     }
-    if (transactionNsu) checkPayload.transaction_nsu = transactionNsu
-    if (invoiceSlug || matchedCharge.getString('invoice_slug')) {
-      checkPayload.slug = invoiceSlug || matchedCharge.getString('invoice_slug')
+    let checkSlug = invoiceSlug || matchedCharge.getString('invoice_slug') || ''
+    if (!checkSlug) {
+      // Fallback: derivar o slug final do link de pagamento salvo na cobrança
+      // (ex.: https://checkout.infinitepay.io/rcacqualife/6xXvOfUP8x -> 6xXvOfUP8x)
+      const linkParts = String(matchedCharge.getString('payment_link') || '')
+        .split('/')
+        .filter((p) => p !== '')
+      if (linkParts.length > 0) {
+        checkSlug = linkParts[linkParts.length - 1]
+      }
     }
+    if (transactionNsu) checkPayload.transaction_nsu = transactionNsu
+    if (checkSlug) checkPayload.slug = checkSlug
 
     let checkSuccess = false
     let checkRespJson = null
@@ -876,14 +928,31 @@ routerAdd('POST', '/backend/v1/infinitepay/webhook', (e) => {
     }
 
     if (!checkSuccess) {
+      const explicitlyUnpaid =
+        checkRespJson !== null && checkRespJson.paid === false && checkRespJson.status !== 'paid'
+
+      if (explicitlyUnpaid) {
+        console.log(
+          `[Webhook] /payment_check indicou pagamento NÃO confirmado para cobrança ${matchedCharge.id}. Mantida em aberto.`,
+        )
+        return e.json(400, {
+          success: false,
+          error: 'Payment check indicates payment not confirmed. Charge kept pending verification.',
+        })
+      }
+
+      // /payment_check indisponível ou inconclusivo (timeout, 5xx, identificadores
+      // insuficientes): confia no evento do webhook para não travar a baixa da cobrança.
       console.log(
-        `[Webhook] Confirmação via /payment_check NÃO aprovada para cobrança ${matchedCharge.id}. Cobrança permanece pendente de verificação.`,
+        `[Webhook] /payment_check indisponível ou inconclusivo para cobrança ${matchedCharge.id} — confiando no evento '${normalizedEvent}' do webhook.`,
       )
-      return e.json(400, {
-        success: false,
-        error:
-          'Confirmation via /payment_check failed or unavailable. Charge kept pending verification.',
-      })
+      confirmedPaid = true
+      const payloadMethod = String(
+        body.capture_method || innerData.capture_method || body.method || innerData.method || '',
+      ).toLowerCase()
+      if (payloadMethod) {
+        verifiedCaptureMethod = payloadMethod
+      }
     }
   }
 
