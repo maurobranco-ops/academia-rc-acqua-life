@@ -16,6 +16,15 @@ export const maskCpf = (value: string): string => {
 }
 
 /**
+ * Máscara de CEP: 00000-000 (formato dos Correios).
+ */
+export const maskCep = (value: string): string => {
+  const d = onlyDigits(value).slice(0, 8)
+  if (d.length <= 5) return d
+  return `${d.slice(0, 5)}-${d.slice(5)}`
+}
+
+/**
  * Máscara de telefone brasileiro:
  *  - celular 10-11 dígitos com 9º dígito: (84) 98830-9717
  *  - fixo 10 dígitos: (84) 3232-0000

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   Search,
@@ -42,6 +42,7 @@ import {
 } from '@/components/ui/select'
 import { academyService } from '@/services/academy'
 import { useRealtime } from '@/hooks/use-realtime'
+import { MapPin } from 'lucide-react'
 import { getStudentPhotoUrl } from '@/lib/studentPhoto'
 import { groupStudentsByGuardian } from '@/lib/familyRules'
 import type {
@@ -52,7 +53,10 @@ import type {
   ClassRecord,
 } from '@/types/database'
 import { useToast } from '@/hooks/use-toast'
-import { maskCpf, maskPhone, isValidCpf, isValidEmail } from '@/lib/formatters'
+import { maskCpf, maskPhone, maskCep, isValidCpf, isValidEmail } from '@/lib/formatters'
+import { fetchAddressByCep } from '@/lib/viacep'
+import { compressImage } from '@/lib/imageCompression'
+import { StudentPhotoPicker } from '@/components/StudentPhotoPicker'
 
 export default function Students() {
   const navigate = useNavigate()
@@ -102,6 +106,23 @@ export default function Students() {
   const [formValidadePagto, setFormValidadePagto] = useState<string>('')
   const [formStatus, setFormStatus] = useState<'ativo' | 'inativo'>('ativo')
   const [submitting, setSubmitting] = useState(false)
+
+  // Foto individual do aluno (formulário cadastrar/editar)
+  const [photoFile, setPhotoFile] = useState<File | null>(null)
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null)
+  const [photoUploading, setPhotoUploading] = useState(false)
+
+  // Endereço (CEP com busca automática ViaCEP)
+  const [formCep, setFormCep] = useState('')
+  const [formStreet, setFormStreet] = useState('')
+  const [formStreetNumber, setFormStreetNumber] = useState('')
+  const [formComplement, setFormComplement] = useState('')
+  const [formNeighborhood, setFormNeighborhood] = useState('')
+  const [formCity, setFormCity] = useState('')
+  const [formUf, setFormUf] = useState('')
+  const [cepLoading, setCepLoading] = useState(false)
+  const [cepError, setCepError] = useState<string | null>(null)
+  const lastSearchedCepRef = useRef('')
 
   // Erros de validação do formulário (exibidos abaixo de cada campo)
   const [formErrors, setFormErrors] = useState<Record<string, string>>({})
@@ -164,6 +185,16 @@ export default function Students() {
     setFormCpf('')
     setFormBirthDate('')
     setFormAddress('')
+    setFormCep('')
+    setFormStreet('')
+    setFormStreetNumber('')
+    setFormComplement('')
+    setFormNeighborhood('')
+    setFormCity('')
+    setFormUf('')
+    setCepError(null)
+    setPhotoFile(null)
+    setPhotoPreview(null)
     const initialPlan = plans[0]
     const initialPrice = initialPlan?.monthly_price ?? 110
     const initialIsIsento =
@@ -190,6 +221,16 @@ export default function Students() {
     setFormBirthDate(st.birth_date ? st.birth_date.substring(0, 10) : '')
     reapplyMasksOnEdit(st)
     setFormAddress(st.address || '')
+    setFormCep(maskCep(st.cep || ''))
+    setFormStreet(st.street || '')
+    setFormStreetNumber(st.street_number || '')
+    setFormComplement(st.complement || '')
+    setFormNeighborhood(st.neighborhood || '')
+    setFormCity(st.city || '')
+    setFormUf(st.uf || '')
+    setCepError(null)
+    setPhotoFile(null)
+    setPhotoPreview(null)
     setFormPlanId(st.plan_id || '')
     const enrolledClass = enrollments.find((e) => e.student_id === st.id)
     setFormClassId(enrolledClass ? enrolledClass.class_id : '')
@@ -230,6 +271,55 @@ export default function Students() {
     )
     setFormStatus(st.status || 'ativo')
     setStudentModalOpen(true)
+  }
+
+  // Busca automática de endereço na ViaCEP quando o CEP fica completo.
+  // Erros NUNCA bloqueiam o salvamento: viram apenas um aviso (cepError).
+  const handleCepChange = async (value: string) => {
+    const masked = maskCep(value)
+    setFormCep(masked)
+    const digits = masked.replace(/\D/g, '')
+
+    if (digits.length !== 8) {
+      setCepError(null)
+      return
+    }
+    if (digits === lastSearchedCepRef.current) return
+    lastSearchedCepRef.current = digits
+
+    setCepLoading(true)
+    setCepError(null)
+    try {
+      const addr = await fetchAddressByCep(digits)
+      setFormStreet(addr.logradouro)
+      setFormNeighborhood(addr.bairro)
+      setFormCity(addr.localidade)
+      setFormUf(addr.uf.toUpperCase())
+      toast({
+        title: 'Endereço encontrado',
+        description: 'Logradouro, bairro, cidade e UF preenchidos automaticamente.',
+      })
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'CEP inválido ou não encontrado.'
+      setCepError(msg)
+    } finally {
+      setCepLoading(false)
+    }
+  }
+
+  // Reexecuta a busca (ex.: botão/Enter) mesmo que o CEP já tenha sido consultado
+  const handleCepSearchRetry = () => {
+    lastSearchedCepRef.current = ''
+    handleCepChange(formCep)
+  }
+
+  // Seleção de foto individual no formulário (cadastro/edição)
+  const handlePhotoSelect = (file: File | null) => {
+    setPhotoFile(file)
+    if (photoPreview) {
+      URL.revokeObjectURL(photoPreview)
+    }
+    setPhotoPreview(file ? URL.createObjectURL(file) : null)
   }
 
   const handleSaveStudent = async (e: React.FormEvent) => {
@@ -282,13 +372,32 @@ export default function Students() {
         : undefined
       const parsedDueDay = formDueDay.trim() ? parseInt(formDueDay, 10) : undefined
 
+      // Mantém o campo legado "address" sincronizado com os novos campos estruturados
+      const composedAddress = [
+        formStreet.trim(),
+        formStreetNumber.trim(),
+        formComplement.trim(),
+        formNeighborhood.trim(),
+        formCity.trim(),
+        formUf.trim().toUpperCase(),
+      ]
+        .filter(Boolean)
+        .join(', ')
+
       const payload: Partial<StudentRecord> = {
         name: formName,
         email: formEmail.trim(),
         phone: formPhone.trim(),
         cpf: formCpf.trim(),
         birth_date: formBirthDate ? `${formBirthDate} 00:00:00.000Z` : undefined,
-        address: formAddress,
+        address: composedAddress || formAddress,
+        cep: formCep.replace(/\D/g, '') || undefined,
+        street: formStreet.trim() || undefined,
+        street_number: formStreetNumber.trim() || undefined,
+        complement: formComplement.trim() || undefined,
+        neighborhood: formNeighborhood.trim() || undefined,
+        city: formCity.trim() || undefined,
+        uf: formUf.trim().toUpperCase() || undefined,
         plan_id: formPlanId,
         guardian_name: formGuardianName.trim() || undefined,
         guardian_cpf: formGuardianCpf.trim() || undefined,
@@ -316,6 +425,39 @@ export default function Students() {
         studentId = created.id
         setStudents((prev) => [created, ...prev])
         toast({ title: 'Aluno cadastrado com sucesso!' })
+      }
+
+      // Upload da foto individual (após criar/atualizar o aluno, para ter o ID)
+      if (studentId && photoFile) {
+        setPhotoUploading(true)
+        try {
+          const { file: fileToSend } = await compressImage(photoFile, photoFile.name, {
+            maxWidth: 1600,
+            maxHeight: 1600,
+            quality: 0.82,
+            mimeType: 'image/jpeg',
+          })
+          const updatedPhoto = await academyService.uploadStudentPhoto(
+            studentId,
+            fileToSend,
+            photoFile.name,
+          )
+          setStudents((prev) =>
+            prev.map((s) => (s.id === studentId ? { ...s, ...updatedPhoto } : s)),
+          )
+        } catch (photoErr: unknown) {
+          const photoMsg =
+            photoErr instanceof Error ? photoErr.message : 'Não foi possível enviar a foto.'
+          toast({
+            title: 'Aviso: foto não enviada',
+            description: `Os demais dados foram salvos, mas houve falha no upload da foto: ${photoMsg}`,
+            variant: 'destructive',
+          })
+        } finally {
+          setPhotoUploading(false)
+          setPhotoFile(null)
+          setPhotoPreview(null)
+        }
       }
 
       // If a class was picked during modal, associate enrollment
@@ -1429,6 +1571,15 @@ export default function Students() {
             </DialogHeader>
 
             <div className="grid gap-3 py-4 text-xs">
+              <StudentPhotoPicker
+                currentPhotoUrl={getStudentPhotoUrl(selectedStudent)}
+                previewUrl={photoPreview}
+                selectedFile={photoFile}
+                studentName={selectedStudent?.name || formName}
+                uploading={photoUploading}
+                onFileSelect={handlePhotoSelect}
+              />
+
               <div className="space-y-1">
                 <Label className="font-semibold text-[#1E2A3A]">Nome Completo</Label>
                 <Input
@@ -1574,14 +1725,102 @@ export default function Students() {
                 </div>
               </div>
 
-              <div className="space-y-1">
-                <Label className="font-semibold text-[#1E2A3A]">Endereço Completo</Label>
-                <Input
-                  placeholder="Rua, Número, Bairro, Cidade"
-                  value={formAddress}
-                  onChange={(e) => setFormAddress(e.target.value)}
-                  className="focus-visible:ring-[#D4AF37]"
-                />
+              {/* Endereço com busca automática de CEP (ViaCEP) */}
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-[#0F1B3D]">
+                  <MapPin className="w-3.5 h-3.5 text-[#D4AF37]" />
+                  <span>Endereço (busca automática pelo CEP)</span>
+                  {cepLoading && <Loader2 className="w-3 h-3 text-[#17A2B8] animate-spin ml-1" />}
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                  <div className="space-y-1">
+                    <Label className="font-semibold text-[11px] text-[#1E2A3A]">CEP</Label>
+                    <Input
+                      placeholder="00000-000"
+                      inputMode="numeric"
+                      value={formCep}
+                      onChange={(e) => handleCepChange(e.target.value)}
+                      onBlur={handleCepSearchRetry}
+                      className={
+                        cepError
+                          ? 'h-8 text-xs border-amber-500 focus-visible:ring-amber-500 bg-white'
+                          : 'h-8 text-xs focus-visible:ring-[#D4AF37] bg-white'
+                      }
+                    />
+                  </div>
+                  <div className="col-span-1 sm:col-span-2 space-y-1">
+                    <Label className="font-semibold text-[11px] text-[#1E2A3A]">Logradouro</Label>
+                    <Input
+                      placeholder="Rua, Avenida, Travessa..."
+                      value={formStreet}
+                      onChange={(e) => setFormStreet(e.target.value)}
+                      className="h-8 text-xs focus-visible:ring-[#D4AF37] bg-white"
+                    />
+                  </div>
+                </div>
+
+                {cepError && (
+                  <p className="text-[11px] text-amber-700 font-medium flex items-start gap-1">
+                    <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                    <span>{cepError}</span>
+                  </p>
+                )}
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                  <div className="space-y-1">
+                    <Label className="font-semibold text-[11px] text-[#1E2A3A]">Número</Label>
+                    <Input
+                      placeholder="Ex: 123"
+                      value={formStreetNumber}
+                      onChange={(e) => setFormStreetNumber(e.target.value)}
+                      className="h-8 text-xs focus-visible:ring-[#D4AF37] bg-white"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="font-semibold text-[11px] text-[#1E2A3A]">Complemento</Label>
+                    <Input
+                      placeholder="Ex: Apto 302 / Bloco B"
+                      value={formComplement}
+                      onChange={(e) => setFormComplement(e.target.value)}
+                      className="h-8 text-xs focus-visible:ring-[#D4AF37] bg-white"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="font-semibold text-[11px] text-[#1E2A3A]">Bairro</Label>
+                    <Input
+                      placeholder="Ex: Centro"
+                      value={formNeighborhood}
+                      onChange={(e) => setFormNeighborhood(e.target.value)}
+                      className="h-8 text-xs focus-visible:ring-[#D4AF37] bg-white"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2.5">
+                  <div className="col-span-2 space-y-1">
+                    <Label className="font-semibold text-[11px] text-[#1E2A3A]">Cidade</Label>
+                    <Input
+                      placeholder="Ex: Natal"
+                      value={formCity}
+                      onChange={(e) => setFormCity(e.target.value)}
+                      className="h-8 text-xs focus-visible:ring-[#D4AF37] bg-white"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="font-semibold text-[11px] text-[#1E2A3A]">UF</Label>
+                    <Input
+                      placeholder="Ex: RN"
+                      maxLength={2}
+                      value={formUf}
+                      onChange={(e) => setFormUf(e.target.value.toUpperCase())}
+                      className="h-8 text-xs focus-visible:ring-[#D4AF37] bg-white uppercase"
+                    />
+                  </div>
+                </div>
+                <p className="text-[10px] text-slate-500">
+                  Digite o CEP para preencher automaticamente. Número e complemento são sempre
+                  digitados por você.
+                </p>
               </div>
 
               <div className="grid grid-cols-2 gap-3">

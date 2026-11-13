@@ -48,6 +48,13 @@ export interface StudentRecord extends RecordModel {
   fee_suspended?: boolean
   raw_situation?: string
   validade_do_ultimo_pagamento?: string
+  cep?: string
+  street?: string
+  street_number?: string
+  complement?: string
+  neighborhood?: string
+  city?: string
+  uf?: string
   expand?: {
     plan_id?: PlanRecord
   }
