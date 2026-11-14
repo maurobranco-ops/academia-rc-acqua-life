@@ -72,6 +72,22 @@ export const maskPhoneIntl = (value: string): string => {
 }
 
 /**
+ * Formata um telefone para EXIBIÇÃO na ficha do aluno (sem "+55"):
+ * remove o prefixo internacional 55 quando o restante forma um número
+ * nacional completo (DDD + 8 ou 9 dígitos) e aplica maskPhone.
+ * Ex.: "5584988309717" -> "(84) 98830-9717".
+ */
+export const formatPhoneDisplay = (value: string): string => {
+  const d = onlyDigits(value)
+  if (d.length >= 12 && d.startsWith('55')) {
+    const rest = d.slice(2)
+    // 11 dígitos nacionais = celular; 10 = fixo. Casos entre 12 e 13 no total.
+    if (rest.length === 10 || rest.length === 11) return maskPhone(rest)
+  }
+  return maskPhone(d)
+}
+
+/**
  * Valida CPF matematicamente pelos dígitos verificadores.
  * Rejeita sequências repetidas (111.111.111-11), dígitos trocados e tamanhos errados.
  */

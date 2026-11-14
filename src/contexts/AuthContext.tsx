@@ -1,6 +1,11 @@
 import React, { createContext, useContext, useEffect, useState, useMemo } from 'react'
 import pb from '@/lib/pocketbase/client'
+import { setupAuthInterceptor } from '@/lib/pocketbase/authInterceptor'
 import type { UserRecord } from '@/types/database'
+
+// Sessão só é descartada em 401 real do backend (token expirado/revogado);
+// falha de rede ou 5xx NÃO deslogam — evita cair no /login numa instabilidade.
+setupAuthInterceptor()
 
 interface AuthContextType {
   user: UserRecord | null
@@ -35,22 +40,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser((model as unknown as UserRecord) || null)
     })
 
-    // Initial check & auto refresh if token exists
-    if (pb.authStore.isValid) {
-      pb.collection('users')
-        .authRefresh()
-        .catch(() => {
+    // Renova a sessão do PocketBase. Só considera a sessão morta quando o
+    // backend responde 401 de verdade (token expirado/revogado). Falhas de
+    // rede ou erro 5xx NÃO deslogam — evita o usuário cair no /login ao
+    // trocar de rede ou em uma instabilidade momentânea do backend.
+    const refreshSession = async () => {
+      if (!pb.authStore.isValid) {
+        setIsLoading(false)
+        return
+      }
+      try {
+        await pb.collection('users').authRefresh()
+      } catch (err: unknown) {
+        const status =
+          (err as { status?: number })?.status ??
+          (err as { response?: { status?: number } })?.response?.status
+        if (status === 401) {
           pb.authStore.clear()
-        })
-        .finally(() => {
-          setIsLoading(false)
-        })
-    } else {
-      setIsLoading(false)
+        }
+        // outros erros: mantém a sessão; o token atual ainda pode ser válido
+      } finally {
+        setIsLoading(false)
+      }
     }
+
+    // Checagem inicial (token persistido no localStorage)
+    refreshSession()
+
+    // O token de autenticação do PocketBase expira; renovar periodicamente
+    // evita o 401 surpresa no meio do uso (que deslogaria de vez).
+    const interval = setInterval(refreshSession, 10 * 60 * 1000)
 
     return () => {
       unsub()
+      clearInterval(interval)
     }
   }, [])
 

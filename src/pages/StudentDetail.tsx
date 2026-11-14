@@ -45,6 +45,7 @@ import type {
 } from '@/types/database'
 import { useToast } from '@/hooks/use-toast'
 import { getStudentPhotoUrl } from '@/lib/studentPhoto'
+import { formatPhoneDisplay } from '@/lib/formatters'
 
 export default function StudentDetail() {
   const { id } = useParams<{ id: string }>()
@@ -288,23 +289,23 @@ export default function StudentDetail() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* Top Back Navigation */}
-      <div className="flex items-center justify-between">
+      {/* Top Back Navigation — mobile: tudo empilhado em coluna e largura total; sm+: linha única, como antes */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <Button
           variant="ghost"
           size="sm"
           onClick={() => navigate('/alunos')}
-          className="text-xs font-semibold text-[#6C757D] hover:text-[#0F1B3D]"
+          className="text-xs font-semibold text-[#6C757D] hover:text-[#0F1B3D] w-full justify-center sm:w-auto sm:justify-start"
         >
           <ArrowLeft className="w-4 h-4 mr-1.5" /> Voltar para Alunos
         </Button>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
           <Button
             variant="outline"
             size="sm"
             onClick={() => navigate(`/alunos?editar=${student.id}&origem=detalhe`)}
-            className="border-[#0F1B3D] text-[#0F1B3D] hover:bg-slate-100 font-bold text-xs h-9 rounded-xl flex items-center gap-1.5 shadow-xs"
+            className="border-[#0F1B3D] text-[#0F1B3D] hover:bg-slate-100 font-bold text-xs h-9 rounded-xl flex items-center justify-center gap-1.5 shadow-xs w-full sm:w-auto"
           >
             <Edit className="w-4 h-4 text-[#0F1B3D]" /> Editar Aluno
           </Button>
@@ -313,7 +314,7 @@ export default function StudentDetail() {
             onClick={() =>
               navigate(`/cobrancas?novo=1&aluno=${student.id}&valor=${plan?.monthly_price || 0}`)
             }
-            className="bg-[#D4AF37] hover:bg-[#B8953A] text-[#0F1B3D] font-bold text-xs h-9 rounded-xl flex items-center gap-1.5 shadow-sm"
+            className="bg-[#D4AF37] hover:bg-[#B8953A] text-[#0F1B3D] font-bold text-xs h-9 rounded-xl flex items-center justify-center gap-1.5 shadow-sm w-full sm:w-auto"
           >
             <CreditCard className="w-4 h-4" /> Emitir Cobrança Infinitepay
           </Button>
@@ -322,7 +323,7 @@ export default function StudentDetail() {
             variant="outline"
             size="sm"
             onClick={handleRequestDelete}
-            className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 font-bold text-xs h-9 rounded-xl flex items-center gap-1.5 shadow-xs"
+            className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 font-bold text-xs h-9 rounded-xl flex items-center justify-center gap-1.5 shadow-xs w-full sm:w-auto"
           >
             <Trash2 className="w-4 h-4 text-red-600" /> Excluir Aluno
           </Button>
@@ -332,10 +333,16 @@ export default function StudentDetail() {
       {/* Header Profile Card */}
       <Card className="bg-white border-[#E0E4EA] rounded-2xl shadow-xs overflow-hidden">
         <div className="h-24 bg-gradient-to-r from-[#0F1B3D] via-[#1B2A5B] to-[#17A2B8]" />
-        <CardContent className="relative px-6 pb-6 pt-0">
+        <CardContent className="relative px-4 pb-6 pt-0 sm:px-6">
+          {/* Mobile: nome em cima, foto embaixo, badges/dados em largura total; sm+: foto à esquerda, como antes */}
           <div className="flex flex-col sm:flex-row items-start sm:items-end justify-between gap-4 -mt-12 mb-4">
-            <div className="flex items-end gap-4">
-              <div className="relative group">
+            {/* Nome — fica sobre o banner em ambas as resoluções */}
+            <h2 className="order-first w-full sm:w-auto break-words hyphens-auto px-4 sm:px-0 -mt-4 sm:mt-0 mb-0 sm:mb-2 sm:max-w-[calc(100%-7rem)] sm:order-none text-xl leading-tight sm:text-2xl font-bold text-[#ffffff]">
+              {student.name}
+            </h2>
+
+            <div className="flex flex-col items-start sm:flex-row sm:items-end gap-4 w-full">
+              <div className="relative group shrink-0">
                 <Avatar className="w-24 h-24 border-4 border-white shadow-lg bg-slate-100">
                   {getStudentPhotoUrl(student) ? (
                     <AvatarImage
@@ -378,9 +385,8 @@ export default function StudentDetail() {
                 </button>
               </div>
 
-              <div className="mb-1">
-                <div className="flex items-center gap-3">
-                  <h2 className="text-2xl font-bold text-[#ffffff]">{student.name}</h2>
+              <div className="flex-1 min-w-0 w-full sm:mb-1">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
                   <Button
                     variant="outline"
                     size="sm"
@@ -392,7 +398,7 @@ export default function StudentDetail() {
                     {uploadingPhoto ? 'Enviando...' : 'Trocar foto'}
                   </Button>
                 </div>
-                <div className="flex items-center gap-2 mt-1">
+                <div className="flex flex-wrap items-center gap-2 mt-2">
                   <Badge
                     className={
                       student.status === 'ativo'
@@ -419,7 +425,7 @@ export default function StudentDetail() {
                     </Badge>
                   )}
                 </div>
-                <p className="text-xs text-[#6C757D] font-medium mt-0.5">
+                <p className="text-xs text-[#6C757D] font-medium mt-1">
                   {student.monthly_fee || student.discounted_fee ? (
                     <>
                       Mensalidade:{' '}
@@ -456,15 +462,17 @@ export default function StudentDetail() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 border-t border-slate-100 text-xs text-[#6C757D]">
+          <div className="flex flex-col gap-3 pt-4 border-t border-slate-100 text-xs text-[#6C757D] sm:grid sm:grid-cols-3 sm:gap-4">
             <div className="flex items-center gap-2">
               <Mail className="w-4 h-4 text-[#17A2B8]" />
               <span>{student.email || student.guardian_email || 'E-mail não cadastrado'}</span>
             </div>
             <div className="flex items-center gap-2">
               <Phone className="w-4 h-4 text-[#17A2B8]" />
-              <span>
-                {student.whatsapp || student.phone || student.guardian_phone || 'Sem telefone'}
+              <span className="break-all">
+                {formatPhoneDisplay(
+                  student.whatsapp || student.phone || student.guardian_phone || '',
+                ) || 'Sem telefone'}
               </span>
             </div>
             <div className="flex items-center gap-2">
@@ -477,22 +485,23 @@ export default function StudentDetail() {
 
       {/* Detail Tabs */}
       <Tabs defaultValue="geral" className="w-full">
-        <TabsList className="bg-white border border-[#E0E4EA] p-1 rounded-xl mb-6">
+        {/* Mobile: grade de 2 colunas com todas as abas visíveis (padrão das Configurações, v0.0.35); md+: linha única com rolagem */}
+        <TabsList className="bg-white border border-[#E0E4EA] p-1 rounded-xl mb-6 w-full max-w-full h-auto grid grid-cols-2 gap-1 md:h-10 md:inline-flex md:flex-nowrap md:gap-0 md:overflow-x-auto md:overflow-y-hidden md:whitespace-nowrap">
           <TabsTrigger
             value="geral"
-            className="data-[state=active]:bg-[#0F1B3D] data-[state=active]:text-white text-xs font-semibold rounded-lg px-4"
+            className="data-[state=active]:bg-[#0F1B3D] data-[state=active]:text-white text-xs font-semibold rounded-lg px-2 py-2 min-w-0 w-full leading-snug whitespace-normal md:w-auto md:px-4 md:py-1.5 md:shrink-0 md:leading-normal md:whitespace-nowrap"
           >
             Visão Geral
           </TabsTrigger>
           <TabsTrigger
             value="pagamentos"
-            className="data-[state=active]:bg-[#0F1B3D] data-[state=active]:text-white text-xs font-semibold rounded-lg px-4"
+            className="data-[state=active]:bg-[#0F1B3D] data-[state=active]:text-white text-xs font-semibold rounded-lg px-2 py-2 min-w-0 w-full leading-snug whitespace-normal md:w-auto md:px-4 md:py-1.5 md:shrink-0 md:leading-normal md:whitespace-nowrap"
           >
             Cobranças &amp; Pagamentos ({charges.length || payments.length})
           </TabsTrigger>
           <TabsTrigger
             value="turmas"
-            className="data-[state=active]:bg-[#0F1B3D] data-[state=active]:text-white text-xs font-semibold rounded-lg px-4"
+            className="data-[state=active]:bg-[#0F1B3D] data-[state=active]:text-white text-xs font-semibold rounded-lg px-2 py-2 min-w-0 w-full leading-snug whitespace-normal md:w-auto md:px-4 md:py-1.5 md:shrink-0 md:leading-normal md:whitespace-nowrap"
           >
             Turmas Matriculadas ({enrollments.length})
           </TabsTrigger>
