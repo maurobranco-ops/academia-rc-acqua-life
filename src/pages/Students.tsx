@@ -60,7 +60,6 @@ import { maskCpf, maskPhone, maskCep, isValidCpf, isValidEmail } from '@/lib/for
 import { fetchAddressByCep } from '@/lib/viacep'
 import { compressImage } from '@/lib/imageCompression'
 import { StudentPhotoPicker } from '@/components/StudentPhotoPicker'
-import { getStudentStatusDisplay } from '@/lib/studentStatus'
 
 export default function Students() {
   const navigate = useNavigate()

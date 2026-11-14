@@ -356,7 +356,7 @@ export default function Classes() {
   // Get enrolled students for selected detail modal.
   // Ordenado por nome; separado em ativos (ativo/isento) e inativos/trancados, cada grupo com contagem.
   const selectedClassEnrollments = useMemo(() => {
-    if (!selectedClass) return []
+    if (!selectedClass) return { active: [], inactive: [] }
     const list = enrollments
       .filter((e) => e.class_id === selectedClass.id)
       .slice()
@@ -370,10 +370,9 @@ export default function Classes() {
       if (!st) return true
       return getStudentStatusDisplay(st).key !== 'inativo'
     }
-    return {
-      active: list.filter(isActiveLike),
-      inactive: list.filter((e) => !isActiveLike(e)),
-    }
+    const active: EnrollmentRecord[] = list.filter(isActiveLike)
+    const inactive: EnrollmentRecord[] = list.filter((e) => !isActiveLike(e))
+    return { active, inactive }
   }, [selectedClass, enrollments])
 
   const navigateToStudent = (studentId?: string) => {
