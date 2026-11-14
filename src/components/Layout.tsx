@@ -28,6 +28,7 @@ import { Input } from '@/components/ui/input'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { LogoFull, LogoMark } from '@/components/Logo'
 import ChangePasswordDialog from '@/components/ChangePasswordDialog'
+import { BirthdayNotifier } from '@/components/BirthdayNotifier'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -406,6 +407,9 @@ export default function Layout() {
                 </div>
               )}
             </div>
+
+            {/* Birthday Notifier (only renders when there are birthdays today) */}
+            <BirthdayNotifier refreshKey={location.pathname} />
 
             {/* Notification Bell with Overdue Alert Badge */}
             <DropdownMenu>
