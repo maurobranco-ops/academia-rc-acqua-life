@@ -18,9 +18,11 @@ import {
   Clock,
   Calendar as CalendarIcon,
   AlertTriangle,
+  User as UserIcon,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Card, CardContent } from '@/components/ui/card'
@@ -127,12 +129,62 @@ export default function Students() {
   // Erros de validação do formulário (exibidos abaixo de cada campo)
   const [formErrors, setFormErrors] = useState<Record<string, string>>({})
 
+  // Checkbox "O aluno é o próprio responsável": copia os dados do aluno para o
+  // responsável (evitando duplo preenchimento) e permite restaurar ao desmarcar
+  const [formSelfResponsible, setFormSelfResponsible] = useState(false)
+  const guardianSnapshotRef = useRef<{
+    name: string
+    cpf: string
+    phone: string
+    email: string
+  } | null>(null)
+
   // Reaplica máscara quando um aluno existente é carregado no modal de edição
   const reapplyMasksOnEdit = (st: StudentRecord) => {
     setFormCpf(maskCpf(st.cpf || ''))
     setFormPhone(maskPhone(st.phone || ''))
     setFormGuardianCpf(maskCpf(st.guardian_cpf || ''))
     setFormGuardianPhone(maskPhone(st.guardian_phone || ''))
+  }
+
+  // Verifica se os dados do responsável já são idênticos aos do aluno
+  // (usado para marcar o checkbox automaticamente ao abrir a edição)
+  const guardianMatchesStudent = (st: StudentRecord) => {
+    const guardianName = (st.guardian_name || '').trim().toLowerCase()
+    const studentName = (st.name || '').trim().toLowerCase()
+    if (!guardianName || guardianName !== studentName) return false
+    if ((st.guardian_cpf || '').replace(/\D/g, '') !== (st.cpf || '').replace(/\D/g, ''))
+      return false
+    if ((st.guardian_phone || '').replace(/\D/g, '') !== (st.phone || '').replace(/\D/g, ''))
+      return false
+    if ((st.guardian_email || '').trim().toLowerCase() !== (st.email || '').trim().toLowerCase())
+      return false
+    return true
+  }
+
+  // Ao marcar: guarda o estado atual do responsável e copia os dados do aluno.
+  // Ao desmarcar: restaura exatamente o estado anterior dos campos do responsável.
+  const handleSelfResponsibleChange = (checked: boolean) => {
+    if (checked) {
+      guardianSnapshotRef.current = {
+        name: formGuardianName,
+        cpf: formGuardianCpf,
+        phone: formGuardianPhone,
+        email: formGuardianEmail,
+      }
+      setFormGuardianName(formName)
+      setFormGuardianCpf(formCpf)
+      setFormGuardianPhone(formPhone)
+      setFormGuardianEmail(formEmail)
+    } else if (guardianSnapshotRef.current) {
+      const snapshot = guardianSnapshotRef.current
+      setFormGuardianName(snapshot.name)
+      setFormGuardianCpf(snapshot.cpf)
+      setFormGuardianPhone(snapshot.phone)
+      setFormGuardianEmail(snapshot.email)
+      guardianSnapshotRef.current = null
+    }
+    setFormSelfResponsible(checked)
   }
 
   const loadData = async () => {
@@ -205,6 +257,8 @@ export default function Students() {
     setFormGuardianCpf('')
     setFormGuardianPhone('')
     setFormGuardianEmail('')
+    setFormSelfResponsible(false)
+    guardianSnapshotRef.current = null
     setFormMonthlyFee(initialIsIsento ? '0' : String(initialPrice))
     setFormDiscountedFee(initialIsIsento ? '0' : String(Math.max(0, initialPrice - 10)))
     setFormDueDay('5')
@@ -238,6 +292,18 @@ export default function Students() {
     setFormGuardianCpf(st.guardian_cpf || '')
     setFormGuardianPhone(st.guardian_phone || '')
     setFormGuardianEmail(st.guardian_email || '')
+    // Checkbox "aluno é o próprio responsável": marcado somente se os dados do
+    // responsável já estão idênticos aos do aluno ao abrir a edição
+    const selfResponsible = guardianMatchesStudent(st)
+    setFormSelfResponsible(selfResponsible)
+    guardianSnapshotRef.current = selfResponsible
+      ? {
+          name: st.guardian_name || '',
+          cpf: st.guardian_cpf || '',
+          phone: st.guardian_phone || '',
+          email: st.guardian_email || '',
+        }
+      : null
     const studentPlan = plans.find((p) => p.id === st.plan_id)
     const planFee = studentPlan ? studentPlan.monthly_price : 110
     const isPlanIsento =
@@ -1580,16 +1646,109 @@ export default function Students() {
                 onFileSelect={handlePhotoSelect}
               />
 
-              <div className="space-y-1">
-                <Label className="font-semibold text-[#1E2A3A]">Nome Completo</Label>
-                <Input
-                  required
-                  placeholder="Ex: Mariana Silva"
-                  value={formName}
-                  onChange={(e) => setFormName(e.target.value)}
-                  className="focus-visible:ring-[#D4AF37]"
-                />
+              {/* ============================================================== */}
+              {/* Quadro "Dados do Aluno" — mesmo visual do quadro do responsável */}
+              {/* ============================================================== */}
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-[#0F1B3D]">
+                  <UserIcon className="w-3.5 h-3.5 text-[#D4AF37]" />
+                  <span>Dados do Aluno</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div className="space-y-1">
+                    <Label className="font-semibold text-[11px] text-[#1E2A3A]">
+                      Nome Completo
+                    </Label>
+                    <Input
+                      required
+                      placeholder="Ex: Mariana Silva"
+                      value={formName}
+                      onChange={(e) => setFormName(e.target.value)}
+                      className="h-8 text-xs focus-visible:ring-[#D4AF37]"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="font-semibold text-[11px] text-[#1E2A3A]">
+                      Data de Nascimento
+                    </Label>
+                    <Input
+                      type="date"
+                      value={formBirthDate}
+                      onChange={(e) => setFormBirthDate(e.target.value)}
+                      className="h-8 text-xs focus-visible:ring-[#D4AF37]"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div className="space-y-1">
+                    <Label className="font-semibold text-[11px] text-[#1E2A3A]">CPF</Label>
+                    <Input
+                      placeholder="000.000.000-00"
+                      value={formCpf}
+                      onChange={(e) => setFormCpf(maskCpf(e.target.value))}
+                      className={
+                        formErrors.cpf
+                          ? 'h-8 text-xs border-red-500 focus-visible:ring-red-500'
+                          : 'h-8 text-xs focus-visible:ring-[#D4AF37]'
+                      }
+                    />
+                    {formErrors.cpf && (
+                      <p className="text-[10px] text-red-600 font-medium">{formErrors.cpf}</p>
+                    )}
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="font-semibold text-[11px] text-[#1E2A3A]">
+                      Telefone / WhatsApp
+                    </Label>
+                    <Input
+                      placeholder="(84) 98830-9717"
+                      value={formPhone}
+                      onChange={(e) => setFormPhone(maskPhone(e.target.value))}
+                      className="h-8 text-xs focus-visible:ring-[#D4AF37]"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div className="space-y-1">
+                    <Label className="font-semibold text-[11px] text-[#1E2A3A]">E-mail</Label>
+                    <Input
+                      type="text"
+                      inputMode="email"
+                      placeholder="aluno@email.com"
+                      value={formEmail}
+                      onChange={(e) => setFormEmail(e.target.value)}
+                      className={
+                        formErrors.email
+                          ? 'h-8 text-xs border-red-500 focus-visible:ring-red-500'
+                          : 'h-8 text-xs focus-visible:ring-[#D4AF37]'
+                      }
+                    />
+                    {formErrors.email && (
+                      <p className="text-[10px] text-red-600 font-medium">{formErrors.email}</p>
+                    )}
+                  </div>
+                </div>
               </div>
+
+              {/* Checkbox: aproveitar os dados do aluno para o responsável */}
+              <label
+                htmlFor="self-responsible-check"
+                className="flex items-start gap-2 p-2.5 bg-blue-50/70 border border-blue-200/80 rounded-xl cursor-pointer"
+              >
+                <Checkbox
+                  id="self-responsible-check"
+                  checked={formSelfResponsible}
+                  onCheckedChange={(v) => handleSelfResponsibleChange(v === true)}
+                  className="mt-0.5"
+                />
+                <span className="text-[11px] leading-snug text-[#1E2A3A]">
+                  <span className="font-bold">O aluno é o próprio responsável</span>
+                  <span className="block text-slate-500">
+                    Aproveita nome, CPF, telefone e e-mail do aluno nos dados do responsável,
+                    evitando o duplo preenchimento (comum em alunos adultos).
+                  </span>
+                </span>
+              </label>
 
               {/* Informações do Responsável (para Plano Família e Agrupamento) */}
               <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
@@ -1597,6 +1756,12 @@ export default function Students() {
                   <Users className="w-3.5 h-3.5 text-[#D4AF37]" />
                   <span>Dados do Responsável (Agrupamento Família)</span>
                 </div>
+                {formSelfResponsible && (
+                  <p className="text-[10px] text-emerald-700 font-medium">
+                    Utilizando os mesmos dados do aluno — desmarque a caixa acima para editar
+                    manualmente.
+                  </p>
+                )}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                   <div className="space-y-1">
                     <Label className="font-semibold text-[11px] text-[#1E2A3A]">
@@ -1606,7 +1771,8 @@ export default function Students() {
                       placeholder="Ex: Maria Oliveira"
                       value={formGuardianName}
                       onChange={(e) => setFormGuardianName(e.target.value)}
-                      className="h-8 text-xs focus-visible:ring-[#D4AF37]"
+                      disabled={formSelfResponsible}
+                      className="h-8 text-xs focus-visible:ring-[#D4AF37] disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-100"
                     />
                   </div>
                   <div className="space-y-1">
@@ -1617,10 +1783,11 @@ export default function Students() {
                       placeholder="000.000.000-00"
                       value={formGuardianCpf}
                       onChange={(e) => setFormGuardianCpf(maskCpf(e.target.value))}
+                      disabled={formSelfResponsible}
                       className={
                         formErrors.guardianCpf
-                          ? 'border-red-500 focus-visible:ring-red-500'
-                          : 'focus-visible:ring-[#D4AF37]'
+                          ? 'h-8 text-xs border-red-500 focus-visible:ring-red-500 disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-100'
+                          : 'h-8 text-xs focus-visible:ring-[#D4AF37] disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-100'
                       }
                     />
                     {formErrors.guardianCpf && (
@@ -1639,7 +1806,8 @@ export default function Students() {
                       placeholder="(84) 98830-9717"
                       value={formGuardianPhone}
                       onChange={(e) => setFormGuardianPhone(maskPhone(e.target.value))}
-                      className="h-8 text-xs focus-visible:ring-[#D4AF37]"
+                      disabled={formSelfResponsible}
+                      className="h-8 text-xs focus-visible:ring-[#D4AF37] disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-100"
                     />
                   </div>
                   <div className="space-y-1">
@@ -1652,10 +1820,11 @@ export default function Students() {
                       placeholder="responsavel@email.com"
                       value={formGuardianEmail}
                       onChange={(e) => setFormGuardianEmail(e.target.value)}
+                      disabled={formSelfResponsible}
                       className={
                         formErrors.guardianEmail
-                          ? 'border-red-500 focus-visible:ring-red-500'
-                          : 'focus-visible:ring-[#D4AF37]'
+                          ? 'h-8 text-xs border-red-500 focus-visible:ring-red-500 disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-100'
+                          : 'h-8 text-xs focus-visible:ring-[#D4AF37] disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-100'
                       }
                     />
                     {formErrors.guardianEmail && (
@@ -1664,64 +1833,6 @@ export default function Students() {
                       </p>
                     )}
                   </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label className="font-semibold text-[#1E2A3A]">E-mail</Label>
-                  <Input
-                    type="text"
-                    inputMode="email"
-                    placeholder="aluno@email.com"
-                    value={formEmail}
-                    onChange={(e) => setFormEmail(e.target.value)}
-                    className={
-                      formErrors.email
-                        ? 'border-red-500 focus-visible:ring-red-500'
-                        : 'focus-visible:ring-[#D4AF37]'
-                    }
-                  />
-                  {formErrors.email && (
-                    <p className="text-[10px] text-red-600 font-medium">{formErrors.email}</p>
-                  )}
-                </div>
-                <div className="space-y-1">
-                  <Label className="font-semibold text-[#1E2A3A]">Telefone / WhatsApp</Label>
-                  <Input
-                    placeholder="(84) 98830-9717"
-                    value={formPhone}
-                    onChange={(e) => setFormPhone(maskPhone(e.target.value))}
-                    className="focus-visible:ring-[#D4AF37]"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label className="font-semibold text-[#1E2A3A]">CPF</Label>
-                  <Input
-                    placeholder="000.000.000-00"
-                    value={formCpf}
-                    onChange={(e) => setFormCpf(maskCpf(e.target.value))}
-                    className={
-                      formErrors.cpf
-                        ? 'border-red-500 focus-visible:ring-red-500'
-                        : 'focus-visible:ring-[#D4AF37]'
-                    }
-                  />
-                  {formErrors.cpf && (
-                    <p className="text-[10px] text-red-600 font-medium">{formErrors.cpf}</p>
-                  )}
-                </div>
-                <div className="space-y-1">
-                  <Label className="font-semibold text-[#1E2A3A]">Data de Nascimento</Label>
-                  <Input
-                    type="date"
-                    value={formBirthDate}
-                    onChange={(e) => setFormBirthDate(e.target.value)}
-                    className="focus-visible:ring-[#D4AF37]"
-                  />
                 </div>
               </div>
 
