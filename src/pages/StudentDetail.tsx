@@ -45,6 +45,7 @@ import type {
 import { useToast } from '@/hooks/use-toast'
 import { getStudentPhotoUrl } from '@/lib/studentPhoto'
 import { formatPhoneDisplay } from '@/lib/formatters'
+import { getStudentStatusDisplay } from '@/lib/studentStatus'
 
 export default function StudentDetail() {
   const { id } = useParams<{ id: string }>()
@@ -395,21 +396,18 @@ export default function StudentDetail() {
                 (mobile: abaixo da foto, com separador; sm+: ao lado da foto, à direita) */}
             <div className="min-w-0 flex-1 space-y-3 pt-4 border-t border-slate-100 sm:border-t-0 sm:pt-6">
               <div className="flex flex-wrap items-center gap-2">
-                <Badge
-                  className={
-                    student.status === 'ativo'
-                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200 font-bold text-[10px]'
-                      : 'bg-slate-100 text-slate-500 border-slate-200 text-[10px]'
-                  }
-                >
-                  {student.status === 'ativo' ? 'Ativo' : 'Inativo'}
-                </Badge>
-                {student.fee_suspended && (
+                {(() => {
+                  // Semântica única de status: TR do Bubble = Inativo (nunca "Ativo" + "Trancada");
+                  // fee_suspended (mensalidade congelada) = "Isento" (aluno frequente que não paga).
+                  const st = getStudentStatusDisplay(student)
+                  return <Badge className={st.badgeClass}>{st.label}</Badge>
+                })()}
+                {student.situation === 'atestado' && (
                   <Badge
                     variant="outline"
-                    className="text-[10px] bg-amber-50 text-amber-700 border-amber-300"
+                    className="text-[10px] bg-blue-50 text-blue-700 border-blue-200"
                   >
-                    Mensalidade Trancada
+                    Atestado
                   </Badge>
                 )}
               </div>

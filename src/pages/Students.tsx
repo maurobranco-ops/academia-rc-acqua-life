@@ -46,6 +46,7 @@ import { academyService } from '@/services/academy'
 import { useRealtime } from '@/hooks/use-realtime'
 import { MapPin } from 'lucide-react'
 import { getStudentPhotoUrl } from '@/lib/studentPhoto'
+import { getStudentStatusDisplay } from '@/lib/studentStatus'
 import { groupStudentsByGuardian } from '@/lib/familyRules'
 import type {
   StudentRecord,
@@ -59,6 +60,7 @@ import { maskCpf, maskPhone, maskCep, isValidCpf, isValidEmail } from '@/lib/for
 import { fetchAddressByCep } from '@/lib/viacep'
 import { compressImage } from '@/lib/imageCompression'
 import { StudentPhotoPicker } from '@/components/StudentPhotoPicker'
+import { getStudentStatusDisplay } from '@/lib/studentStatus'
 
 export default function Students() {
   const navigate = useNavigate()
@@ -999,13 +1001,9 @@ export default function Students() {
                                   {plan?.name || (isFam ? 'Plano Família' : 'Plano Integral')}
                                 </Badge>
                                 <Badge
-                                  className={
-                                    st.status === 'ativo'
-                                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px]'
-                                      : 'bg-red-50 text-red-600 border-red-200 text-[10px]'
-                                  }
+                                  className={`text-[10px] border ${getStudentStatusDisplay(st).badgeClass}`}
                                 >
-                                  {st.status === 'ativo' ? 'Ativo' : 'Inativo'}
+                                  {getStudentStatusDisplay(st).label}
                                 </Badge>
                                 {studentClasses.length > 0 && (
                                   <span className="text-[11px] text-[#6C757D]">
@@ -1176,14 +1174,8 @@ export default function Students() {
                           </td>
 
                           <td className="px-3 py-3.5">
-                            <Badge
-                              className={
-                                st.status === 'ativo'
-                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200 font-bold'
-                                  : 'bg-red-50 text-red-600 border-red-200'
-                              }
-                            >
-                              {st.status === 'ativo' ? 'Ativo' : 'Inativo'}
+                            <Badge className={getStudentStatusDisplay(st).badgeClass}>
+                              {getStudentStatusDisplay(st).label}
                             </Badge>
                           </td>
 
@@ -1419,14 +1411,8 @@ export default function Students() {
                                 <Badge className="bg-[#0F1B3D]/5 text-[#0F1B3D] border-[#0F1B3D]/20 text-[10px]">
                                   {plan?.name || 'Plano Padrão'}
                                 </Badge>
-                                <Badge
-                                  className={
-                                    st.status === 'ativo'
-                                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px]'
-                                      : 'bg-red-50 text-red-600 border-red-200 text-[10px]'
-                                  }
-                                >
-                                  {st.status === 'ativo' ? 'Ativo' : 'Inativo'}
+                                <Badge className={getStudentStatusDisplay(st).badgeClass}>
+                                  {getStudentStatusDisplay(st).label}
                                 </Badge>
                                 {st.guardian_name && (
                                   <span className="text-[11px] text-[#6C757D]">
@@ -1541,14 +1527,8 @@ export default function Students() {
                             <Badge className="bg-[#0F1B3D]/5 text-[#0F1B3D] border-[#0F1B3D]/20 text-[10px]">
                               {plan?.name || 'Plano Padrão'}
                             </Badge>
-                            <Badge
-                              className={
-                                st.status === 'ativo'
-                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px]'
-                                  : 'bg-red-50 text-red-600 border-red-200 text-[10px]'
-                              }
-                            >
-                              {st.status === 'ativo' ? 'Ativo' : 'Inativo'}
+                            <Badge className={getStudentStatusDisplay(st).badgeClass}>
+                              {getStudentStatusDisplay(st).label}
                             </Badge>
                             <span className="text-[11px] text-amber-700 font-medium italic">
                               Não matriculado em turma

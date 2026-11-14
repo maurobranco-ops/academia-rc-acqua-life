@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   Plus,
   Users,
@@ -51,7 +51,78 @@ import type {
 } from '@/types/database'
 import { useToast } from '@/hooks/use-toast'
 import { getStudentPhotoUrl } from '@/lib/studentPhoto'
+import { getStudentStatusDisplay } from '@/lib/studentStatus'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+
+interface ClassEnrollmentRowProps {
+  enrollment: EnrollmentRecord
+  onOpenStudent: () => void
+  onRemove: () => void
+}
+
+/**
+ * Linha de aluno matriculado no modal "Gerenciar Matrículas":
+ * tocar na tarja/linha inteira abre a edição do aluno; o botão Remover
+ * continua desvinculando apenas a matrícula (sem abrir o aluno).
+ */
+function ClassEnrollmentRow({ enrollment, onOpenStudent, onRemove }: ClassEnrollmentRowProps) {
+  const student = enrollment.expand?.student_id
+  const photoUrl = student ? getStudentPhotoUrl(student) : null
+  const status = getStudentStatusDisplay(student)
+
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onOpenStudent}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onOpenStudent()
+        }
+      }}
+      className="p-3 flex items-center justify-between hover:bg-slate-50 cursor-pointer transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#17A2B8]"
+      title="Abrir ficha do aluno"
+    >
+      <div className="flex items-center gap-2.5 min-w-0">
+        <Avatar className="w-10 h-10 rounded-lg bg-slate-100 border border-slate-200 shrink-0">
+          {photoUrl ? (
+            <AvatarImage
+              src={photoUrl}
+              alt={student?.name || ''}
+              className="object-cover rounded-lg"
+            />
+          ) : null}
+          <AvatarFallback className="text-xs bg-[#0F1B3D] text-[#D4AF37] font-bold rounded-lg">
+            {(student?.name || 'AL').slice(0, 2).toUpperCase()}
+          </AvatarFallback>
+        </Avatar>
+        <div className="min-w-0">
+          <p className="text-xs font-bold text-[#0F1B3D] truncate">{student?.name || 'Aluno'}</p>
+          <p className="text-[11px] text-[#6C757D] truncate">
+            {student?.phone || student?.email || 'Sem contato'}
+          </p>
+        </div>
+      </div>
+      <div className="flex items-center gap-2 shrink-0">
+        <Badge variant="outline" className={`text-[10px] border ${status.badgeClass}`}>
+          {status.label}
+        </Badge>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={(e) => {
+            e.stopPropagation()
+            onRemove()
+          }}
+          className="h-7 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
+        >
+          Remover
+        </Button>
+      </div>
+    </div>
+  )
+}
 
 const DAYS_OF_WEEK = [
   { id: 'seg', label: 'Segunda' },
@@ -64,6 +135,7 @@ const DAYS_OF_WEEK = [
 ]
 
 export default function Classes() {
+  const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const { toast } = useToast()
 
@@ -281,11 +353,32 @@ export default function Classes() {
     return map
   }, [enrollments])
 
-  // Get enrolled students for selected detail modal
+  // Get enrolled students for selected detail modal.
+  // Ordenado por nome; separado em ativos (ativo/isento) e inativos/trancados, cada grupo com contagem.
   const selectedClassEnrollments = useMemo(() => {
     if (!selectedClass) return []
-    return enrollments.filter((e) => e.class_id === selectedClass.id)
+    const list = enrollments
+      .filter((e) => e.class_id === selectedClass.id)
+      .slice()
+      .sort((a, b) => {
+        const na = (a.expand?.student_id?.name || '').toLocaleLowerCase('pt-BR')
+        const nb = (b.expand?.student_id?.name || '').toLocaleLowerCase('pt-BR')
+        return na.localeCompare(nb, 'pt-BR')
+      })
+    const isActiveLike = (e: EnrollmentRecord) => {
+      const st = e.expand?.student_id
+      if (!st) return true
+      return getStudentStatusDisplay(st).key !== 'inativo'
+    }
+    return {
+      active: list.filter(isActiveLike),
+      inactive: list.filter((e) => !isActiveLike(e)),
+    }
   }, [selectedClass, enrollments])
+
+  const navigateToStudent = (studentId?: string) => {
+    if (studentId) navigate(`/alunos/${studentId}`)
+  }
 
   if (loading) {
     return (
@@ -484,7 +577,10 @@ export default function Classes() {
           <div className="p-4 overflow-x-auto">
             <div className="grid grid-cols-7 gap-3 min-w-[840px]">
               {DAYS_OF_WEEK.map((day) => {
-                const dayClasses = classes.filter((c) => (c.schedule_days || []).includes(day.id))
+                const dayClasses = classes
+                  .filter((c) => (c.schedule_days || []).includes(day.id))
+                  .slice()
+                  .sort((a, b) => (a.schedule_time || '').localeCompare(b.schedule_time || ''))
 
                 return (
                   <div key={day.id} className="bg-[#F5F7FA] rounded-xl p-3 border border-[#E0E4EA]">
@@ -510,7 +606,9 @@ export default function Classes() {
                                   : 'bg-teal-50/80 border-teal-200 hover:border-teal-400'
                               }`}
                             >
-                              <div className="font-bold text-[#0F1B3D] truncate">{dc.name}</div>
+                              <div className="font-bold text-[#0F1B3D] break-words leading-snug whitespace-normal">
+                                {dc.name}
+                              </div>
                               <div className="text-[11px] font-semibold text-[#17A2B8] mt-0.5">
                                 {dc.schedule_time}
                               </div>
@@ -702,7 +800,9 @@ export default function Classes() {
           <div className="py-4 space-y-4">
             <div className="flex items-center justify-between">
               <span className="text-sm font-bold text-[#1E2A3A]">
-                Alunos Matriculados ({selectedClassEnrollments.length} de {selectedClass?.capacity})
+                Alunos Matriculados (
+                {selectedClassEnrollments.active.length + selectedClassEnrollments.inactive.length}{' '}
+                de {selectedClass?.capacity})
               </span>
               <Button
                 size="sm"
@@ -713,7 +813,8 @@ export default function Classes() {
               </Button>
             </div>
 
-            {selectedClassEnrollments.length === 0 ? (
+            {selectedClassEnrollments.active.length === 0 &&
+            selectedClassEnrollments.inactive.length === 0 ? (
               <div className="p-8 text-center border border-dashed rounded-xl border-[#E0E4EA]">
                 <Users className="w-8 h-8 text-slate-300 mx-auto mb-2" />
                 <p className="text-xs text-[#6C757D]">
@@ -721,56 +822,48 @@ export default function Classes() {
                 </p>
               </div>
             ) : (
-              <div className="max-h-64 overflow-y-auto divide-y divide-[#E0E4EA] border border-[#E0E4EA] rounded-xl">
-                {selectedClassEnrollments.map((enr) => {
-                  const student = enr.expand?.student_id
-                  const photoUrl = student ? getStudentPhotoUrl(student) : null
-                  return (
-                    <div
-                      key={enr.id}
-                      className="p-3 flex items-center justify-between hover:bg-slate-50 transition"
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <Avatar className="w-10 h-10 rounded-lg bg-slate-100 border border-slate-200 shrink-0">
-                          {photoUrl ? (
-                            <AvatarImage
-                              src={photoUrl}
-                              alt={student?.name || ''}
-                              className="object-cover rounded-lg"
-                            />
-                          ) : null}
-                          <AvatarFallback className="text-xs bg-[#0F1B3D] text-[#D4AF37] font-bold rounded-lg">
-                            {(student?.name || 'AL').slice(0, 2).toUpperCase()}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div>
-                          <p className="text-xs font-bold text-[#0F1B3D]">
-                            {student?.name || 'Aluno'}
-                          </p>
-                          <p className="text-[11px] text-[#6C757D]">
-                            {student?.phone || student?.email || 'Sem contato'}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Badge
-                          variant="outline"
-                          className="text-[10px] bg-green-50 text-green-700 border-green-200"
-                        >
-                          {student?.status || 'ativo'}
-                        </Badge>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleRemoveEnrollment(enr.id)}
-                          className="h-7 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
-                        >
-                          Remover
-                        </Button>
-                      </div>
+              <div className="space-y-4">
+                {/* Bloco 1: alunos ativos (inclui "Isento" — mensalidade congelada) */}
+                <div>
+                  <p className="text-sm font-bold text-[#1E2A3A] mb-2">
+                    Alunos Matriculados ({selectedClassEnrollments.active.length})
+                  </p>
+                  {selectedClassEnrollments.active.length === 0 ? (
+                    <p className="text-xs text-[#6C757D] italic px-3 py-3 border border-dashed rounded-xl border-[#E0E4EA]">
+                      Nenhum aluno ativo matriculado nesta turma.
+                    </p>
+                  ) : (
+                    <div className="max-h-64 overflow-y-auto divide-y divide-[#E0E4EA] border border-[#E0E4EA] rounded-xl">
+                      {selectedClassEnrollments.active.map((enr) => (
+                        <ClassEnrollmentRow
+                          key={enr.id}
+                          enrollment={enr}
+                          onOpenStudent={() => navigateToStudent(enr.expand?.student_id?.id)}
+                          onRemove={() => handleRemoveEnrollment(enr.id)}
+                        />
+                      ))}
                     </div>
-                  )
-                })}
+                  )}
+                </div>
+
+                {/* Bloco 2: alunos inativos/trancados, logo abaixo, com contagem */}
+                {selectedClassEnrollments.inactive.length > 0 && (
+                  <div>
+                    <p className="text-sm font-bold text-[#1E2A3A] mb-2">
+                      Alunos Inativos/Trancados ({selectedClassEnrollments.inactive.length})
+                    </p>
+                    <div className="max-h-48 overflow-y-auto divide-y divide-[#E0E4EA] border border-[#E0E4EA] rounded-xl bg-slate-50/40">
+                      {selectedClassEnrollments.inactive.map((enr) => (
+                        <ClassEnrollmentRow
+                          key={enr.id}
+                          enrollment={enr}
+                          onOpenStudent={() => navigateToStudent(enr.expand?.student_id?.id)}
+                          onRemove={() => handleRemoveEnrollment(enr.id)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>

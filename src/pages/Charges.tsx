@@ -26,6 +26,7 @@ import {
 } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { getStudentPhotoUrl, normalizeName } from '@/lib/studentPhoto'
+import { getStudentStatusDisplay } from '@/lib/studentStatus'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -887,13 +888,9 @@ export default function Charges() {
                             {selectedModalStudent.name}
                           </p>
                           <Badge
-                            className={`text-[9px] px-1.5 py-0 ${
-                              selectedModalStudent.status === 'ativo'
-                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                : 'bg-red-50 text-red-600 border-red-200'
-                            }`}
+                            className={`text-[9px] px-1.5 py-0 border ${getStudentStatusDisplay(selectedModalStudent).badgeClass}`}
                           >
-                            {selectedModalStudent.status === 'ativo' ? 'Ativo' : 'Inativo'}
+                            {getStudentStatusDisplay(selectedModalStudent).label}
                           </Badge>
                         </div>
                         <p className="text-[11px] text-slate-500 truncate">
