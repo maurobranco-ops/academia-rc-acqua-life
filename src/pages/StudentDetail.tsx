@@ -14,7 +14,6 @@ import {
   Trash2,
   X,
   Camera,
-  Upload,
   Sparkles,
   Edit,
   Ban,
@@ -341,9 +340,28 @@ export default function StudentDetail() {
               {student.name}
             </h2>
 
-            <div className="flex flex-col items-start sm:flex-row sm:items-end gap-4 w-full">
-              <div className="relative group shrink-0">
-                <Avatar className="w-24 h-24 border-4 border-white shadow-lg bg-slate-100">
+            <div className="w-full sm:w-auto">
+              {/* Foto do aluno — a própria foto é o botão de troca (mobile e desktop) */}
+              <input
+                type="file"
+                ref={photoInputRef}
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                className="hidden"
+                onChange={(e) => {
+                  if (e.target.files && e.target.files[0]) {
+                    handlePhotoUpload(e.target.files[0])
+                  }
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => photoInputRef.current?.click()}
+                disabled={uploadingPhoto}
+                className="group relative block cursor-pointer rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D4AF37] focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:cursor-not-allowed"
+                title="Trocar foto do aluno"
+                aria-label="Trocar foto do aluno"
+              >
+                <Avatar className="w-24 h-24 border-4 border-white shadow-lg bg-slate-100 transition-all group-hover:ring-2 group-hover:ring-[#D4AF37]/70 group-focus-visible:ring-2 group-focus-visible:ring-[#D4AF37]">
                   {getStudentPhotoUrl(student) ? (
                     <AvatarImage
                       src={getStudentPhotoUrl(student) || ''}
@@ -356,128 +374,101 @@ export default function StudentDetail() {
                   </AvatarFallback>
                 </Avatar>
 
-                {/* Botão de Trocar Foto Sobreposto */}
-                <input
-                  type="file"
-                  ref={photoInputRef}
-                  accept="image/jpeg,image/png,image/webp,image/gif"
-                  className="hidden"
-                  onChange={(e) => {
-                    if (e.target.files && e.target.files[0]) {
-                      handlePhotoUpload(e.target.files[0])
-                    }
-                  }}
-                />
-                <button
-                  onClick={() => photoInputRef.current?.click()}
-                  disabled={uploadingPhoto}
-                  className="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center text-white transition-opacity cursor-pointer border-4 border-transparent"
-                  title="Trocar foto do aluno"
-                >
+                {/* Dica visual 1: ícone de câmera discreto no canto da foto */}
+                <span className="absolute bottom-0.5 right-0.5 flex h-7 w-7 items-center justify-center rounded-full bg-[#D4AF37] text-[#0F1B3D] shadow-md ring-2 ring-white">
                   {uploadingPhoto ? (
-                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
                   ) : (
-                    <>
-                      <Camera className="w-5 h-5 mb-0.5" />
-                      <span className="text-[10px] font-bold">Trocar foto</span>
-                    </>
+                    <Camera className="w-3.5 h-3.5" />
                   )}
-                </button>
-              </div>
+                </span>
 
-              <div className="flex-1 min-w-0 w-full sm:mb-1">
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => photoInputRef.current?.click()}
-                    disabled={uploadingPhoto}
-                    className="h-7 text-xs border-slate-300 text-slate-700 hover:bg-slate-50 flex items-center gap-1.5"
-                  >
-                    <Upload className="w-3.5 h-3.5 text-[#17A2B8]" />
-                    {uploadingPhoto ? 'Enviando...' : 'Trocar foto'}
-                  </Button>
-                </div>
-                <div className="flex flex-wrap items-center gap-2 mt-2">
-                  <Badge
-                    className={
-                      student.status === 'ativo'
-                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200 font-bold text-[10px]'
-                        : 'bg-slate-100 text-slate-500 border-slate-200 text-[10px]'
-                    }
-                  >
-                    {student.status === 'ativo' ? 'Ativo' : 'Inativo'}
-                  </Badge>
-                  {student.raw_situation && (
-                    <Badge
-                      variant="outline"
-                      className="text-[10px] bg-slate-50 text-slate-700 border-slate-300"
-                    >
-                      Situação: {student.raw_situation}
-                    </Badge>
-                  )}
-                  {student.fee_suspended && (
-                    <Badge
-                      variant="outline"
-                      className="text-[10px] bg-amber-50 text-amber-700 border-amber-300"
-                    >
-                      Mensalidade Trancada
-                    </Badge>
-                  )}
-                </div>
-                <p className="text-xs text-[#6C757D] font-medium mt-1">
-                  {student.monthly_fee || student.discounted_fee ? (
-                    <>
-                      Mensalidade:{' '}
-                      <strong className="text-[#0F1B3D] font-bold">
-                        R$ {(student.monthly_fee ?? plan?.monthly_price ?? 110).toFixed(2)}
-                      </strong>
-                      {student.discounted_fee ? (
-                        <>
-                          {' '}
-                          • Com Desconto:{' '}
-                          <strong className="text-emerald-700 font-bold">
-                            R$ {student.discounted_fee.toFixed(2)}
-                          </strong>
-                        </>
-                      ) : null}
-                      {student.due_day ? ` • Vencimento dia ${student.due_day}` : ''}
-                    </>
-                  ) : (
-                    <>
-                      Plano Vigente:{' '}
-                      <strong className="text-[#0F1B3D]">{plan?.name || 'Padrão'}</strong>
-                      {plan?.monthly_price === 0 ? (
-                        <span className="text-emerald-700 font-bold ml-1">
-                          (Isento de mensalidade)
-                        </span>
-                      ) : (
-                        ` (R$ ${(plan?.monthly_price ?? 110).toFixed(2)}/mês)`
-                      )}
-                      {student.due_day ? ` • Vencimento dia ${student.due_day}` : ''}
-                    </>
-                  )}
-                </p>
-              </div>
+                {/* Dica visual 2: véu escuro com ícone apenas no hover/focus (desktop) */}
+                <span className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center rounded-full bg-black/50 text-white opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
+                  <Camera className="w-5 h-5 mb-0.5" />
+                  <span className="text-[10px] font-bold">Trocar foto</span>
+                </span>
+              </button>
             </div>
           </div>
 
-          <div className="flex flex-col gap-3 pt-4 border-t border-slate-100 text-xs text-[#6C757D] sm:grid sm:grid-cols-3 sm:gap-4">
-            <div className="flex items-center gap-2">
-              <Mail className="w-4 h-4 text-[#17A2B8]" />
-              <span>{student.email || student.guardian_email || 'E-mail não cadastrado'}</span>
+          {/* Quadro de dados: badges de status + mensalidade + contatos */}
+          <div className="space-y-3 pt-4 border-t border-slate-100">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge
+                className={
+                  student.status === 'ativo'
+                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200 font-bold text-[10px]'
+                    : 'bg-slate-100 text-slate-500 border-slate-200 text-[10px]'
+                }
+              >
+                {student.status === 'ativo' ? 'Ativo' : 'Inativo'}
+              </Badge>
+              {student.raw_situation && (
+                <Badge
+                  variant="outline"
+                  className="text-[10px] bg-slate-50 text-slate-700 border-slate-300"
+                >
+                  Situação: {student.raw_situation}
+                </Badge>
+              )}
+              {student.fee_suspended && (
+                <Badge
+                  variant="outline"
+                  className="text-[10px] bg-amber-50 text-amber-700 border-amber-300"
+                >
+                  Mensalidade Trancada
+                </Badge>
+              )}
             </div>
-            <div className="flex items-center gap-2">
-              <Phone className="w-4 h-4 text-[#17A2B8]" />
-              <span className="break-all">
-                {formatPhoneDisplay(
-                  student.whatsapp || student.phone || student.guardian_phone || '',
-                ) || 'Sem telefone'}
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <FileText className="w-4 h-4 text-[#17A2B8]" />
-              <span>CPF: {student.cpf || student.guardian_cpf || 'Não informado'}</span>
+            <p className="text-xs text-[#6C757D] font-medium">
+              {student.monthly_fee || student.discounted_fee ? (
+                <>
+                  Mensalidade:{' '}
+                  <strong className="text-[#0F1B3D] font-bold">
+                    R$ {(student.monthly_fee ?? plan?.monthly_price ?? 110).toFixed(2)}
+                  </strong>
+                  {student.discounted_fee ? (
+                    <>
+                      {' '}
+                      • Com Desconto:{' '}
+                      <strong className="text-emerald-700 font-bold">
+                        R$ {student.discounted_fee.toFixed(2)}
+                      </strong>
+                    </>
+                  ) : null}
+                  {student.due_day ? ` • Vencimento dia ${student.due_day}` : ''}
+                </>
+              ) : (
+                <>
+                  Plano Vigente:{' '}
+                  <strong className="text-[#0F1B3D]">{plan?.name || 'Padrão'}</strong>
+                  {plan?.monthly_price === 0 ? (
+                    <span className="text-emerald-700 font-bold ml-1">(Isento de mensalidade)</span>
+                  ) : (
+                    ` (R$ ${(plan?.monthly_price ?? 110).toFixed(2)}/mês)`
+                  )}
+                  {student.due_day ? ` • Vencimento dia ${student.due_day}` : ''}
+                </>
+              )}
+            </p>
+            <div className="flex flex-col gap-3 text-xs text-[#6C757D] sm:grid sm:grid-cols-3 sm:gap-4">
+              <div className="flex items-center gap-2">
+                <Mail className="w-4 h-4 text-[#17A2B8]" />
+                <span>{student.email || student.guardian_email || 'E-mail não cadastrado'}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Phone className="w-4 h-4 text-[#17A2B8]" />
+                <span className="break-all">
+                  {formatPhoneDisplay(
+                    student.whatsapp || student.phone || student.guardian_phone || '',
+                  ) || 'Sem telefone'}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <FileText className="w-4 h-4 text-[#17A2B8]" />
+                <span>CPF: {student.cpf || student.guardian_cpf || 'Não informado'}</span>
+              </div>
             </div>
           </div>
         </CardContent>
