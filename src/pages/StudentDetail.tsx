@@ -331,16 +331,16 @@ export default function StudentDetail() {
 
       {/* Header Profile Card */}
       <Card className="bg-white border-[#E0E4EA] rounded-2xl shadow-xs overflow-hidden">
-        <div className="h-24 bg-gradient-to-r from-[#0F1B3D] via-[#1B2A5B] to-[#17A2B8]" />
-        <CardContent className="relative px-4 pb-6 pt-0 sm:px-6">
-          {/* Mobile: nome em cima, foto embaixo, badges/dados em largura total; sm+: foto à esquerda, como antes */}
-          <div className="flex flex-col sm:flex-row items-start sm:items-end justify-between gap-4 -mt-12 mb-4">
-            {/* Nome — fica sobre o banner em ambas as resoluções */}
-            <h2 className="order-first w-full sm:w-auto break-words hyphens-auto px-4 sm:px-0 -mt-4 sm:mt-0 mb-0 sm:mb-2 sm:max-w-[calc(100%-7rem)] sm:order-none text-xl leading-tight sm:text-2xl font-bold text-[#ffffff]">
-              {student.name}
-            </h2>
-
-            <div className="w-full sm:w-auto">
+        {/* Nome do aluno SEMPRE visível sobre o banner azul (mobile e desktop) — o banner cresce se o nome quebrar */}
+        <div className="min-h-[6rem] bg-gradient-to-r from-[#0F1B3D] via-[#1B2A5B] to-[#17A2B8] flex items-end px-4 pt-4 pb-3 sm:px-6">
+          <h2 className="text-xl leading-tight sm:text-2xl font-bold text-white break-words hyphens-auto sm:ml-28">
+            {student.name}
+          </h2>
+        </div>
+        <CardContent className="relative px-4 pb-6 sm:px-6">
+          {/* Foto à ESQUERDA em ambas as resoluções (espelhando o mobile); sm+: quadro de dados ao lado da foto; mobile: dados abaixo */}
+          <div className="flex flex-col sm:flex-row sm:items-start gap-4 sm:gap-6 pt-4 sm:pt-0 sm:-mt-12">
+            <div className="shrink-0">
               {/* Foto do aluno — a própria foto é o botão de troca (mobile e desktop) */}
               <input
                 type="file"
@@ -390,84 +390,79 @@ export default function StudentDetail() {
                 </span>
               </button>
             </div>
-          </div>
 
-          {/* Quadro de dados: badges de status + mensalidade + contatos */}
-          <div className="space-y-3 pt-4 border-t border-slate-100">
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge
-                className={
-                  student.status === 'ativo'
-                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200 font-bold text-[10px]'
-                    : 'bg-slate-100 text-slate-500 border-slate-200 text-[10px]'
-                }
-              >
-                {student.status === 'ativo' ? 'Ativo' : 'Inativo'}
-              </Badge>
-              {student.raw_situation && (
+            {/* Quadro de dados: badges de status + mensalidade + contatos
+                (mobile: abaixo da foto, com separador; sm+: ao lado da foto, à direita) */}
+            <div className="min-w-0 flex-1 space-y-3 pt-4 border-t border-slate-100 sm:border-t-0 sm:pt-6">
+              <div className="flex flex-wrap items-center gap-2">
                 <Badge
-                  variant="outline"
-                  className="text-[10px] bg-slate-50 text-slate-700 border-slate-300"
+                  className={
+                    student.status === 'ativo'
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200 font-bold text-[10px]'
+                      : 'bg-slate-100 text-slate-500 border-slate-200 text-[10px]'
+                  }
                 >
-                  Situação: {student.raw_situation}
+                  {student.status === 'ativo' ? 'Ativo' : 'Inativo'}
                 </Badge>
-              )}
-              {student.fee_suspended && (
-                <Badge
-                  variant="outline"
-                  className="text-[10px] bg-amber-50 text-amber-700 border-amber-300"
-                >
-                  Mensalidade Trancada
-                </Badge>
-              )}
-            </div>
-            <p className="text-xs text-[#6C757D] font-medium">
-              {student.monthly_fee || student.discounted_fee ? (
-                <>
-                  Mensalidade:{' '}
-                  <strong className="text-[#0F1B3D] font-bold">
-                    R$ {(student.monthly_fee ?? plan?.monthly_price ?? 110).toFixed(2)}
-                  </strong>
-                  {student.discounted_fee ? (
-                    <>
-                      {' '}
-                      • Com Desconto:{' '}
-                      <strong className="text-emerald-700 font-bold">
-                        R$ {student.discounted_fee.toFixed(2)}
-                      </strong>
-                    </>
-                  ) : null}
-                  {student.due_day ? ` • Vencimento dia ${student.due_day}` : ''}
-                </>
-              ) : (
-                <>
-                  Plano Vigente:{' '}
-                  <strong className="text-[#0F1B3D]">{plan?.name || 'Padrão'}</strong>
-                  {plan?.monthly_price === 0 ? (
-                    <span className="text-emerald-700 font-bold ml-1">(Isento de mensalidade)</span>
-                  ) : (
-                    ` (R$ ${(plan?.monthly_price ?? 110).toFixed(2)}/mês)`
-                  )}
-                  {student.due_day ? ` • Vencimento dia ${student.due_day}` : ''}
-                </>
-              )}
-            </p>
-            <div className="flex flex-col gap-3 text-xs text-[#6C757D] sm:grid sm:grid-cols-3 sm:gap-4">
-              <div className="flex items-center gap-2">
-                <Mail className="w-4 h-4 text-[#17A2B8]" />
-                <span>{student.email || student.guardian_email || 'E-mail não cadastrado'}</span>
+                {student.fee_suspended && (
+                  <Badge
+                    variant="outline"
+                    className="text-[10px] bg-amber-50 text-amber-700 border-amber-300"
+                  >
+                    Mensalidade Trancada
+                  </Badge>
+                )}
               </div>
-              <div className="flex items-center gap-2">
-                <Phone className="w-4 h-4 text-[#17A2B8]" />
-                <span className="break-all">
-                  {formatPhoneDisplay(
-                    student.whatsapp || student.phone || student.guardian_phone || '',
-                  ) || 'Sem telefone'}
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <FileText className="w-4 h-4 text-[#17A2B8]" />
-                <span>CPF: {student.cpf || student.guardian_cpf || 'Não informado'}</span>
+              <p className="text-xs text-[#6C757D] font-medium">
+                {student.monthly_fee || student.discounted_fee ? (
+                  <>
+                    Mensalidade:{' '}
+                    <strong className="text-[#0F1B3D] font-bold">
+                      R$ {(student.monthly_fee ?? plan?.monthly_price ?? 110).toFixed(2)}
+                    </strong>
+                    {student.discounted_fee ? (
+                      <>
+                        {' '}
+                        • Com Desconto:{' '}
+                        <strong className="text-emerald-700 font-bold">
+                          R$ {student.discounted_fee.toFixed(2)}
+                        </strong>
+                      </>
+                    ) : null}
+                    {student.due_day ? ` • Vencimento dia ${student.due_day}` : ''}
+                  </>
+                ) : (
+                  <>
+                    Plano Vigente:{' '}
+                    <strong className="text-[#0F1B3D]">{plan?.name || 'Padrão'}</strong>
+                    {plan?.monthly_price === 0 ? (
+                      <span className="text-emerald-700 font-bold ml-1">
+                        (Isento de mensalidade)
+                      </span>
+                    ) : (
+                      ` (R$ ${(plan?.monthly_price ?? 110).toFixed(2)}/mês)`
+                    )}
+                    {student.due_day ? ` • Vencimento dia ${student.due_day}` : ''}
+                  </>
+                )}
+              </p>
+              <div className="flex flex-col gap-3 text-xs text-[#6C757D] sm:grid sm:grid-cols-3 sm:gap-4">
+                <div className="flex items-center gap-2">
+                  <Mail className="w-4 h-4 text-[#17A2B8]" />
+                  <span>{student.email || student.guardian_email || 'E-mail não cadastrado'}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Phone className="w-4 h-4 text-[#17A2B8]" />
+                  <span className="break-all">
+                    {formatPhoneDisplay(
+                      student.whatsapp || student.phone || student.guardian_phone || '',
+                    ) || 'Sem telefone'}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-[#17A2B8]" />
+                  <span>CPF: {student.cpf || student.guardian_cpf || 'Não informado'}</span>
+                </div>
               </div>
             </div>
           </div>
