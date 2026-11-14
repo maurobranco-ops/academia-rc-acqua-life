@@ -1,7 +1,9 @@
 import { useState, useEffect, useMemo } from 'react'
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft,
+  Users,
+  ChevronDown,
   Mail,
   Phone,
   FileText,
@@ -17,6 +19,14 @@ import {
   Edit,
   Ban,
 } from 'lucide-react'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -49,7 +59,6 @@ import { getStudentStatusDisplay } from '@/lib/studentStatus'
 export default function StudentDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const [searchParams] = useSearchParams()
   const { toast } = useToast()
 
   const [student, setStudent] = useState<StudentRecord | null>(null)
@@ -59,14 +68,23 @@ export default function StudentDetail() {
   const [enrollments, setEnrollments] = useState<EnrollmentRecord[]>([])
   const [classes, setClasses] = useState<ClassRecord[]>([])
   const [loading, setLoading] = useState(true)
-  // Contexto de origem: quando a ficha foi aberta pelo gerenciamento de matrículas
-  // de uma turma (/alunos/:id?de=turma:<id>), o botão "Voltar para Turma" é exibido.
-  // Vive na URL (não no state de navegação) para sobreviver à edição do aluno e ao F5.
-  const fromClassRaw = searchParams.get('de')
-  const fromClassId = fromClassRaw?.startsWith('turma:')
-    ? fromClassRaw.slice('turma:'.length)
-    : null
-  const fromClassName = fromClassRaw?.startsWith('turma:') ? searchParams.get('nome') : null
+
+  // Botão "Voltar para Turma" derivado dos DADOS DE MATRÍCULA do aluno (não da
+  // navegação): lista fixa das turmas em que ele está matriculado, carregada junto
+  // com os dados da ficha — logo sobrevive à edição, ao F5 e a abrir a ficha
+  // direto pela lista de alunos ou pela busca.
+  const studentClasses = useMemo(() => {
+    const classById = new Map(classes.map((c) => [c.id, c]))
+    const seen = new Set<string>()
+    return enrollments
+      .map((enr) => classById.get(enr.class_id))
+      .filter((cls): cls is ClassRecord => {
+        if (!cls || seen.has(cls.id)) return false
+        seen.add(cls.id)
+        return true
+      })
+  }, [enrollments, classes])
+  const backToClassLabel = studentClasses.map((c) => c.name).join(', ')
 
   // Cancel charge modal state
   const [cancelModalOpen, setCancelModalOpen] = useState(false)
@@ -274,21 +292,62 @@ export default function StudentDetail() {
             <ArrowLeft className="w-4 h-4 mr-1.5" /> Voltar para Alunos
           </Button>
 
-          {fromClassId && (
+          {studentClasses.length === 1 && (
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => navigate(`/turmas?turma=${fromClassId}`)}
+              onClick={() => navigate(`/turmas?turma=${studentClasses[0].id}`)}
               className="text-xs font-semibold text-[#17A2B8] hover:text-[#0F1B3D] hover:bg-slate-100 w-full justify-center sm:w-auto sm:justify-start"
-              title={
-                fromClassName
-                  ? `Voltar ao gerenciamento de matrículas da turma ${fromClassName}`
-                  : 'Voltar ao gerenciamento de matrículas da turma de origem'
-              }
+              title={`Voltar ao gerenciamento de matrículas da turma ${studentClasses[0].name}`}
             >
-              <ArrowLeft className="w-4 h-4 mr-1.5" /> Voltar para Turma
-              {fromClassName ? `: ${fromClassName}` : ''}
+              <ArrowLeft className="w-4 h-4 mr-1.5" /> Voltar para Turma · {studentClasses[0].name}
             </Button>
+          )}
+
+          {/* Aluno em mais de uma turma: dropdown para escolher a turma de destino */}
+          {studentClasses.length > 1 && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-xs font-semibold text-[#17A2B8] hover:text-[#0F1B3D] hover:bg-slate-100 w-full justify-center sm:w-auto sm:justify-start"
+                  title={
+                    studentClasses.length > 2
+                      ? `Matriculado nas turmas: ${backToClassLabel}`
+                      : `Matriculado nas turmas ${backToClassLabel}`
+                  }
+                >
+                  <ArrowLeft className="w-4 h-4 mr-1.5 shrink-0" />
+                  <span className="truncate max-w-[16rem]">
+                    Voltar para Turma · {backToClassLabel}
+                  </span>
+                  <ChevronDown className="w-3.5 h-3.5 ml-1 shrink-0" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-64">
+                <DropdownMenuLabel className="text-xs text-[#6C757D] font-semibold">
+                  Turmas do aluno
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {studentClasses.map((cls) => (
+                  <DropdownMenuItem
+                    key={cls.id}
+                    onClick={() => navigate(`/turmas?turma=${cls.id}`)}
+                    className="text-xs cursor-pointer"
+                  >
+                    <Users className="w-3.5 h-3.5 mr-2 text-[#17A2B8] shrink-0" />
+                    <span className="min-w-0">
+                      <span className="block font-bold text-[#0F1B3D] truncate">{cls.name}</span>
+                      <span className="block text-[10px] text-[#6C757D]">
+                        {cls.schedule_time}
+                        {cls.schedule_days?.length ? ` • ${cls.schedule_days.join(', ')}` : ''}
+                      </span>
+                    </span>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
         </div>
 

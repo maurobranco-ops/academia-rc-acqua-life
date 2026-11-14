@@ -61,21 +61,11 @@ import { fetchAddressByCep } from '@/lib/viacep'
 import { compressImage } from '@/lib/imageCompression'
 import { StudentPhotoPicker } from '@/components/StudentPhotoPicker'
 
-// Monta a rota de retorno à ficha do aluno após a edição preservando a origem
-// (?de=turma:<id>) — mantém o botão "Voltar para Turma" na ficha após salvar.
-const buildDetailReturnPath = (
-  searchParams: URLSearchParams,
-  studentId?: string | null,
-): string => {
-  if (!studentId) return '/alunos'
-  const de = searchParams.get('de')
-  const nome = searchParams.get('nome')
-  const params = new URLSearchParams()
-  if (de) params.set('de', de)
-  if (nome) params.set('nome', nome)
-  const qs = params.toString()
-  return `/alunos/${studentId}${qs ? `?${qs}` : ''}`
-}
+// Rota de retorno à ficha do aluno após a edição aberta a partir do detalhe.
+// O botão "Voltar para Turma" da ficha é derivado dos dados de matrícula do aluno
+// (enrollments + turmas), então nenhum parâmetro de origem precisa ser preservado.
+const buildDetailReturnPath = (studentId?: string | null): string =>
+  studentId ? `/alunos/${studentId}` : '/alunos'
 
 export default function Students() {
   const navigate = useNavigate()
@@ -560,7 +550,7 @@ export default function Students() {
       const editId = searchParams.get('editar')
       const origem = searchParams.get('origem')
       if (origem === 'detalhe' && (editId || selectedStudent?.id)) {
-        navigate(buildDetailReturnPath(searchParams, editId || selectedStudent?.id))
+        navigate(buildDetailReturnPath(editId || selectedStudent?.id))
       } else if (editId) {
         // Limpa os parâmetros de busca da URL para não reabrir o modal em renderizações subsequentes
         navigate('/alunos', { replace: true })
@@ -1615,7 +1605,7 @@ export default function Students() {
             const editId = searchParams.get('editar')
             const origem = searchParams.get('origem')
             if (origem === 'detalhe' && (editId || selectedStudent?.id)) {
-              navigate(buildDetailReturnPath(searchParams, editId || selectedStudent?.id))
+              navigate(buildDetailReturnPath(editId || selectedStudent?.id))
             }
           }
         }}
@@ -2103,7 +2093,7 @@ export default function Students() {
                   const editId = searchParams.get('editar')
                   const origem = searchParams.get('origem')
                   if (origem === 'detalhe' && (editId || selectedStudent?.id)) {
-                    navigate(buildDetailReturnPath(searchParams, editId || selectedStudent?.id))
+                    navigate(buildDetailReturnPath(editId || selectedStudent?.id))
                   }
                 }}
               >

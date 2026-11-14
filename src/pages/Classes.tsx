@@ -222,8 +222,9 @@ export default function Classes() {
     }
   }, [searchParams])
 
-  // Deep-link do botão "Voltar para Turma" da ficha do aluno: abre o modal
-  // "Gerenciar Matrículas" da turma indicada por ?turma=<id> (via /turmas?turma=...)
+  // Deep-link do botão "Voltar para Turma" da ficha do aluno (derivado das
+  // matrículas do aluno): abre o modal "Gerenciar Matrículas" da turma
+  // indicada por ?turma=<id> (via /turmas?turma=...)
   useEffect(() => {
     const turmaId = searchParams.get('turma')
     if (!turmaId) return
