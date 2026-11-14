@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { useParams, useNavigate, useLocation } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   ArrowLeft,
   Mail,
@@ -49,7 +49,7 @@ import { getStudentStatusDisplay } from '@/lib/studentStatus'
 export default function StudentDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const location = useLocation()
+  const [searchParams] = useSearchParams()
   const { toast } = useToast()
 
   const [student, setStudent] = useState<StudentRecord | null>(null)
@@ -60,9 +60,13 @@ export default function StudentDetail() {
   const [classes, setClasses] = useState<ClassRecord[]>([])
   const [loading, setLoading] = useState(true)
   // Contexto de origem: quando a ficha foi aberta pelo gerenciamento de matrículas
-  // de uma turma (state.fromClassId), o botão "Voltar para Turma" é exibido.
-  const fromClassId = (location.state as { fromClassId?: string } | null)?.fromClassId
-  const fromClassName = (location.state as { fromClassName?: string } | null)?.fromClassName
+  // de uma turma (/alunos/:id?de=turma:<id>), o botão "Voltar para Turma" é exibido.
+  // Vive na URL (não no state de navegação) para sobreviver à edição do aluno e ao F5.
+  const fromClassRaw = searchParams.get('de')
+  const fromClassId = fromClassRaw?.startsWith('turma:')
+    ? fromClassRaw.slice('turma:'.length)
+    : null
+  const fromClassName = fromClassRaw?.startsWith('turma:') ? searchParams.get('nome') : null
 
   // Cancel charge modal state
   const [cancelModalOpen, setCancelModalOpen] = useState(false)

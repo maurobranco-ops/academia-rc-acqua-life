@@ -419,7 +419,12 @@ export default function Classes() {
   }, [selectedClass, enrollments])
 
   const navigateToStudent = (studentId?: string) => {
-    if (studentId) navigate(`/alunos/${studentId}`, { state: { fromClassId: selectedClass?.id } })
+    if (!studentId || !selectedClass) return
+    // Origem gravada na URL (?de=turma:<id>) para o botão "Voltar para Turma"
+    // sobreviver à edição do aluno e ao refresh da ficha.
+    const params = new URLSearchParams({ de: `turma:${selectedClass.id}` })
+    if (selectedClass.name) params.set('nome', selectedClass.name)
+    navigate(`/alunos/${studentId}?${params.toString()}`)
   }
 
   if (loading) {
