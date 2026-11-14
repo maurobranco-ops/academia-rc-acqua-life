@@ -1,7 +1,8 @@
 import React, { useState } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
-import { Waves, Eye, EyeOff, Loader2 } from 'lucide-react'
+import { Eye, EyeOff, Loader2 } from 'lucide-react'
+import { LogoMark } from '@/components/Logo'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -69,10 +70,8 @@ export default function Login() {
       <div className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl border border-white/20 p-8 animate-fade-in-up">
         {/* Logo and Brand */}
         <div className="flex flex-col items-center mb-8 text-center">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-[#0F1B3D] to-[#17A2B8] flex items-center justify-center shadow-lg shadow-cyan-900/30 mb-3 border-2 border-[#D4AF37]">
-            <Waves className="w-9 h-9 text-[#D4AF37]" />
-          </div>
-          <h1 className="text-2xl font-bold tracking-tight text-[#0F1B3D]">Academia Aquática</h1>
+          <LogoMark size={72} className="rounded-2xl mb-3" />
+          <h1 className="text-2xl font-bold tracking-tight text-[#0F1B3D]">RC Acqua Life</h1>
           <p className="text-xs text-[#6C757D] mt-1 font-medium tracking-wide uppercase">
             Natação &amp; Hidroginástica
           </p>

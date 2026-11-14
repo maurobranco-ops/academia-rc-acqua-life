@@ -135,7 +135,7 @@ export default function ChangePasswordDialog({ open, onOpenChange }: ChangePassw
           <div>
             <DialogTitle className="text-lg font-bold text-white">Alterar Senha</DialogTitle>
             <DialogDescription className="text-xs text-slate-300 mt-0.5">
-              Atualize sua senha de acesso ao AquaGestão
+              Atualize sua senha de acesso ao RC Acqua Life
             </DialogDescription>
           </div>
         </div>

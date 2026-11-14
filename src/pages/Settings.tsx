@@ -47,6 +47,7 @@ import {
 import { academyService } from '@/services/academy'
 import type { PlanRecord, InstructorRecord } from '@/types/database'
 import { useToast } from '@/hooks/use-toast'
+import { onlyDigits, maskCnpj, maskPhoneIntl } from '@/lib/formatters'
 
 export default function Settings() {
   const { toast } = useToast()
@@ -511,46 +512,46 @@ export default function Settings() {
       </div>
 
       <Tabs defaultValue="perfil" className="w-full">
-        <TabsList className="bg-white border border-[#E0E4EA] p-1 rounded-xl mb-6 flex-wrap">
+        <TabsList className="bg-white border border-[#E0E4EA] p-1 rounded-xl mb-6 w-full max-w-full flex-nowrap overflow-x-auto overflow-y-hidden whitespace-nowrap">
           <TabsTrigger
             value="perfil"
-            className="data-[state=active]:bg-[#0F1B3D] data-[state=active]:text-white text-xs font-semibold rounded-lg px-4"
+            className="data-[state=active]:bg-[#0F1B3D] data-[state=active]:text-white text-xs font-semibold rounded-lg px-4 shrink-0"
           >
             <Building2 className="w-3.5 h-3.5 mr-1.5" /> Dados da Academia
           </TabsTrigger>
           <TabsTrigger
             value="planos"
-            className="data-[state=active]:bg-[#0F1B3D] data-[state=active]:text-white text-xs font-semibold rounded-lg px-4"
+            className="data-[state=active]:bg-[#0F1B3D] data-[state=active]:text-white text-xs font-semibold rounded-lg px-4 shrink-0"
           >
             <BookmarkCheck className="w-3.5 h-3.5 mr-1.5" /> Planos e Mensalidades
           </TabsTrigger>
           <TabsTrigger
             value="infinitepay"
-            className="data-[state=active]:bg-[#0F1B3D] data-[state=active]:text-white text-xs font-semibold rounded-lg px-4"
+            className="data-[state=active]:bg-[#0F1B3D] data-[state=active]:text-white text-xs font-semibold rounded-lg px-4 shrink-0"
           >
             <CreditCard className="w-3.5 h-3.5 mr-1.5" /> Integração Infinitepay
           </TabsTrigger>
           <TabsTrigger
             value="cobranca_automatica"
-            className="data-[state=active]:bg-[#0F1B3D] data-[state=active]:text-white text-xs font-semibold rounded-lg px-4"
+            className="data-[state=active]:bg-[#0F1B3D] data-[state=active]:text-white text-xs font-semibold rounded-lg px-4 shrink-0"
           >
             <RotateCw className="w-3.5 h-3.5 mr-1.5" /> Cobrança Automática
           </TabsTrigger>
           <TabsTrigger
             value="instrutores"
-            className="data-[state=active]:bg-[#0F1B3D] data-[state=active]:text-white text-xs font-semibold rounded-lg px-4"
+            className="data-[state=active]:bg-[#0F1B3D] data-[state=active]:text-white text-xs font-semibold rounded-lg px-4 shrink-0"
           >
             <UserCheck className="w-3.5 h-3.5 mr-1.5" /> Instrutores
           </TabsTrigger>
           <TabsTrigger
             value="notificacoes"
-            className="data-[state=active]:bg-[#0F1B3D] data-[state=active]:text-white text-xs font-semibold rounded-lg px-4"
+            className="data-[state=active]:bg-[#0F1B3D] data-[state=active]:text-white text-xs font-semibold rounded-lg px-4 shrink-0"
           >
             <Bell className="w-3.5 h-3.5 mr-1.5" /> Notificações
           </TabsTrigger>
           <TabsTrigger
             value="limpeza_dados"
-            className="data-[state=active]:bg-rose-700 data-[state=active]:text-white text-xs font-semibold rounded-lg px-4"
+            className="data-[state=active]:bg-rose-700 data-[state=active]:text-white text-xs font-semibold rounded-lg px-4 shrink-0"
           >
             <Trash2 className="w-3.5 h-3.5 mr-1.5" /> Limpeza de Dados de Exemplo
           </TabsTrigger>
@@ -583,8 +584,12 @@ export default function Settings() {
                 <div className="space-y-1">
                   <Label className="font-semibold text-[#1E2A3A]">CNPJ</Label>
                   <Input
-                    value={settings.academy_cnpj || ''}
-                    onChange={(e) => handleUpdateSetting('academy_cnpj', e.target.value)}
+                    value={maskCnpj(settings.academy_cnpj || '')}
+                    onChange={(e) =>
+                      handleUpdateSetting('academy_cnpj', onlyDigits(e.target.value))
+                    }
+                    inputMode="numeric"
+                    placeholder="00.000.000/0000-00"
                     className="focus-visible:ring-[#D4AF37]"
                   />
                 </div>
@@ -592,8 +597,12 @@ export default function Settings() {
                 <div className="space-y-1">
                   <Label className="font-semibold text-[#1E2A3A]">Telefone / WhatsApp</Label>
                   <Input
-                    value={settings.academy_phone || ''}
-                    onChange={(e) => handleUpdateSetting('academy_phone', e.target.value)}
+                    value={maskPhoneIntl(settings.academy_phone || '')}
+                    onChange={(e) =>
+                      handleUpdateSetting('academy_phone', onlyDigits(e.target.value))
+                    }
+                    inputMode="tel"
+                    placeholder="(00) 00000-0000"
                     className="focus-visible:ring-[#D4AF37]"
                   />
                 </div>
@@ -635,8 +644,8 @@ export default function Settings() {
         {/* TAB 2: PLANS */}
         {/* ============================================================ */}
         <TabsContent value="planos" className="space-y-4">
-          <div className="flex justify-between items-center">
-            <div>
+          <div className="flex flex-wrap gap-3 justify-between items-center">
+            <div className="min-w-0">
               <h3 className="text-base font-bold text-[#0F1B3D]">Planos Disponíveis</h3>
               <p className="text-xs text-[#6C757D]">
                 Configure os valores mensais praticados para natação e hidroginástica.
@@ -699,8 +708,8 @@ export default function Settings() {
         <TabsContent value="infinitepay">
           <Card className="bg-white border-[#E0E4EA] rounded-xl shadow-xs">
             <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
+              <div className="flex flex-wrap gap-2 justify-between items-start">
+                <div className="min-w-0">
                   <CardTitle className="text-base font-bold text-[#0F1B3D]">
                     Credenciais da API Infinitepay
                   </CardTitle>
@@ -792,11 +801,11 @@ export default function Settings() {
                 <Label className="font-semibold text-[#1E2A3A]">
                   Webhook URL (Endereço para cadastrar na InfinitePay)
                 </Label>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                   <Input
                     readOnly
                     value={webhookEndpoint}
-                    className="bg-slate-50 font-mono text-slate-700 font-semibold"
+                    className="bg-slate-50 font-mono text-slate-700 font-semibold min-w-0"
                   />
                   <Button
                     variant="outline"
@@ -837,7 +846,7 @@ export default function Settings() {
                 </label>
               </div>
 
-              <div className="flex items-center gap-3 pt-3 border-t border-slate-100">
+              <div className="flex flex-wrap items-center gap-3 pt-3 border-t border-slate-100">
                 <Button
                   onClick={handleSaveInfinitepay}
                   className="bg-[#D4AF37] hover:bg-[#B8953A] text-[#0F1B3D] font-bold text-xs h-9"
@@ -1359,8 +1368,8 @@ export default function Settings() {
         {/* TAB 5: INSTRUCTORS */}
         {/* ============================================================ */}
         <TabsContent value="instrutores" className="space-y-4">
-          <div className="flex justify-between items-center">
-            <div>
+          <div className="flex flex-wrap gap-3 justify-between items-center">
+            <div className="min-w-0">
               <h3 className="text-base font-bold text-[#0F1B3D]">Quadro de Instrutores</h3>
               <p className="text-xs text-[#6C757D]">
                 Profissionais de natação e hidroginástica responsáveis pelas turmas.
@@ -1378,9 +1387,9 @@ export default function Settings() {
             {instructors.map((ins) => (
               <Card
                 key={ins.id}
-                className="bg-white border-[#E0E4EA] hover:border-slate-300 transition rounded-xl p-4 flex items-center justify-between"
+                className="bg-white border-[#E0E4EA] hover:border-slate-300 transition rounded-xl p-4 flex flex-wrap items-center justify-between gap-2"
               >
-                <div>
+                <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <p className="text-sm font-bold text-[#0F1B3D]">{ins.name}</p>
                     <Badge variant="outline" className="text-[10px] uppercase">

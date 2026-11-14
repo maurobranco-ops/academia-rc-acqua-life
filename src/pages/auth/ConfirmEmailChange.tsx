@@ -1,7 +1,8 @@
 import React, { useState } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
-import { Waves, Loader2, CheckCircle2 } from 'lucide-react'
+import { Loader2, CheckCircle2 } from 'lucide-react'
+import { LogoMark } from '@/components/Logo'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -71,9 +72,7 @@ export default function ConfirmEmailChange() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#0F1B3D] via-[#1B2A5B] to-[#0A122A] p-4">
       <div className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl p-8 animate-fade-in-up">
         <div className="flex flex-col items-center mb-6 text-center">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-[#0F1B3D] to-[#17A2B8] flex items-center justify-center shadow-lg mb-2 border border-[#D4AF37]">
-            <Waves className="w-8 h-8 text-[#D4AF37]" />
-          </div>
+          <LogoMark size={64} className="rounded-2xl mb-2" />
           <h1 className="text-2xl font-bold text-[#0F1B3D]">Confirmar Novo E-mail</h1>
           <p className="text-xs text-[#6C757D] mt-1">
             Digite sua senha para autorizar a troca do seu endereço de e-mail

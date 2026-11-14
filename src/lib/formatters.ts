@@ -43,6 +43,35 @@ export const maskPhone = (value: string): string => {
 }
 
 /**
+ * Máscara de CNPJ: 00.000.000/0000-00 (aceita valor parcial).
+ */
+export const maskCnpj = (value: string): string => {
+  const d = onlyDigits(value).slice(0, 14)
+  if (d.length <= 2) return d
+  if (d.length <= 5) return `${d.slice(0, 2)}.${d.slice(2)}`
+  if (d.length <= 8) return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5)}`
+  if (d.length <= 12) return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8)}`
+  return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8, 12)}-${d.slice(12)}`
+}
+
+/**
+ * Máscara de telefone aceitando também o prefixo internacional +55
+ * (13 dígitos: +55 (84) 99992-9666). Sem o prefixo, usa maskPhone.
+ */
+export const maskPhoneIntl = (value: string): string => {
+  const d = onlyDigits(value)
+  if (d.length >= 12 && d.startsWith('55')) {
+    const rest = d.slice(2, 13)
+    if (rest.length === 0) return '+55 '
+    if (rest.length <= 2) return `+55 (${rest}`
+    if (rest.length <= 6) return `+55 (${rest.slice(0, 2)}) ${rest.slice(2)}`
+    if (rest.length <= 10) return `+55 (${rest.slice(0, 2)}) ${rest.slice(2, 6)}-${rest.slice(6)}`
+    return `+55 (${rest.slice(0, 2)}) ${rest.slice(2, 7)}-${rest.slice(7)}`
+  }
+  return maskPhone(d)
+}
+
+/**
  * Valida CPF matematicamente pelos dígitos verificadores.
  * Rejeita sequências repetidas (111.111.111-11), dígitos trocados e tamanhos errados.
  */

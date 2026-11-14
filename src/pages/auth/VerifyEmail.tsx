@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
-import { Waves, Loader2, CheckCircle2, XCircle } from 'lucide-react'
+import { Loader2, CheckCircle2, XCircle } from 'lucide-react'
+import { LogoMark } from '@/components/Logo'
 import { Button } from '@/components/ui/button'
 
 export default function VerifyEmail() {
@@ -34,9 +35,7 @@ export default function VerifyEmail() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#0F1B3D] via-[#1B2A5B] to-[#0A122A] p-4">
       <div className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl p-8 text-center animate-fade-in-up">
         <div className="flex flex-col items-center mb-6">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-[#0F1B3D] to-[#17A2B8] flex items-center justify-center shadow-lg mb-2 border border-[#D4AF37]">
-            <Waves className="w-8 h-8 text-[#D4AF37]" />
-          </div>
+          <LogoMark size={56} className="rounded-2xl mb-2" />
           <h1 className="text-2xl font-bold text-[#0F1B3D]">Verificação de E-mail</h1>
         </div>
 

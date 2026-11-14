@@ -10,7 +10,6 @@ import {
   Settings as SettingsIcon,
   UploadCloud,
   LogOut,
-  Waves,
   Menu,
   X,
   Search,
@@ -27,6 +26,7 @@ import { getStudentPhotoUrl } from '@/lib/studentPhoto'
 import { cn } from '@/lib/utils'
 import { Input } from '@/components/ui/input'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { LogoFull, LogoMark } from '@/components/Logo'
 import ChangePasswordDialog from '@/components/ChangePasswordDialog'
 import {
   DropdownMenu,
@@ -100,7 +100,7 @@ export default function Layout() {
     })
     if (location.pathname.startsWith('/alunos/')) return 'Detalhes do Aluno'
     if (location.pathname.startsWith('/turmas/')) return 'Detalhes da Turma'
-    return current ? current.label : 'Academia Aquática'
+    return current ? current.label : 'RC Acqua Life'
   }
 
   const handleSelectStudent = (id: string) => {
@@ -128,17 +128,7 @@ export default function Layout() {
         {/* Academy Brand */}
         <div className="h-20 flex items-center justify-between px-4 border-b border-[#1B2A5B]">
           <div className="flex items-center gap-3 overflow-hidden">
-            <div className="w-10 h-10 shrink-0 rounded-xl bg-gradient-to-tr from-[#17A2B8] to-[#0F1B3D] border border-[#D4AF37] flex items-center justify-center shadow-md">
-              <Waves className="w-6 h-6 text-[#D4AF37]" />
-            </div>
-            {!collapsed && (
-              <div className="truncate">
-                <span className="font-bold text-sm text-white tracking-wide block">AquaGestão</span>
-                <span className="text-[10px] text-[#D4AF37] tracking-wider uppercase font-semibold">
-                  Natação &amp; Hidro
-                </span>
-              </div>
-            )}
+            <LogoFull withText={!collapsed} size={40} />
           </div>
           <button
             onClick={() => setCollapsed(!collapsed)}
@@ -215,7 +205,7 @@ export default function Layout() {
                         {user?.name || 'Administrador'}
                       </p>
                       <p className="text-[11px] text-slate-400 truncate">
-                        {user?.email || 'admin@aquagestao.com'}
+                        {user?.email || 'contato@rcacqualife.com.br'}
                       </p>
                     </div>
                   )}
@@ -223,7 +213,7 @@ export default function Layout() {
               </DropdownMenuTrigger>
               <DropdownMenuContent side="top" align="start" className="w-56 rounded-xl shadow-xl">
                 <DropdownMenuLabel className="text-xs font-semibold text-[#0F1B3D] truncate">
-                  {user?.email || 'admin@aquagestao.com'}
+                  {user?.email || 'contato@rcacqualife.com.br'}
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
@@ -251,11 +241,9 @@ export default function Layout() {
       {/* Mobile Top Bar (Screens < 1024px) */}
       {/* ============================================================== */}
       <div className="lg:hidden fixed top-0 inset-x-0 h-16 bg-[#0F1B3D] text-white z-40 flex items-center justify-between px-4 shadow-md">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-[#17A2B8] flex items-center justify-center border border-[#D4AF37]">
-            <Waves className="w-5 h-5 text-[#D4AF37]" />
-          </div>
-          <span className="font-bold text-base text-white">AquaGestão</span>
+        <div className="flex items-center gap-2 min-w-0">
+          <LogoMark size={36} />
+          <span className="font-bold text-base text-white truncate">RC Acqua Life</span>
         </div>
 
         <button
@@ -276,9 +264,9 @@ export default function Layout() {
           />
           <div className="relative w-[280px] bg-[#0F1B3D] text-white h-full flex flex-col z-10 shadow-2xl animate-fade-in">
             <div className="h-16 flex items-center justify-between px-4 border-b border-[#1B2A5B]">
-              <div className="flex items-center gap-2.5">
-                <Waves className="w-6 h-6 text-[#D4AF37]" />
-                <span className="font-bold text-base">AquaGestão</span>
+              <div className="flex items-center gap-2.5 min-w-0">
+                <LogoMark size={34} />
+                <span className="font-bold text-base truncate">RC Acqua Life</span>
               </div>
               <button
                 onClick={() => setMobileMenuOpen(false)}
@@ -364,16 +352,16 @@ export default function Layout() {
         )}
       >
         {/* Sticky Desktop/Mobile Header */}
-        <header className="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-[#E0E4EA] h-20 px-6 flex items-center justify-between shadow-xs">
-          <div className="flex items-center gap-4">
-            <h1 className="text-xl md:text-2xl font-bold tracking-tight text-[#0F1B3D]">
+        <header className="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-[#E0E4EA] min-h-20 py-3 px-4 md:px-6 flex items-center justify-between gap-3 shadow-xs flex-wrap lg:flex-nowrap">
+          <div className="flex items-center gap-4 min-w-0">
+            <h1 className="text-lg sm:text-xl md:text-2xl font-bold tracking-tight text-[#0F1B3D] truncate">
               {getPageTitle()}
             </h1>
           </div>
 
-          <div className="flex items-center gap-3 md:gap-4">
+          <div className="flex items-center gap-2 md:gap-4 order-last lg:order-none lg:ml-auto">
             {/* Global Student Search */}
-            <div className="relative w-48 sm:w-64 md:w-80">
+            <div className="relative flex-1 min-w-0 sm:flex-none sm:w-48 md:w-64 lg:w-80">
               <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <Input
                 type="text"
@@ -494,8 +482,8 @@ export default function Layout() {
         <footer className="border-t border-[#E0E4EA] bg-white py-4 px-6 text-center text-xs text-[#6C757D]">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-2 max-w-[1400px] mx-auto">
             <span>
-              &copy; {new Date().getFullYear()} Academia Aquática — Natação &amp; Hidroginástica.
-              Todos os direitos reservados.
+              &copy; {new Date().getFullYear()} RC Acqua Life — Natação &amp; Hidroginástica. Todos
+              os direitos reservados.
             </span>
             <span className="text-slate-400">
               Desenvolvido com <strong className="text-slate-600">Skip Cloud</strong> &amp;
