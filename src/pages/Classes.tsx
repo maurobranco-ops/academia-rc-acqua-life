@@ -134,6 +134,16 @@ const DAYS_OF_WEEK = [
   { id: 'dom', label: 'Domingo' },
 ]
 
+// Grade semanal: exibe apenas estes dias (pedido do usuário — terça, quinta e
+// domingo ficam ocultos na grade; os dados das turmas continuam intactos).
+const SCHEDULE_DAYS = [
+  { id: 'seg', label: 'Segunda' },
+  { id: 'qua', label: 'Quarta' },
+  { id: 'sex', label: 'Sexta' },
+  { id: 'sab', label: 'Sábado' },
+]
+const HIDDEN_SCHEDULE_DAY_IDS = ['ter', 'qui', 'dom']
+
 export default function Classes() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -166,6 +176,18 @@ export default function Classes() {
   const [formCapacity, setFormCapacity] = useState('10')
   const [formMonthlyPrice, setFormMonthlyPrice] = useState('160')
   const [submitting, setSubmitting] = useState(false)
+
+  // Turmas que só acontecem nos dias ocultos da grade (ter/qui/dom) — dados
+  // intactos, apenas não exibidos na grade semanal (aviso discreto acima dela).
+  const hiddenDaysClasses = useMemo(
+    () =>
+      classes.filter(
+        (c) =>
+          (c.schedule_days || []).length > 0 &&
+          (c.schedule_days || []).every((d) => HIDDEN_SCHEDULE_DAY_IDS.includes(d)),
+      ),
+    [classes],
+  )
 
   const loadData = async () => {
     try {
@@ -573,14 +595,23 @@ export default function Classes() {
               Grade Semanal de Aulas
             </CardTitle>
           </CardHeader>
+          {hiddenDaysClasses.length > 0 && (
+            <div className="px-4 pt-3">
+              <p className="text-[11px] text-[#6C757D] bg-[#F5F7FA] border border-[#E0E4EA] rounded-lg px-3 py-2">
+                Turmas de terça, quinta e domingo não aparecem nesta grade (
+                {hiddenDaysClasses.length} turma
+                {hiddenDaysClasses.length > 1 ? 's' : ''}). Elas continuam na lista "Turmas" e na
+                ficha de cada aluno.
+              </p>
+            </div>
+          )}
           <div className="p-4 overflow-x-auto">
-            <div className="grid grid-cols-7 gap-3 min-w-[840px]">
-              {DAYS_OF_WEEK.map((day) => {
+            <div className="grid grid-cols-4 gap-3 min-w-[640px]">
+              {SCHEDULE_DAYS.map((day) => {
                 const dayClasses = classes
                   .filter((c) => (c.schedule_days || []).includes(day.id))
                   .slice()
                   .sort((a, b) => (a.schedule_time || '').localeCompare(b.schedule_time || ''))
-
                 return (
                   <div key={day.id} className="bg-[#F5F7FA] rounded-xl p-3 border border-[#E0E4EA]">
                     <div className="text-center font-bold text-xs text-[#0F1B3D] pb-2 border-b border-[#E0E4EA] uppercase tracking-wide">
@@ -605,7 +636,7 @@ export default function Classes() {
                                   : 'bg-teal-50/80 border-teal-200 hover:border-teal-400'
                               }`}
                             >
-                              <div className="font-bold text-[#0F1B3D] break-words leading-snug whitespace-normal">
+                              <div className="font-bold text-[#0F1B3D] [overflow-wrap:anywhere] [word-break:normal] leading-snug whitespace-normal">
                                 {dc.name}
                               </div>
                               <div className="text-[11px] font-semibold text-[#17A2B8] mt-0.5">

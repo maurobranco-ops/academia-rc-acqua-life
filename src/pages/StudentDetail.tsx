@@ -340,8 +340,10 @@ export default function StudentDetail() {
         </div>
         <CardContent className="relative px-4 pb-6 sm:px-6">
           {/* Foto à ESQUERDA em ambas as resoluções (espelhando o mobile); sm+: quadro de dados ao lado da foto; mobile: dados abaixo */}
-          <div className="flex flex-col sm:flex-row sm:items-start gap-4 sm:gap-6 pt-4 sm:pt-0 sm:-mt-12">
-            <div className="shrink-0">
+          {/* sm+: SOMENTE a foto sobe (sm:-mt-12) sobre o banner — o quadro de dados fica abaixo do banner,
+              para os badges de status nunca sobreporem o nome do aluno */}
+          <div className="flex flex-col sm:flex-row sm:items-start gap-4 sm:gap-6 pt-4 sm:pt-0">
+            <div className="shrink-0 sm:-mt-12">
               {/* Foto do aluno — a própria foto é o botão de troca (mobile e desktop) */}
               <input
                 type="file"
