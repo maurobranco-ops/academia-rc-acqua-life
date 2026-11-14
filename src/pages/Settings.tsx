@@ -48,6 +48,32 @@ import { academyService } from '@/services/academy'
 import type { PlanRecord, InstructorRecord } from '@/types/database'
 import { useToast } from '@/hooks/use-toast'
 import { onlyDigits, maskCnpj, maskPhoneIntl } from '@/lib/formatters'
+import type { LucideIcon } from 'lucide-react'
+import { cn } from '@/lib/utils'
+
+/** Abas da tela de Configurações — renderizadas em grade 2×N no mobile e em faixa com rolagem no desktop. */
+const SETTINGS_TABS: Array<{
+  value: string
+  label: string
+  icon: LucideIcon
+  danger?: boolean
+  /** Ocupa as 2 colunas da grade no mobile (rótulo longo). */
+  fullWidth?: boolean
+}> = [
+  { value: 'perfil', label: 'Dados da Academia', icon: Building2 },
+  { value: 'planos', label: 'Planos e Mensalidades', icon: BookmarkCheck },
+  { value: 'infinitepay', label: 'Integração Infinitepay', icon: CreditCard },
+  { value: 'cobranca_automatica', label: 'Cobrança Automática', icon: RotateCw },
+  { value: 'instrutores', label: 'Instrutores', icon: UserCheck },
+  { value: 'notificacoes', label: 'Notificações', icon: Bell },
+  {
+    value: 'limpeza_dados',
+    label: 'Limpeza de Dados de Exemplo',
+    icon: Trash2,
+    danger: true,
+    fullWidth: true,
+  },
+]
 
 export default function Settings() {
   const { toast } = useToast()
@@ -512,49 +538,21 @@ export default function Settings() {
       </div>
 
       <Tabs defaultValue="perfil" className="w-full">
-        <TabsList className="bg-white border border-[#E0E4EA] p-1 rounded-xl mb-6 w-full max-w-full flex-nowrap overflow-x-auto overflow-y-hidden whitespace-nowrap">
-          <TabsTrigger
-            value="perfil"
-            className="data-[state=active]:bg-[#0F1B3D] data-[state=active]:text-white text-xs font-semibold rounded-lg px-4 shrink-0"
-          >
-            <Building2 className="w-3.5 h-3.5 mr-1.5" /> Dados da Academia
-          </TabsTrigger>
-          <TabsTrigger
-            value="planos"
-            className="data-[state=active]:bg-[#0F1B3D] data-[state=active]:text-white text-xs font-semibold rounded-lg px-4 shrink-0"
-          >
-            <BookmarkCheck className="w-3.5 h-3.5 mr-1.5" /> Planos e Mensalidades
-          </TabsTrigger>
-          <TabsTrigger
-            value="infinitepay"
-            className="data-[state=active]:bg-[#0F1B3D] data-[state=active]:text-white text-xs font-semibold rounded-lg px-4 shrink-0"
-          >
-            <CreditCard className="w-3.5 h-3.5 mr-1.5" /> Integração Infinitepay
-          </TabsTrigger>
-          <TabsTrigger
-            value="cobranca_automatica"
-            className="data-[state=active]:bg-[#0F1B3D] data-[state=active]:text-white text-xs font-semibold rounded-lg px-4 shrink-0"
-          >
-            <RotateCw className="w-3.5 h-3.5 mr-1.5" /> Cobrança Automática
-          </TabsTrigger>
-          <TabsTrigger
-            value="instrutores"
-            className="data-[state=active]:bg-[#0F1B3D] data-[state=active]:text-white text-xs font-semibold rounded-lg px-4 shrink-0"
-          >
-            <UserCheck className="w-3.5 h-3.5 mr-1.5" /> Instrutores
-          </TabsTrigger>
-          <TabsTrigger
-            value="notificacoes"
-            className="data-[state=active]:bg-[#0F1B3D] data-[state=active]:text-white text-xs font-semibold rounded-lg px-4 shrink-0"
-          >
-            <Bell className="w-3.5 h-3.5 mr-1.5" /> Notificações
-          </TabsTrigger>
-          <TabsTrigger
-            value="limpeza_dados"
-            className="data-[state=active]:bg-rose-700 data-[state=active]:text-white text-xs font-semibold rounded-lg px-4 shrink-0"
-          >
-            <Trash2 className="w-3.5 h-3.5 mr-1.5" /> Limpeza de Dados de Exemplo
-          </TabsTrigger>
+        {/* Mobile: grade de 2 colunas com todas as abas visíveis (sem scroll). md+: linha única com rolagem, como antes. */}
+        <TabsList className="bg-white border border-[#E0E4EA] p-1 rounded-xl mb-6 w-full max-w-full h-auto grid grid-cols-2 gap-1 md:h-10 md:inline-flex md:flex-nowrap md:gap-0 md:overflow-x-auto md:overflow-y-hidden md:whitespace-nowrap">
+          {SETTINGS_TABS.map((tab) => (
+            <TabsTrigger
+              key={tab.value}
+              value={tab.value}
+              className={cn(
+                'data-[state=active]:bg-[#0F1B3D] data-[state=active]:text-white text-xs font-semibold rounded-lg px-2 py-2 min-w-0 w-full gap-1.5 leading-snug whitespace-normal md:whitespace-nowrap md:w-auto md:px-4 md:py-1.5 md:shrink-0 md:leading-normal',
+                tab.danger ? 'data-[state=active]:bg-rose-700' : 'data-[state=active]:bg-[#0F1B3D]',
+                tab.fullWidth && 'col-span-2 md:col-span-1',
+              )}
+            >
+              <tab.icon className="w-3.5 h-3.5 shrink-0" /> {tab.label}
+            </TabsTrigger>
+          ))}
         </TabsList>
 
         {/* ============================================================ */}
