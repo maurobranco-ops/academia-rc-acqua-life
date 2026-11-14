@@ -222,6 +222,27 @@ export default function Classes() {
     }
   }, [searchParams])
 
+  // Deep-link do botão "Voltar para Turma" da ficha do aluno: abre o modal
+  // "Gerenciar Matrículas" da turma indicada por ?turma=<id> (via /turmas?turma=...)
+  useEffect(() => {
+    const turmaId = searchParams.get('turma')
+    if (!turmaId) return
+    // Aguarda o carregamento das turmas para encontrar o registro correspondente
+    if (loading) return
+    const cls = classes.find((c) => c.id === turmaId)
+    if (cls) {
+      handleOpenDetailModal(cls)
+    }
+    // Limpa o parâmetro para reabrir no clique futuro sem fechar o modal manualmente
+    searchParams.delete('turma')
+    window.history.replaceState(
+      {},
+      '',
+      `${window.location.pathname}${searchParams.toString() ? `?${searchParams.toString()}` : ''}`,
+    )
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, loading, classes])
+
   const handleOpenCreateModal = () => {
     setSelectedClass(null)
     setFormName('')
@@ -398,7 +419,7 @@ export default function Classes() {
   }, [selectedClass, enrollments])
 
   const navigateToStudent = (studentId?: string) => {
-    if (studentId) navigate(`/alunos/${studentId}`)
+    if (studentId) navigate(`/alunos/${studentId}`, { state: { fromClassId: selectedClass?.id } })
   }
 
   if (loading) {

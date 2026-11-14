@@ -118,6 +118,15 @@ export default function Charges() {
       setCharges(cData)
       setStudents(sData)
       setPlans(pData)
+      // Detalhe técnico da falha de envio fica APENAS no console — nunca no DOM.
+      cData.forEach((c) => {
+        if (c.whatsapp_error) {
+          console.warn(
+            `[WhatsApp] Falha no envio da cobrança ${c.id} (${c.description}):`,
+            c.whatsapp_error,
+          )
+        }
+      })
     } catch (err) {
       console.error(err)
     } finally {
@@ -245,7 +254,8 @@ export default function Charges() {
         feedbackMsg +=
           ' Aviso: aluno/responsável sem telefone cadastrado — cadastre para envio automático.'
       } else if (waError) {
-        feedbackMsg += ` Aviso de envio WhatsApp: ${waError}.`
+        console.warn('[WhatsApp] Falha no envio automático da nova cobrança:', waError)
+        feedbackMsg += ' Aviso: envio automático do WhatsApp indisponível no momento.'
       }
 
       toast({
@@ -694,14 +704,11 @@ export default function Charges() {
                         <span className="font-semibold">Sem telefone</span>
                       </div>
                     ) : charge.whatsapp_status === 'falha' ? (
+                      // Mensagem amigável — o erro técnico (ex.: "connectors are not enabled
+                      // for this app") fica registrado apenas no console (ver loadData).
                       <div
                         className="flex items-center gap-1.5 text-xs text-rose-700 bg-rose-50 px-2.5 py-1 rounded-lg border border-rose-200"
-                        title={
-                          charge.whatsapp_error?.includes('connectors are not enabled') ||
-                          charge.whatsapp_error?.includes('não autorizada')
-                            ? 'Conexão do WhatsApp aguardando confirmação/habilitação no painel do proprietário'
-                            : charge.whatsapp_error || 'Falha no envio da mensagem'
-                        }
+                        title="Envio automático do WhatsApp indisponível no momento. Use Copiar Link ou o envio manual."
                       >
                         <AlertCircle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
                         <span className="font-semibold">Falha WhatsApp</span>
@@ -715,14 +722,6 @@ export default function Charges() {
                     {charge.whatsapp_phone && (
                       <span className="text-[10px] text-slate-400 mt-0.5 font-mono">
                         {charge.whatsapp_phone}
-                      </span>
-                    )}
-                    {charge.whatsapp_error && charge.whatsapp_status !== 'sem_telefone' && (
-                      <span
-                        className="text-[10px] text-rose-600 mt-0.5 truncate max-w-[200px]"
-                        title={charge.whatsapp_error}
-                      >
-                        {charge.whatsapp_error}
                       </span>
                     )}
                   </div>

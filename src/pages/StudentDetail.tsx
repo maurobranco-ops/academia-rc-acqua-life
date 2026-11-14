@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo, useRef } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useState, useEffect, useMemo } from 'react'
+import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import {
   ArrowLeft,
   Mail,
@@ -13,7 +13,6 @@ import {
   AlertTriangle,
   Trash2,
   X,
-  Camera,
   Sparkles,
   Edit,
   Ban,
@@ -50,6 +49,7 @@ import { getStudentStatusDisplay } from '@/lib/studentStatus'
 export default function StudentDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const location = useLocation()
   const { toast } = useToast()
 
   const [student, setStudent] = useState<StudentRecord | null>(null)
@@ -59,8 +59,10 @@ export default function StudentDetail() {
   const [enrollments, setEnrollments] = useState<EnrollmentRecord[]>([])
   const [classes, setClasses] = useState<ClassRecord[]>([])
   const [loading, setLoading] = useState(true)
-  const [uploadingPhoto, setUploadingPhoto] = useState(false)
-  const photoInputRef = useRef<HTMLInputElement>(null)
+  // Contexto de origem: quando a ficha foi aberta pelo gerenciamento de matrículas
+  // de uma turma (state.fromClassId), o botão "Voltar para Turma" é exibido.
+  const fromClassId = (location.state as { fromClassId?: string } | null)?.fromClassId
+  const fromClassName = (location.state as { fromClassName?: string } | null)?.fromClassName
 
   // Cancel charge modal state
   const [cancelModalOpen, setCancelModalOpen] = useState(false)
@@ -200,39 +202,6 @@ export default function StudentDetail() {
     }
   }
 
-  const handlePhotoUpload = async (file: File) => {
-    if (!student) return
-    if (!file.type.startsWith('image/')) {
-      toast({
-        title: 'Arquivo inválido',
-        description: 'Por favor, selecione um arquivo de imagem (.jpg, .jpeg, .png, .webp).',
-        variant: 'destructive',
-      })
-      return
-    }
-
-    setUploadingPhoto(true)
-    try {
-      const updated = await academyService.uploadStudentPhoto(student.id, file, file.name)
-      setStudent(updated)
-      toast({
-        title: 'Foto atualizada!',
-        description: 'A nova foto do aluno foi salva com sucesso no armazenamento.',
-      })
-    } catch (err: any) {
-      toast({
-        title: 'Erro no envio da foto',
-        description: err?.message || 'Não foi possível atualizar a foto.',
-        variant: 'destructive',
-      })
-    } finally {
-      setUploadingPhoto(false)
-      if (photoInputRef.current) {
-        photoInputRef.current.value = ''
-      }
-    }
-  }
-
   // Summary Metrics
   const paidPayments = useMemo(() => payments.filter((p) => p.status === 'pago'), [payments])
   const overduePayments = useMemo(() => payments.filter((p) => p.status === 'vencido'), [payments])
@@ -291,14 +260,33 @@ export default function StudentDetail() {
     <div className="space-y-6 animate-fade-in">
       {/* Top Back Navigation — mobile: tudo empilhado em coluna e largura total; sm+: linha única, como antes */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => navigate('/alunos')}
-          className="text-xs font-semibold text-[#6C757D] hover:text-[#0F1B3D] w-full justify-center sm:w-auto sm:justify-start"
-        >
-          <ArrowLeft className="w-4 h-4 mr-1.5" /> Voltar para Alunos
-        </Button>
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => navigate('/alunos')}
+            className="text-xs font-semibold text-[#6C757D] hover:text-[#0F1B3D] w-full justify-center sm:w-auto sm:justify-start"
+          >
+            <ArrowLeft className="w-4 h-4 mr-1.5" /> Voltar para Alunos
+          </Button>
+
+          {fromClassId && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate(`/turmas?turma=${fromClassId}`)}
+              className="text-xs font-semibold text-[#17A2B8] hover:text-[#0F1B3D] hover:bg-slate-100 w-full justify-center sm:w-auto sm:justify-start"
+              title={
+                fromClassName
+                  ? `Voltar ao gerenciamento de matrículas da turma ${fromClassName}`
+                  : 'Voltar ao gerenciamento de matrículas da turma de origem'
+              }
+            >
+              <ArrowLeft className="w-4 h-4 mr-1.5" /> Voltar para Turma
+              {fromClassName ? `: ${fromClassName}` : ''}
+            </Button>
+          )}
+        </div>
 
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
           <Button
@@ -344,54 +332,19 @@ export default function StudentDetail() {
               para os badges de status nunca sobreporem o nome do aluno */}
           <div className="flex flex-col sm:flex-row sm:items-start gap-4 sm:gap-6 pt-4 sm:pt-0">
             <div className="shrink-0 sm:-mt-12">
-              {/* Foto do aluno — a própria foto é o botão de troca (mobile e desktop) */}
-              <input
-                type="file"
-                ref={photoInputRef}
-                accept="image/jpeg,image/png,image/webp,image/gif"
-                className="hidden"
-                onChange={(e) => {
-                  if (e.target.files && e.target.files[0]) {
-                    handlePhotoUpload(e.target.files[0])
-                  }
-                }}
-              />
-              <button
-                type="button"
-                onClick={() => photoInputRef.current?.click()}
-                disabled={uploadingPhoto}
-                className="group relative block cursor-pointer rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D4AF37] focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:cursor-not-allowed"
-                title="Trocar foto do aluno"
-                aria-label="Trocar foto do aluno"
-              >
-                <Avatar className="w-24 h-24 border-4 border-white shadow-lg bg-slate-100 transition-all group-hover:ring-2 group-hover:ring-[#D4AF37]/70 group-focus-visible:ring-2 group-focus-visible:ring-[#D4AF37]">
-                  {getStudentPhotoUrl(student) ? (
-                    <AvatarImage
-                      src={getStudentPhotoUrl(student) || ''}
-                      alt={student.name}
-                      className="object-cover"
-                    />
-                  ) : null}
-                  <AvatarFallback className="bg-[#0F1B3D] text-[#D4AF37] text-2xl font-black">
-                    {student.name.slice(0, 2).toUpperCase()}
-                  </AvatarFallback>
-                </Avatar>
-
-                {/* Dica visual 1: ícone de câmera discreto no canto da foto */}
-                <span className="absolute bottom-0.5 right-0.5 flex h-7 w-7 items-center justify-center rounded-full bg-[#D4AF37] text-[#0F1B3D] shadow-md ring-2 ring-white">
-                  {uploadingPhoto ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  ) : (
-                    <Camera className="w-3.5 h-3.5" />
-                  )}
-                </span>
-
-                {/* Dica visual 2: véu escuro com ícone apenas no hover/focus (desktop) */}
-                <span className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center rounded-full bg-black/50 text-white opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
-                  <Camera className="w-5 h-5 mb-0.5" />
-                  <span className="text-[10px] font-bold">Trocar foto</span>
-                </span>
-              </button>
+              {/* Foto do aluno — apenas exibida; a troca é feita pelo botão "Editar Aluno" */}
+              <Avatar className="w-24 h-24 border-4 border-white shadow-lg bg-slate-100">
+                {getStudentPhotoUrl(student) ? (
+                  <AvatarImage
+                    src={getStudentPhotoUrl(student) || ''}
+                    alt={student.name}
+                    className="object-cover"
+                  />
+                ) : null}
+                <AvatarFallback className="bg-[#0F1B3D] text-[#D4AF37] text-2xl font-black">
+                  {student.name.slice(0, 2).toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
             </div>
 
             {/* Quadro de dados: badges de status + mensalidade + contatos
