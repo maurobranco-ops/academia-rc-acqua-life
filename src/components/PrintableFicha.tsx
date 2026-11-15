@@ -320,7 +320,10 @@ export function PrintableFichaDialog({
               ))}
             </div>
             <Row label="Medicamentos em uso" value={data.anamnese.anamnese_medicamentos} />
-            <Row label="Objetivo com a natação" value={data.anamnese.anamnese_objetivo} />
+            <Row
+              label="Objetivo com a atividade escolhida"
+              value={data.anamnese.anamnese_objetivo}
+            />
           </section>
 
           {/* Exames */}

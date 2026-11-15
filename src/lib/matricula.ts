@@ -153,6 +153,43 @@ export const FICHA_LEGAL = {
   lgpd: 'Autorização de uso de imagem (LGPD — Lei nº 13.709/2018): concorda com o uso da imagem do(a) aluno(a) em fotos e vídeos institucionais da academia (redes sociais e divulgação)?',
 }
 
+// ============================================================
+// Preferências da matrícula (migration 0023) — atividades, turmas
+// pretendidas e dia de vencimento da mensalidade.
+// ============================================================
+
+/** Atividades da academia (múltipla escolha no /matricula). */
+export const ACTIVITY_OPTIONS = [
+  { value: 'natacao', label: 'Natação' },
+  { value: 'hidroginastica', label: 'Hidroginástica' },
+] as const
+
+export type ActivityOptionValue = (typeof ACTIVITY_OPTIONS)[number]['value']
+
+/** Rótulo legível de uma atividade armazenada (valor cru da inscrição). */
+export function activityLabel(v: string): string {
+  const found = ACTIVITY_OPTIONS.find((o) => o.value === v)
+  if (found) return found.label
+  const byText = ACTIVITY_OPTIONS.find((o) => o.label.toLowerCase() === v.trim().toLowerCase())
+  return byText ? byText.label : v
+}
+
+/** Opções fixas de dia de vencimento da mensalidade (radio, escolha única). */
+export const DUE_DAY_OPTIONS = [5, 10, 15, 20, 25] as const
+
+/** Monta o texto de referência das preferências gravado no cadastro do aluno. */
+export function buildEnrollmentNotes(
+  activities: string[],
+  classLabels: string[],
+  dueDay: string | number | null | undefined,
+): string {
+  const parts: string[] = []
+  if (activities.length > 0) parts.push(`Atividades pretendidas: ${activities.join(', ')}`)
+  if (classLabels.length > 0) parts.push(`Turmas pretendidas: ${classLabels.join('; ')}`)
+  if (dueDay) parts.push(`Vencimento escolhido: dia ${dueDay}`)
+  return parts.join('\n')
+}
+
 /** Formata data ISO (yyyy-mm-dd ou timestamp) como dd/mm/aaaa. */
 export function formatDateBR(iso?: string | null): string {
   if (!iso) return '—'

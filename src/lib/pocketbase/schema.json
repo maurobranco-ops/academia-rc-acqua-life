@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-15T20:27:20.100Z",
+  "generatedAt": "2026-11-15T20:47:38.252Z",
   "collections": [
     {
       "name": "users",
@@ -527,6 +527,12 @@
           "type": "text",
           "required": false,
           "system": false
+        },
+        {
+          "name": "observacoes_matricula",
+          "type": "text",
+          "required": false,
+          "system": false
         }
       ],
       "indexes": [
@@ -538,8 +544,8 @@
       "name": "classes",
       "type": "base",
       "apiRules": {
-        "list": "@request.auth.id != ''",
-        "view": "@request.auth.id != ''",
+        "list": "",
+        "view": "",
         "create": "@request.auth.id != ''",
         "update": "@request.auth.id != ''",
         "delete": "@request.auth.id != ''"
@@ -1467,6 +1473,26 @@
           "required": false,
           "system": false,
           "selectValues": ["sim", "nao"]
+        },
+        {
+          "name": "activities",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": ["natacao", "hidroginastica"]
+        },
+        {
+          "name": "preferred_classes",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "classes"
+        },
+        {
+          "name": "due_day",
+          "type": "number",
+          "required": false,
+          "system": false
         }
       ],
       "indexes": []

@@ -328,7 +328,9 @@ export function AnamneseSection({ values, onChange }: AnamneseSectionProps) {
           />
         </div>
         <div className="bg-white border border-slate-200 rounded-lg px-2.5 py-2 space-y-1">
-          <Label className="text-[11px] font-semibold text-[#1E2A3A]">Objetivo com a natação</Label>
+          <Label className="text-[11px] font-semibold text-[#1E2A3A]">
+            Objetivo com a atividade escolhida
+          </Label>
           <Input
             placeholder="Ex: saúde, recreação, performance..."
             value={values.anamnese_objetivo || ''}

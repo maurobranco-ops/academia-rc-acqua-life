@@ -5,8 +5,11 @@
 // dos DOIS exames (cardiológico + dermatológico — Lei Estadual nº 9.863/2012-PB).
 // Os dados técnicos dos exames (datas, CRM, status) são lançados pelo administrador
 // na aprovação da matrícula em /matriculas — o formulário público não os coleta.
+// Preferências: atividades pretendidas (Natação/Hidroginástica), turma(s) pretendida(s)
+// (listadas da collection classes — leitura pública, sem login) e dia de vencimento
+// da mensalidade (5/10/15/20/25, obrigatório).
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, CheckCircle2, Loader2, Send, UserCheck } from 'lucide-react'
 import pb from '@/lib/pocketbase/client'
 import { Button } from '@/components/ui/button'
@@ -31,16 +34,34 @@ import { maskCpf, maskPhone } from '@/lib/formatters'
 import {
   FICHA_LEGAL,
   EMPTY_PARQ_DETAILS,
+  ACTIVITY_OPTIONS,
+  DUE_DAY_OPTIONS,
   type ParqDetailsMap,
   type ParqDetailKey,
 } from '@/lib/matricula'
 import { getErrorMessage } from '@/lib/pocketbase/errors'
+import type { ClassRecord } from '@/types/database'
 
 interface GuardianData {
   name: string
   cpf: string
   phone: string
   email: string
+}
+
+/** Rótulo curto de uma turma: nome + dias + horário. */
+function classLabel(c: ClassRecord): string {
+  const dayMap: Record<string, string> = {
+    seg: 'Seg',
+    ter: 'Ter',
+    qua: 'Qua',
+    qui: 'Qui',
+    sex: 'Sex',
+    sab: 'Sáb',
+    dom: 'Dom',
+  }
+  const days = (c.schedule_days || []).map((x) => dayMap[String(x)] || String(x)).join(' · ')
+  return [c.name, days, c.schedule_time].filter(Boolean).join(' — ')
 }
 
 const EMPTY_GUARDIAN: GuardianData = { name: '', cpf: '', phone: '', email: '' }
@@ -81,6 +102,28 @@ export default function PublicEnroll() {
 
   // Endereço (CEP com busca ViaCEP + edição manual)
   const [address, setAddress] = useState<EnrollAddressValue>({ ...EMPTY_ADDRESS })
+
+  // Preferências: atividades, turmas pretendidas e dia de vencimento da mensalidade.
+  const [activities, setActivities] = useState<string[]>([])
+  const [preferredClasses, setPreferredClasses] = useState<string[]>([])
+  const [dueDay, setDueDay] = useState('')
+  const [classes, setClasses] = useState<ClassRecord[]>([])
+
+  // Turmas reais cadastradas — leitura pública (sem login) na collection classes.
+  useEffect(() => {
+    let active = true
+    pb.collection('classes')
+      .getFullList<ClassRecord>({ sort: 'name' })
+      .then((list) => {
+        if (active) setClasses(list)
+      })
+      .catch(() => {
+        // Sem turmas acessíveis: o campo fica vazio (não bloqueia a matrícula).
+      })
+    return () => {
+      active = false
+    }
+  }, [])
 
   // Saúde (PAR-Q + anamnese). Perguntas 5-7 do PAR-Q aceitam detalhe escrito quando SIM.
   const [parq, setParq] = useState<Record<string, string>>({})
@@ -174,6 +217,9 @@ export default function PublicEnroll() {
       next.guardian_cpf = 'CPF do responsável incompleto (11 dígitos).'
     }
 
+    if (activities.length === 0)
+      next.activities = 'Marque ao menos uma atividade pretendida (Natação e/ou Hidroginástica).'
+    if (!dueDay) next.due_day = 'Escolha o dia de vencimento da mensalidade (5, 10, 15, 20 ou 25).'
     if (address.cep && onlyDigits(address.cep).length !== 8)
       next.cep = 'CEP incompleto (8 dígitos).'
     if (address.cep && onlyDigits(address.cep).length === 8 && !address.city.trim())
@@ -231,6 +277,7 @@ export default function PublicEnroll() {
         exams_cardio_delivered: cardioDelivered ? 'sim' : 'nao',
         exams_dermato_delivered: dermatoDelivered ? 'sim' : 'nao',
         term_agreed: termAgreed ? 'sim' : 'nao',
+        due_day: dueDay,
         status: 'pendente',
       }
       Object.keys(parq).forEach((k) => {
@@ -249,6 +296,9 @@ export default function PublicEnroll() {
       // (photo_file é required) e a inscrição já nasce completa, com documentos.
       const fd = new FormData()
       Object.entries(payload).forEach(([k, v]) => fd.append(k, String(v)))
+      // Arrays multi-select: cada valor em uma entrada própria do FormData.
+      activities.forEach((a) => fd.append('activities', a))
+      preferredClasses.forEach((c) => fd.append('preferred_classes', c))
       // photo_file é imagem: comprime antes de anexar (mesma rotina da tela de alunos).
       let photo = photoFile
       try {
@@ -447,6 +497,117 @@ export default function PublicEnroll() {
           )}
         </Card>
 
+        {/* Preferências: atividades, turmas pretendidas e dia de vencimento */}
+        <Card className="p-4 space-y-3">
+          <h2 className="text-sm font-bold text-[#0F1B3D]">2. Preferências da matrícula</h2>
+
+          <div className="space-y-1">
+            <Label className="text-xs font-semibold text-[#1E2A3A]">
+              Atividade(s) pretendida(s) <span className="text-red-600">*</span>
+            </Label>
+            <div className="flex flex-wrap gap-4">
+              {ACTIVITY_OPTIONS.map((opt) => (
+                <label
+                  key={opt.value}
+                  className="flex items-center gap-1.5 text-xs font-medium text-[#1E2A3A]"
+                >
+                  <Checkbox
+                    checked={activities.includes(opt.value)}
+                    onCheckedChange={(v) =>
+                      setActivities((prev) =>
+                        v === true
+                          ? prev.includes(opt.value)
+                            ? prev
+                            : [...prev, opt.value]
+                          : prev.filter((x) => x !== opt.value),
+                      )
+                    }
+                  />
+                  {opt.label}
+                </label>
+              ))}
+            </div>
+            <p className="text-[10px] text-slate-500">
+              Marque uma ou as duas — Natação e Hidroginástica.
+            </p>
+            <Err field="activities" />
+          </div>
+
+          <div className="space-y-1">
+            <Label className="text-xs font-semibold text-[#1E2A3A]">Turma(s) pretendida(s)</Label>
+            {classes.length === 0 ? (
+              <p className="text-[11px] text-slate-500">
+                Nenhuma turma disponível no momento — a academia definirá a turma na conferência.
+              </p>
+            ) : (
+              <>
+                <div className="max-h-40 overflow-y-auto rounded-lg border border-slate-200 divide-y divide-slate-100">
+                  {classes.map((c) => (
+                    <label
+                      key={c.id}
+                      className="flex items-center gap-2 px-2.5 py-1.5 text-xs cursor-pointer hover:bg-slate-50"
+                    >
+                      <Checkbox
+                        checked={preferredClasses.includes(c.id)}
+                        onCheckedChange={(v) =>
+                          setPreferredClasses((prev) =>
+                            v === true
+                              ? prev.includes(c.id)
+                                ? prev
+                                : [...prev, c.id]
+                              : prev.filter((x) => x !== c.id),
+                          )
+                        }
+                      />
+                      <span className="text-[#1E2A3A] font-medium">{classLabel(c)}</span>
+                    </label>
+                  ))}
+                </div>
+                <p className="text-[10px] text-slate-500">
+                  Turma(s) de preferência (pode marcar mais de uma) — a vaga é confirmada pela
+                  academia na conferência da matrícula.
+                </p>
+              </>
+            )}
+          </div>
+
+          <div className="space-y-1">
+            <Label className="text-xs font-semibold text-[#1E2A3A]">
+              Dia de vencimento da mensalidade <span className="text-red-600">*</span>
+            </Label>
+            <div className="flex flex-wrap gap-2">
+              {DUE_DAY_OPTIONS.map((d) => (
+                <label
+                  key={d}
+                  className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold cursor-pointer ${
+                    dueDay === String(d)
+                      ? 'border-[#0F1B3D] bg-[#0F1B3D] text-white'
+                      : 'border-slate-200 bg-white text-[#1E2A3A] hover:border-slate-300'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="due-day"
+                    className="sr-only"
+                    checked={dueDay === String(d)}
+                    onChange={() => {
+                      setDueDay(String(d))
+                      setErrors((e) => {
+                        if (!e.due_day) return e
+                        const clean = { ...e }
+                        delete clean.due_day
+                        return clean
+                      })
+                    }}
+                  />
+                  Dia {d}
+                </label>
+              ))}
+            </div>
+            <Err field="due_day" />
+          </div>
+        </Card>
+
         {/* Endereço com ViaCEP */}
         <EnrollAddressSection
           value={address}
@@ -456,7 +617,7 @@ export default function PublicEnroll() {
 
         {/* Responsável */}
         <Card className="p-4 space-y-3">
-          <h2 className="text-sm font-bold text-[#0F1B3D]">2. Dados do responsável</h2>
+          <h2 className="text-sm font-bold text-[#0F1B3D]">3. Dados do responsável</h2>
           <div className="flex items-start gap-2 rounded-lg bg-slate-50 border border-slate-200 p-2.5">
             <Checkbox
               id="self-guardian"
@@ -582,7 +743,7 @@ export default function PublicEnroll() {
 
         {/* Saúde */}
         <Card className="p-4 space-y-3">
-          <h2 className="text-sm font-bold text-[#0F1B3D]">3. Saúde</h2>
+          <h2 className="text-sm font-bold text-[#0F1B3D]">4. Saúde</h2>
           <ParqSection
             values={parq}
             details={parqDetails}
@@ -626,7 +787,7 @@ export default function PublicEnroll() {
 
         {/* Exames */}
         <Card className="p-4 space-y-3">
-          <h2 className="text-sm font-bold text-[#0F1B3D]">4. Exames médicos</h2>
+          <h2 className="text-sm font-bold text-[#0F1B3D]">5. Exames médicos</h2>
           <p className="text-xs text-slate-600 leading-relaxed">
             São exigidos apenas os <strong>DOIS exames</strong> abaixo — o{' '}
             <strong>atestado cardiológico</strong> e o <strong>exame dermatológico</strong>, com
@@ -673,8 +834,8 @@ export default function PublicEnroll() {
         {/* Termo legal */}
         <Card className="p-4 space-y-2">
           <h2 className="text-sm font-bold text-[#0F1B3D]">
-            5. Termo de ciência — {FICHA_LEGAL.law}
-          </h2>
+            6. Termo de ciência — {FICHA_LEGAL.law}
+          </h2>{' '}
           <p className="text-xs text-slate-600 leading-relaxed">{FICHA_LEGAL.riskTerm}</p>
           <p className="text-xs text-slate-600 leading-relaxed">
             <strong>Normas da academia:</strong> Conforme {FICHA_LEGAL.law}, é obrigatória a

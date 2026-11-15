@@ -6,13 +6,15 @@ import { useCallback, useEffect, useState } from 'react'
 import type { RecordModel } from 'pocketbase'
 import pb from '@/lib/pocketbase/client'
 import { academyService } from '@/services/academy'
-import type { EnrollmentRequestRecord, StudentRecord } from '@/types/database'
+import type { ClassRecord, EnrollmentRequestRecord, StudentRecord } from '@/types/database'
 import {
   PARQ_QUESTIONS,
   ANAMNESE_QUESTIONS,
   formatDateBR,
   PARQ_YES,
   PARQ_DETAIL_QUESTION,
+  activityLabel,
+  buildEnrollmentNotes,
   type ParqDetailKey,
 } from '@/lib/matricula'
 import { FICHA_LEGAL } from '@/lib/matricula'
@@ -116,10 +118,26 @@ function SectionCard({
   )
 }
 
+/** Rótulo de turma na conferência: nome + dias + horário. */
+function classRecordLabel(c: ClassRecord): string {
+  const dayMap: Record<string, string> = {
+    seg: 'Seg',
+    ter: 'Ter',
+    qua: 'Qua',
+    qui: 'Qui',
+    sex: 'Sex',
+    sab: 'Sáb',
+    dom: 'Dom',
+  }
+  const days = (c.schedule_days || []).map((x) => dayMap[String(x)] || String(x)).join(' · ')
+  return [c.name, days, c.schedule_time].filter(Boolean).join(' — ')
+}
+
 export default function EnrollmentsReview() {
   const { toast } = useToast()
   const [requests, setRequests] = useState<EnrollmentRequestRecord[]>([])
   const [students, setStudents] = useState<StudentRecord[]>([])
+  const [classes, setClasses] = useState<ClassRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [rejectTarget, setRejectTarget] = useState<EnrollmentRequestRecord | null>(null)
@@ -135,12 +153,14 @@ export default function EnrollmentsReview() {
     setLoading(true)
     setLoadError(false)
     try {
-      const [reqs, sts] = await Promise.all([
+      const [reqs, sts, cls] = await Promise.all([
         academyService.getEnrollmentRequests(),
         academyService.getStudents({ expand: '' }),
+        pb.collection('classes').getFullList<ClassRecord>({ sort: 'name' }),
       ])
       setRequests(reqs)
       setStudents(sts)
+      setClasses(cls)
     } catch (err) {
       console.error(err)
       // Mensagem amigável em pt-BR — nunca vazar o erro cru do backend na UI.
@@ -220,6 +240,17 @@ export default function EnrollmentsReview() {
         cardio_status: examsForm.cardioStatus,
         dermato_date: examsForm.dermatoDate || undefined,
         dermato_status: examsForm.dermatoStatus,
+        // Dia de vencimento escolhido no /matricula (migration 0023) — vai para o cadastro.
+        due_day: request.due_day ? Number(request.due_day) : undefined,
+        // Referência do admin: atividades/turmas pretendidas viram texto na ficha do aluno.
+        observacoes_matricula: buildEnrollmentNotes(
+          (request.activities || []).map(activityLabel),
+          (request.preferred_classes || [])
+            .map((id) => classes.find((c) => c.id === id))
+            .filter((c): c is ClassRecord => !!c)
+            .map(classRecordLabel),
+          request.due_day,
+        ),
       }
 
       if (studentId) {
@@ -285,6 +316,10 @@ export default function EnrollmentsReview() {
     const rgUrl = requestFileUrl(r, r.guardian_rg_file)
     const linkedStudent = r.student_id ? students.find((s) => s.id === r.student_id) : undefined
     const isBusy = busyId === r.id
+    const preferredClasses = (r.preferred_classes || [])
+      .map((id) => classes.find((c) => c.id === id))
+      .filter((c): c is ClassRecord => !!c)
+    const activities = (r.activities || []).map(activityLabel)
 
     return (
       <Card key={r.id} className="rounded-xl border-slate-200 shadow-xs overflow-hidden">
@@ -383,6 +418,33 @@ export default function EnrollmentsReview() {
             )}
           </SectionCard>
 
+          <SectionCard title="Preferências da matrícula" icon={UserCheck}>
+            <div className="flex justify-between items-start gap-3 py-0.5">
+              <span className="text-[11px] text-slate-700">Atividade(s) pretendida(s)</span>
+              <span className="text-xs font-semibold text-[#0F1B3D] text-right">
+                {activities.length > 0 ? activities.join(', ') : '—'}
+              </span>
+            </div>
+            <div className="py-0.5">
+              <span className="text-[11px] text-slate-500">Turma(s) pretendida(s)</span>
+              {preferredClasses.length === 0 ? (
+                <p className="text-xs font-semibold text-slate-400">—</p>
+              ) : (
+                <ul className="mt-0.5 space-y-0.5">
+                  {preferredClasses.map((c) => (
+                    <li key={c.id} className="text-xs font-semibold text-[#0F1B3D]">
+                      {classRecordLabel(c)}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            <InfoRow
+              label="Dia de vencimento escolhido"
+              value={r.due_day ? `Dia ${r.due_day}` : null}
+            />
+          </SectionCard>
+
           <SectionCard title="PAR-Q (7 perguntas)" icon={ClipboardCheck}>
             {PARQ_QUESTIONS.map((q, i) => {
               const detailKey = (
@@ -417,7 +479,7 @@ export default function EnrollmentsReview() {
               </div>
             ))}
             <InfoRow label="Medicamentos em uso" value={r.anamnese_medicamentos} />
-            <InfoRow label="Objetivo com a natação" value={r.anamnese_objetivo} />
+            <InfoRow label="Objetivo com a atividade escolhida" value={r.anamnese_objetivo} />
           </SectionCard>
 
           <SectionCard title="Exames — Lei Estadual nº 9.863/2012-PB" icon={HeartPulse}>

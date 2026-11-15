@@ -81,6 +81,8 @@ export interface StudentRecord extends RecordModel {
   anamnese_medicamentos?: string
   anamnese_objetivo?: string
   uso_imagem_autorizado?: 'sim' | 'nao'
+  // Referência das preferências escolhidas na matrícula on-line (migration 0023)
+  observacoes_matricula?: string
   expand?: {
     plan_id?: PlanRecord
   }
@@ -225,6 +227,10 @@ export interface EnrollmentRequestRecord extends RecordModel {
   exams_dermato_delivered?: 'sim' | 'nao'
   // Concordância com o termo de ciência (Lei Estadual nº 9.863/2012-PB, migration 0022)
   term_agreed?: 'sim' | 'nao'
+  // Preferências da matrícula (migration 0023)
+  activities?: string[]
+  preferred_classes?: string[]
+  due_day?: string
   student_id?: string
   reviewed_at?: string
 }
