@@ -309,3 +309,41 @@
     animation: spotlight 2s ease forwards;
   }
 }
+
+/* ============================================================
+   Ficha de matrícula imprimível (window.print) — frente 4.
+   Fora de .print-area só fica visível o conteúdo da ficha.
+   ============================================================ */
+@media print {
+  @page {
+    margin: 12mm;
+  }
+  body {
+    background: #fff !important;
+  }
+  body * {
+    visibility: hidden;
+  }
+  .print-area,
+  .print-area * {
+    visibility: visible;
+  }
+  .print-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    padding: 0;
+    margin: 0;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .print-sheet {
+    box-shadow: none !important;
+    border: none !important;
+  }
+  .print-break {
+    break-before: page;
+  }
+}

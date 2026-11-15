@@ -9,6 +9,7 @@ import type {
   PaymentRecord,
   TransactionRecord,
   SettingRecord,
+  EnrollmentRequestRecord,
 } from '@/types/database'
 
 export const academyService = {
@@ -24,6 +25,29 @@ export const academyService = {
   },
   async deletePlan(id: string): Promise<boolean> {
     return pb.collection('plans').delete(id)
+  },
+
+  // Enrollment requests — inscrições do formulário público /matricula
+  async getEnrollmentRequests(status?: string): Promise<EnrollmentRequestRecord[]> {
+    return pb.collection('enrollment_requests').getFullList<EnrollmentRequestRecord>({
+      sort: '-created',
+      filter: status ? `status = "${status}"` : undefined,
+    })
+  },
+  async getEnrollmentRequest(id: string): Promise<EnrollmentRequestRecord> {
+    return pb.collection('enrollment_requests').getOne<EnrollmentRequestRecord>(id)
+  },
+  async createEnrollmentRequest(data: FormData): Promise<EnrollmentRequestRecord> {
+    return pb.collection('enrollment_requests').create<EnrollmentRequestRecord>(data)
+  },
+  async updateEnrollmentRequest(
+    id: string,
+    data: Partial<EnrollmentRequestRecord> | FormData,
+  ): Promise<EnrollmentRequestRecord> {
+    return pb.collection('enrollment_requests').update<EnrollmentRequestRecord>(id, data)
+  },
+  async deleteEnrollmentRequest(id: string): Promise<boolean> {
+    return pb.collection('enrollment_requests').delete(id)
   },
 
   // Instructors

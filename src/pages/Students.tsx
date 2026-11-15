@@ -60,6 +60,16 @@ import { maskCpf, maskPhone, maskCep, isValidCpf, isValidEmail } from '@/lib/for
 import { fetchAddressByCep } from '@/lib/viacep'
 import { compressImage } from '@/lib/imageCompression'
 import { StudentPhotoPicker } from '@/components/StudentPhotoPicker'
+import {
+  EMPTY_PARQ,
+  EMPTY_ANAMNESE,
+  getParq,
+  getAnamnese,
+  type ParqValues,
+  type AnamneseValues,
+} from '@/lib/matricula'
+import { MatriculaExamsSection, MatriculaHealthSection } from '@/components/MatriculaFormSections'
+import { PrintableFichaDialog, studentToPrintable } from '@/components/PrintableFicha'
 
 // Rota de retorno à ficha do aluno após a edição aberta a partir do detalhe.
 // O botão "Voltar para Turma" da ficha é derivado dos dados de matrícula do aluno
@@ -114,11 +124,21 @@ export default function Students() {
   const [formDueDay, setFormDueDay] = useState<string>('5')
   const [formValidadePagto, setFormValidadePagto] = useState<string>('')
   const [formStatus, setFormStatus] = useState<'ativo' | 'inativo'>('ativo')
+  // Matrícula aquática: exames obrigatórios, PAR-Q, anamnese e uso de imagem
+  const [formAptidaoDate, setFormAptidaoDate] = useState('')
+  const [formAptidaoCrm, setFormAptidaoCrm] = useState('')
+  const [formAptidaoStatus, setFormAptidaoStatus] = useState<'entregue' | 'pendente'>('pendente')
+  const [formDermatoDate, setFormDermatoDate] = useState('')
+  const [formDermatoStatus, setFormDermatoStatus] = useState<'entregue' | 'pendente'>('pendente')
+  const [formParq, setFormParq] = useState<ParqValues>(EMPTY_PARQ)
+  const [formAnamnese, setFormAnamnese] = useState<AnamneseValues>(EMPTY_ANAMNESE)
+  const [formUsoImagem, setFormUsoImagem] = useState<'sim' | 'nao' | ''>('')
   const [submitting, setSubmitting] = useState(false)
 
   // Foto individual do aluno (formulário cadastrar/editar)
   const [photoFile, setPhotoFile] = useState<File | null>(null)
   const [photoPreview, setPhotoPreview] = useState<string | null>(null)
+  const [fichaOpen, setFichaOpen] = useState(false)
   const [photoUploading, setPhotoUploading] = useState(false)
 
   // Endereço (CEP com busca automática ViaCEP)
@@ -272,6 +292,14 @@ export default function Students() {
     setFormValidadePagto('')
     setFormStatus('ativo')
     setFormErrors({})
+    setFormAptidaoDate('')
+    setFormAptidaoCrm('')
+    setFormAptidaoStatus('pendente')
+    setFormDermatoDate('')
+    setFormDermatoStatus('pendente')
+    setFormParq({ ...EMPTY_PARQ })
+    setFormAnamnese({ ...EMPTY_ANAMNESE })
+    setFormUsoImagem('')
     setStudentModalOpen(true)
   }
 
@@ -343,6 +371,14 @@ export default function Students() {
       st.validade_do_ultimo_pagamento ? st.validade_do_ultimo_pagamento.substring(0, 10) : '',
     )
     setFormStatus(st.status || 'ativo')
+    setFormAptidaoDate(st.aptidao_date ? st.aptidao_date.substring(0, 10) : '')
+    setFormAptidaoCrm(st.aptidao_crm || '')
+    setFormAptidaoStatus(st.aptidao_status === 'entregue' ? 'entregue' : 'pendente')
+    setFormDermatoDate(st.dermato_date ? st.dermato_date.substring(0, 10) : '')
+    setFormDermatoStatus(st.dermato_status === 'entregue' ? 'entregue' : 'pendente')
+    setFormParq(getParq(st))
+    setFormAnamnese(getAnamnese(st))
+    setFormUsoImagem((st.uso_imagem_autorizado as 'sim' | 'nao' | '') || '')
     setStudentModalOpen(true)
   }
 
@@ -483,6 +519,24 @@ export default function Students() {
           ? `${formValidadePagto} 00:00:00.000Z`
           : undefined,
         status: formStatus,
+        aptidao_date: formAptidaoDate ? `${formAptidaoDate} 00:00:00.000Z` : undefined,
+        aptidao_crm: formAptidaoCrm.trim() || undefined,
+        aptidao_status: formAptidaoStatus,
+        dermato_date: formDermatoDate ? `${formDermatoDate} 00:00:00.000Z` : undefined,
+        dermato_status: formDermatoStatus,
+        parq_1: formParq.parq_1 || '',
+        parq_2: formParq.parq_2 || '',
+        parq_3: formParq.parq_3 || '',
+        parq_4: formParq.parq_4 || '',
+        parq_5: formParq.parq_5 || '',
+        parq_6: formParq.parq_6 || '',
+        parq_7: formParq.parq_7 || '',
+        anamnese_medo_agua: formAnamnese.anamnese_medo_agua || '',
+        anamnese_convulsoes: formAnamnese.anamnese_convulsoes || '',
+        anamnese_alergia_cloro: formAnamnese.anamnese_alergia_cloro || '',
+        anamnese_medicamentos: formAnamnese.anamnese_medicamentos.trim() || undefined,
+        anamnese_objetivo: formAnamnese.anamnese_objetivo.trim() || undefined,
+        uso_imagem_autorizado: formUsoImagem || undefined,
       }
 
       let studentId = selectedStudent?.id
@@ -1715,6 +1769,30 @@ export default function Students() {
                 </div>
               </div>
 
+              {/* Exames obrigatórios (Lei 9.863/2012-PB): aptidão física + dermatológico */}
+              <MatriculaExamsSection
+                aptidaoDate={formAptidaoDate}
+                aptidaoCrm={formAptidaoCrm}
+                aptidaoStatus={formAptidaoStatus}
+                dermatoDate={formDermatoDate}
+                dermatoStatus={formDermatoStatus}
+                onAptidaoDate={setFormAptidaoDate}
+                onAptidaoCrm={setFormAptidaoCrm}
+                onAptidaoStatus={setFormAptidaoStatus}
+                onDermatoDate={setFormDermatoDate}
+                onDermatoStatus={setFormDermatoStatus}
+              />
+
+              {/* PAR-Q e anamnese aquática (frente 2) */}
+              <MatriculaHealthSection
+                parq={formParq}
+                anamnese={formAnamnese}
+                usoImagem={formUsoImagem}
+                onParq={setFormParq}
+                onAnamnese={setFormAnamnese}
+                onUsoImagem={setFormUsoImagem}
+              />
+
               {/* Checkbox: aproveitar os dados do aluno para o responsável */}
               <label
                 htmlFor="self-responsible-check"
@@ -2110,6 +2188,13 @@ export default function Students() {
           </form>
         </DialogContent>
       </Dialog>
+
+      <PrintableFichaDialog
+        open={fichaOpen}
+        onOpenChange={setFichaOpen}
+        data={selectedStudent ? studentToPrintable(selectedStudent) : null}
+        studentId={selectedStudent?.id}
+      />
 
       {/* ============================================================== */}
       {/* Delete Safeguard Confirmation Modal */}
