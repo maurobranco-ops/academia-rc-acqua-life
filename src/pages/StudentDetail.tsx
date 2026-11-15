@@ -51,6 +51,7 @@ import type {
   EnrollmentRecord,
   ClassRecord,
 } from '@/types/database'
+import { getExamAlert } from '@/types/database'
 import { useToast } from '@/hooks/use-toast'
 import { getStudentPhotoUrl } from '@/lib/studentPhoto'
 import { formatPhoneDisplay } from '@/lib/formatters'
@@ -493,6 +494,55 @@ export default function StudentDetail() {
                   <FileText className="w-4 h-4 text-[#17A2B8]" />
                   <span>CPF: {student.cpf || student.guardian_cpf || 'Não informado'}</span>
                 </div>
+              </div>
+              {/* Tarjas de validade dos DOIS exames (Lei PB 9.863/2012 — 6 meses,
+                  janela âmbar de 15 dias). Edição dos dados na aba Saúde. */}
+              <div className="flex flex-col gap-1.5 sm:grid sm:grid-cols-2 sm:gap-3">
+                {[
+                  {
+                    title: 'Atestado cardiológico',
+                    date: student.cardio_date,
+                    status: student.cardio_status,
+                  },
+                  {
+                    title: 'Exame dermatológico',
+                    date: student.dermato_date,
+                    status: student.dermato_status,
+                  },
+                ].map(({ title, date, status }) => {
+                  const alert = getExamAlert(date, status)
+                  const badgeClass =
+                    alert?.level === 'expired'
+                      ? 'bg-red-50 border-red-300 text-red-800'
+                      : alert?.level === 'warn'
+                        ? 'bg-amber-50 border-amber-300 text-amber-800'
+                        : alert?.level === 'ok'
+                          ? 'bg-emerald-50 border-emerald-300 text-emerald-800'
+                          : 'bg-slate-50 border-slate-200 text-slate-500'
+                  const dot =
+                    alert?.level === 'expired'
+                      ? '🔴'
+                      : alert?.level === 'warn'
+                        ? '🟡'
+                        : alert?.level === 'ok'
+                          ? '🟢'
+                          : '⚪'
+                  return (
+                    <div
+                      key={title}
+                      className={`flex items-center justify-between gap-2 border rounded-lg px-2.5 py-1.5 ${badgeClass}`}
+                    >
+                      <span className="text-[11px] font-semibold truncate">
+                        {dot} {title}
+                      </span>
+                      <span className="text-[10px] font-medium shrink-0 text-right">
+                        {alert
+                          ? `${alert.level === 'ok' ? 'Válido' : alert.level === 'expired' ? 'Vencido' : alert.label}${alert.expiry ? ` · até ${formatDateBR(alert.expiry)}` : ''}`
+                          : 'Sem data de emissão'}
+                      </span>
+                    </div>
+                  )
+                })}
               </div>
             </div>
           </div>

@@ -109,11 +109,11 @@ export const FICHA_LEGAL = {
   city: 'Bayeux - PB',
   law: 'Lei Estadual nº 9.863/2012-PB',
   lawText:
-    'Conforme a Lei Estadual nº 9.863/2012-PB, é obrigatória a apresentação do Atestado de Aptidão Física (cardiológico) e do Exame Médico Dermatológico, com validade de 6 (seis) meses a partir da data de emissão, como condição para a prática de natação e/ou hidroginástica.',
+    'Conforme a Lei Estadual nº 9.863/2012-PB, são obrigatórios o Atestado Cardiológico e o Exame Médico Dermatológico, com validade de 6 (seis) meses a partir da data de emissão, como condição para a prática de natação e/ou hidroginástica.',
   cardioLawText:
-    'O atestado cardiológico de aptidão física é exigido como condição para a prática das atividades de natação e/ou hidroginástica, nos termos da Lei Estadual nº 9.863/2012-PB.',
+    'O atestado cardiológico é exigido como condição para a prática das atividades de natação e/ou hidroginástica, nos termos da Lei Estadual nº 9.863/2012-PB.',
   footer:
-    'Conforme a Lei Estadual nº 9.863/2012-PB: atestado de aptidão física (cardiológico) e exame médico dermatológico obrigatórios, com validade de 6 (seis) meses.',
+    'Conforme a Lei Estadual nº 9.863/2012-PB: atestado cardiológico e exame médico dermatológico obrigatórios, com validade de 6 (seis) meses.',
   riskTerm:
     'Declaro estar ciente de que a prática de natação/hidroginástica envolve riscos inerentes à atividade física em meio aquático, e me comprometo a informar à academia qualquer alteração de saúde que venha a ocorrer durante o período de matrícula.',
   rules:

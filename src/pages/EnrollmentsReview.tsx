@@ -8,6 +8,7 @@ import pb from '@/lib/pocketbase/client'
 import { academyService } from '@/services/academy'
 import type { EnrollmentRequestRecord, StudentRecord } from '@/types/database'
 import { PARQ_QUESTIONS, ANAMNESE_QUESTIONS, formatDateBR } from '@/lib/matricula'
+import { FICHA_LEGAL } from '@/lib/matricula'
 import {
   requestToPrintable,
   PrintableFichaDialog,
@@ -16,6 +17,8 @@ import {
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
@@ -40,6 +43,23 @@ import {
   UserCheck,
   X,
 } from 'lucide-react'
+
+/** Dados dos DOIS exames coletados no diálogo de aprovação (Lei PB 9.863/2012). */
+interface ApproveExamsForm {
+  cardioDate: string
+  cardioCrm: string
+  cardioStatus: 'entregue' | 'pendente'
+  dermatoDate: string
+  dermatoStatus: 'entregue' | 'pendente'
+}
+
+const EMPTY_EXAMS_FORM: ApproveExamsForm = {
+  cardioDate: '',
+  cardioCrm: '',
+  cardioStatus: 'entregue',
+  dermatoDate: '',
+  dermatoStatus: 'entregue',
+}
 
 /** URL pública de um arquivo (foto/RG) do registro de inscrição. */
 function requestFileUrl(record: EnrollmentRequestRecord, filename?: string): string | null {
@@ -98,6 +118,10 @@ export default function EnrollmentsReview() {
   const [rejectTarget, setRejectTarget] = useState<EnrollmentRequestRecord | null>(null)
   const [rejectNotes, setRejectNotes] = useState('')
   const [fichaData, setFichaData] = useState<PrintableFichaData | null>(null)
+  // Aprovação: diálogo que coleta os dados dos DOIS exames (cardiológico e
+  // dermatológico) antes de confirmar — a inscrição só traz a declaração.
+  const [approveTarget, setApproveTarget] = useState<EnrollmentRequestRecord | null>(null)
+  const [examsForm, setExamsForm] = useState<ApproveExamsForm>(EMPTY_EXAMS_FORM)
   const [loadError, setLoadError] = useState(false)
 
   const load = useCallback(async () => {
@@ -139,6 +163,12 @@ export default function EnrollmentsReview() {
     await academyService.uploadStudentPhoto(studentId, blob, request.photo_file)
   }
 
+  /** Abre o diálogo de aprovação, coletando antes os dados dos DOIS exames. */
+  const openApprove = (request: EnrollmentRequestRecord) => {
+    setApproveTarget(request)
+    setExamsForm({ ...EMPTY_EXAMS_FORM })
+  }
+
   const handleApprove = async (request: EnrollmentRequestRecord) => {
     setBusyId(request.id)
     try {
@@ -172,9 +202,13 @@ export default function EnrollmentsReview() {
         neighborhood: request.neighborhood || undefined,
         city: request.city || undefined,
         uf: request.uf || undefined,
-        cardio_date: request.cardio_date || undefined,
-        cardio_crm: request.cardio_crm || undefined,
-        cardio_status: (request.cardio_status as 'entregue' | 'pendente' | undefined) || undefined,
+        // Exames (Lei PB 9.863/2012): lançados pelo administrador no diálogo de
+        // aprovação — cardiológico (data + CRM + status) e dermatológico (data + status).
+        cardio_date: examsForm.cardioDate || undefined,
+        cardio_crm: examsForm.cardioCrm.trim() || undefined,
+        cardio_status: examsForm.cardioStatus,
+        dermato_date: examsForm.dermatoDate || undefined,
+        dermato_status: examsForm.dermatoStatus,
       }
 
       if (studentId) {
@@ -196,6 +230,7 @@ export default function EnrollmentsReview() {
         title: 'Inscrição aprovada',
         description: `${request.student_name} agora consta na lista de alunos.`,
       })
+      setApproveTarget(null)
       await load()
     } catch (err) {
       console.error(err)
@@ -361,24 +396,13 @@ export default function EnrollmentsReview() {
 
           <SectionCard title="Exames — Lei Estadual nº 9.863/2012-PB" icon={HeartPulse}>
             <InfoRow
-              label="Atestado de Aptidão Física"
+              label="Declarou a entrega dos exames (cardiológico + dermatológico)"
               value={
-                r.aptidao_date
-                  ? `${formatDateBR(r.aptidao_date)} · ${r.aptidao_status === 'entregue' ? 'Entregue' : 'Pendente'}`
-                  : null
-              }
-            />
-            <InfoRow label="Atestado de Aptidão Física — CRM" value={r.aptidao_crm} />
-            <InfoRow
-              label="Exame Dermatológico"
-              value={
-                r.dermato_date
-                  ? `${formatDateBR(r.dermato_date)} · ${r.dermato_status === 'entregue' ? 'Entregue' : 'Pendente'}`
-                  : null
+                r.exams_delivered === 'sim' ? 'Sim' : r.exams_delivered === 'nao' ? 'Não' : null
               }
             />
             <InfoRow
-              label="Atestado Cardiológico"
+              label="Atestado Cardiológico — lançado"
               value={
                 r.cardio_date
                   ? `${formatDateBR(r.cardio_date)} · ${r.cardio_status === 'entregue' ? 'Entregue' : 'Pendente'}`
@@ -386,8 +410,17 @@ export default function EnrollmentsReview() {
               }
             />
             <InfoRow label="Atestado Cardiológico — CRM" value={r.cardio_crm} />
+            <InfoRow
+              label="Exame Dermatológico — lançado"
+              value={
+                r.dermato_date
+                  ? `${formatDateBR(r.dermato_date)} · ${r.dermato_status === 'entregue' ? 'Entregue' : 'Pendente'}`
+                  : null
+              }
+            />
             <p className="text-[10px] text-slate-500 pt-1">
-              Validade de 6 meses da emissão — exigidos para natação e/ou hidroginástica.
+              Validade de 6 meses da emissão — dados técnicos lançados pelo administrador na
+              aprovação.
             </p>
           </SectionCard>
         </div>
@@ -428,13 +461,9 @@ export default function EnrollmentsReview() {
                 size="sm"
                 className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
                 disabled={isBusy}
-                onClick={() => handleApprove(r)}
+                onClick={() => openApprove(r)}
               >
-                {isBusy ? (
-                  <Loader2 className="w-4 h-4 mr-1 animate-spin" />
-                ) : (
-                  <Check className="w-4 h-4 mr-1" />
-                )}
+                <Check className="w-4 h-4 mr-1" />
                 Aprovar
               </Button>
             </>
@@ -540,6 +569,127 @@ export default function EnrollmentsReview() {
                 <X className="w-4 h-4 mr-1" />
               )}
               Confirmar recusa
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Diálogo de aprovação: coleta os dados dos DOIS exames (Lei PB 9.863/2012) */}
+      <Dialog
+        open={!!approveTarget}
+        onOpenChange={(open) => {
+          if (!open) setApproveTarget(null)
+        }}
+      >
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Aprovar inscrição — lançar exames</DialogTitle>
+            <DialogDescription>
+              A inscrição de <strong>{approveTarget?.student_name}</strong> declarou a entrega dos
+              exames. Lance agora os dados técnicos dos DOIS exames obrigatórios — eles vão para a
+              ficha do aluno (Lei Estadual nº 9.863/2012-PB, validade de 6 meses).
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <p className="text-xs font-bold uppercase tracking-wide text-[#0F1B3D]">
+                Atestado cardiológico
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label htmlFor="appr-cardio-date" className="text-xs">
+                    Data de emissão
+                  </Label>
+                  <Input
+                    id="appr-cardio-date"
+                    type="date"
+                    value={examsForm.cardioDate}
+                    onChange={(e) => setExamsForm((f) => ({ ...f, cardioDate: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="appr-cardio-crm" className="text-xs">
+                    CRM
+                  </Label>
+                  <Input
+                    id="appr-cardio-crm"
+                    placeholder="Ex.: 12345-PB"
+                    value={examsForm.cardioCrm}
+                    onChange={(e) => setExamsForm((f) => ({ ...f, cardioCrm: e.target.value }))}
+                  />
+                </div>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Status</Label>
+                <div className="flex gap-4">
+                  {(['entregue', 'pendente'] as const).map((s) => (
+                    <label key={s} className="flex items-center gap-1.5 text-xs font-medium">
+                      <input
+                        type="radio"
+                        name="appr-cardio-status"
+                        checked={examsForm.cardioStatus === s}
+                        onChange={() => setExamsForm((f) => ({ ...f, cardioStatus: s }))}
+                      />
+                      {s === 'entregue' ? 'Entregue' : 'Pendente'}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-xs font-bold uppercase tracking-wide text-[#0F1B3D]">
+                Exame dermatológico
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label htmlFor="appr-dermato-date" className="text-xs">
+                    Data de emissão
+                  </Label>
+                  <Input
+                    id="appr-dermato-date"
+                    type="date"
+                    value={examsForm.dermatoDate}
+                    onChange={(e) => setExamsForm((f) => ({ ...f, dermatoDate: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Status</Label>
+                  <div className="flex gap-4">
+                    {(['entregue', 'pendente'] as const).map((s) => (
+                      <label key={s} className="flex items-center gap-1.5 text-xs font-medium">
+                        <input
+                          type="radio"
+                          name="appr-dermato-status"
+                          checked={examsForm.dermatoStatus === s}
+                          onChange={() => setExamsForm((f) => ({ ...f, dermatoStatus: s }))}
+                        />
+                        {s === 'entregue' ? 'Entregue' : 'Pendente'}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setApproveTarget(null)}>
+              Cancelar
+            </Button>
+            <Button
+              size="sm"
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
+              disabled={busyId === approveTarget?.id}
+              onClick={() => approveTarget && handleApprove(approveTarget)}
+            >
+              {busyId === approveTarget?.id ? (
+                <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+              ) : (
+                <Check className="w-4 h-4 mr-1" />
+              )}
+              Confirmar aprovação
             </Button>
           </DialogFooter>
         </DialogContent>

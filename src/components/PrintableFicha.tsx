@@ -27,12 +27,13 @@ export interface PrintableFichaData {
   parq: ParqValues
   anamnese: Partial<Record<AnamneseKey, string>>
   usoImagem: string
-  aptidaoDate?: string
-  aptidaoCrm?: string
+  /** Exame dermatológico (Lei PB 9.863/2012 — natação e/ou hidroginástica). */
   dermatoDate?: string
   /** Atestado cardiológico (Lei PB 9.863/2012 — natação e/ou hidroginástica). */
   cardioDate?: string
   cardioCrm?: string
+  /** Declaração do responsável na matrícula on-line (checkbox única). */
+  examsDelivered?: string
   /** Endereço do(a) aluno(a) (students 0016 / enrollment_requests 0020). */
   cep?: string
   street?: string
@@ -71,8 +72,6 @@ export function studentToPrintable(st: StudentRecord): PrintableFichaData {
       anamnese_objetivo: st.anamnese_objetivo || '',
     },
     usoImagem: st.uso_imagem_autorizado || '',
-    aptidaoDate: st.aptidao_date,
-    aptidaoCrm: st.aptidao_crm,
     dermatoDate: st.dermato_date,
     cardioDate: st.cardio_date,
     cardioCrm: st.cardio_crm,
@@ -113,11 +112,10 @@ export function requestToPrintable(r: EnrollmentRequestRecord): PrintableFichaDa
       anamnese_objetivo: r.anamnese_objetivo || '',
     },
     usoImagem: r.uso_imagem_autorizado || '',
-    aptidaoDate: r.aptidao_date,
-    aptidaoCrm: r.aptidao_crm,
     dermatoDate: r.dermato_date,
     cardioDate: r.cardio_date,
     cardioCrm: r.cardio_crm,
+    examsDelivered: r.exams_delivered,
     cep: r.cep,
     street: r.street,
     streetNumber: r.street_number,
@@ -300,21 +298,10 @@ export function PrintableFichaDialog({
             </h3>
             <p className="text-[10px] text-slate-500 mb-1.5">{FICHA_LEGAL.lawText}</p>
             <Row
-              label="Atestado de Aptidão Física — emissão"
-              value={data.aptidaoDate ? formatDateBR(data.aptidaoDate) : null}
-            />
-            <Row label="Atestado de Aptidão Física — CRM" value={data.aptidaoCrm} />
-            <Row
-              label="Atestado de Aptidão Física — válido até"
-              value={data.aptidaoDate ? formatDateBR(addSixMonths(data.aptidaoDate)) : null}
-            />
-            <Row
-              label="Exame Dermatológico — emissão"
-              value={data.dermatoDate ? formatDateBR(data.dermatoDate) : null}
-            />
-            <Row
-              label="Exame Dermatológico — válido até"
-              value={data.dermatoDate ? formatDateBR(addSixMonths(data.dermatoDate)) : null}
+              label="Declarou a entrega dos exames (responsável)"
+              value={
+                data.examsDelivered === 'sim' ? 'Sim' : data.examsDelivered === 'nao' ? 'Não' : null
+              }
             />
             <Row
               label="Atestado Cardiológico — emissão"
@@ -324,6 +311,14 @@ export function PrintableFichaDialog({
             <Row
               label="Atestado Cardiológico — válido até"
               value={data.cardioDate ? formatDateBR(addSixMonths(data.cardioDate)) : null}
+            />
+            <Row
+              label="Exame Dermatológico — emissão"
+              value={data.dermatoDate ? formatDateBR(data.dermatoDate) : null}
+            />
+            <Row
+              label="Exame Dermatológico — válido até"
+              value={data.dermatoDate ? formatDateBR(addSixMonths(data.dermatoDate)) : null}
             />
           </section>
 

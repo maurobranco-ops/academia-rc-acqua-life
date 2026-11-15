@@ -125,10 +125,11 @@ export default function Students() {
   const [formDueDay, setFormDueDay] = useState<string>('5')
   const [formValidadePagto, setFormValidadePagto] = useState<string>('')
   const [formStatus, setFormStatus] = useState<'ativo' | 'inativo'>('ativo')
-  // Matrícula aquática: exames obrigatórios, PAR-Q, anamnese e uso de imagem
-  const [formAptidaoDate, setFormAptidaoDate] = useState('')
-  const [formAptidaoCrm, setFormAptidaoCrm] = useState('')
-  const [formAptidaoStatus, setFormAptidaoStatus] = useState<'entregue' | 'pendente'>('pendente')
+  // Matrícula aquática: os DOIS exames obrigatórios (cardiológico + dermatológico),
+  // PAR-Q, anamnese e uso de imagem
+  const [formCardioDate, setFormCardioDate] = useState('')
+  const [formCardioCrm, setFormCardioCrm] = useState('')
+  const [formCardioStatus, setFormCardioStatus] = useState<'entregue' | 'pendente'>('pendente')
   const [formDermatoDate, setFormDermatoDate] = useState('')
   const [formDermatoStatus, setFormDermatoStatus] = useState<'entregue' | 'pendente'>('pendente')
   const [formParq, setFormParq] = useState<ParqValues>(EMPTY_PARQ)
@@ -293,9 +294,9 @@ export default function Students() {
     setFormValidadePagto('')
     setFormStatus('ativo')
     setFormErrors({})
-    setFormAptidaoDate('')
-    setFormAptidaoCrm('')
-    setFormAptidaoStatus('pendente')
+    setFormCardioDate('')
+    setFormCardioCrm('')
+    setFormCardioStatus('pendente')
     setFormDermatoDate('')
     setFormDermatoStatus('pendente')
     setFormParq({ ...EMPTY_PARQ })
@@ -372,9 +373,9 @@ export default function Students() {
       st.validade_do_ultimo_pagamento ? st.validade_do_ultimo_pagamento.substring(0, 10) : '',
     )
     setFormStatus(st.status || 'ativo')
-    setFormAptidaoDate(st.aptidao_date ? st.aptidao_date.substring(0, 10) : '')
-    setFormAptidaoCrm(st.aptidao_crm || '')
-    setFormAptidaoStatus(st.aptidao_status === 'entregue' ? 'entregue' : 'pendente')
+    setFormCardioDate(st.cardio_date ? st.cardio_date.substring(0, 10) : '')
+    setFormCardioCrm(st.cardio_crm || '')
+    setFormCardioStatus(st.cardio_status === 'entregue' ? 'entregue' : 'pendente')
     setFormDermatoDate(st.dermato_date ? st.dermato_date.substring(0, 10) : '')
     setFormDermatoStatus(st.dermato_status === 'entregue' ? 'entregue' : 'pendente')
     setFormParq(getParq(st))
@@ -520,9 +521,9 @@ export default function Students() {
           ? `${formValidadePagto} 00:00:00.000Z`
           : undefined,
         status: formStatus,
-        aptidao_date: formAptidaoDate ? `${formAptidaoDate} 00:00:00.000Z` : undefined,
-        aptidao_crm: formAptidaoCrm.trim() || undefined,
-        aptidao_status: formAptidaoStatus,
+        cardio_date: formCardioDate ? `${formCardioDate} 00:00:00.000Z` : undefined,
+        cardio_crm: formCardioCrm.trim() || undefined,
+        cardio_status: formCardioStatus,
         dermato_date: formDermatoDate ? `${formDermatoDate} 00:00:00.000Z` : undefined,
         dermato_status: formDermatoStatus,
         parq_1: formParq.parq_1 || '',
@@ -1808,16 +1809,16 @@ export default function Students() {
                 </div>
               </div>
 
-              {/* Exames obrigatórios (Lei 9.863/2012-PB): aptidão física + dermatológico */}
+              {/* Exames obrigatórios (Lei 9.863/2012-PB): cardiológico + dermatológico */}
               <MatriculaExamsSection
-                aptidaoDate={formAptidaoDate}
-                aptidaoCrm={formAptidaoCrm}
-                aptidaoStatus={formAptidaoStatus}
+                cardioDate={formCardioDate}
+                cardioCrm={formCardioCrm}
+                cardioStatus={formCardioStatus}
+                onCardioDate={setFormCardioDate}
+                onCardioCrm={setFormCardioCrm}
+                onCardioStatus={setFormCardioStatus}
                 dermatoDate={formDermatoDate}
                 dermatoStatus={formDermatoStatus}
-                onAptidaoDate={setFormAptidaoDate}
-                onAptidaoCrm={setFormAptidaoCrm}
-                onAptidaoStatus={setFormAptidaoStatus}
                 onDermatoDate={setFormDermatoDate}
                 onDermatoStatus={setFormDermatoStatus}
               />

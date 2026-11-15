@@ -1,7 +1,8 @@
-// Aba "Saúde & Exames" da ficha do aluno (StudentDetail): exames obrigatórios
-// (Lei Estadual PB 9.863/2012 — aptidão física + dermatológico, validade 6 meses
-// com alerta visual vencido/próximo do vencimento), PAR-Q, anamnese e uso de
-// imagem — editáveis ali mesmo — e o botão "Imprimir ficha" (PrintableFichaDialog).
+// Aba "Saúde & Exames" da ficha do aluno (StudentDetail): os DOIS exames
+// obrigatórios (Lei Estadual PB 9.863/2012 — atestado cardiológico + exame
+// dermatológico, validade 6 meses com alerta visual vencido/próximo do
+// vencimento), PAR-Q, anamnese e uso de imagem — editáveis ali mesmo — e o
+// botão "Imprimir ficha" (PrintableFichaDialog).
 
 import { useEffect, useState } from 'react'
 import { Loader2, Printer, Save, ShieldAlert, ShieldCheck } from 'lucide-react'
@@ -39,7 +40,7 @@ function examBadgeClass(level: ExamAlertInfo['level']): string {
   return 'bg-emerald-100 text-emerald-800 border-emerald-300'
 }
 
-/** Cartão de um exame com alerta visual de validade (vermelho vencido / âmbar ≤30d / verde). */
+/** Cartão de um exame com alerta visual de validade (vermelho vencido / âmbar ≤15d / verde). */
 function ExamAlertLine({ title, alert }: { title: string; alert: ExamAlertInfo | null }) {
   if (!alert) {
     return (
@@ -114,9 +115,6 @@ interface StudentHealthTabProps {
 export function StudentHealthTab({ student, onSaved }: StudentHealthTabProps) {
   const { toast } = useToast()
 
-  const [aptidaoDate, setAptidaoDate] = useState('')
-  const [aptidaoCrm, setAptidaoCrm] = useState('')
-  const [aptidaoStatus, setAptidaoStatus] = useState<ExamStatus>('pendente')
   const [dermatoDate, setDermatoDate] = useState('')
   const [dermatoStatus, setDermatoStatus] = useState<ExamStatus>('pendente')
   const [cardioDate, setCardioDate] = useState('')
@@ -130,9 +128,6 @@ export function StudentHealthTab({ student, onSaved }: StudentHealthTabProps) {
 
   // Recarrega o formulário sempre que o aluno trocar (ou após salvar/reload da ficha)
   useEffect(() => {
-    setAptidaoDate(student.aptidao_date || '')
-    setAptidaoCrm(student.aptidao_crm || '')
-    setAptidaoStatus(student.aptidao_status === 'entregue' ? 'entregue' : 'pendente')
     setDermatoDate(student.dermato_date || '')
     setDermatoStatus(student.dermato_status === 'entregue' ? 'entregue' : 'pendente')
     setCardioDate(student.cardio_date || '')
@@ -161,9 +156,6 @@ export function StudentHealthTab({ student, onSaved }: StudentHealthTabProps) {
     setSaving(true)
     try {
       await academyService.updateStudent(student.id, {
-        aptidao_date: aptidaoDate || undefined,
-        aptidao_crm: aptidaoCrm.trim() || undefined,
-        aptidao_status: aptidaoStatus,
         dermato_date: dermatoDate || undefined,
         dermato_status: dermatoStatus,
         cardio_date: cardioDate || undefined,
@@ -200,7 +192,6 @@ export function StudentHealthTab({ student, onSaved }: StudentHealthTabProps) {
     }
   }
 
-  const aptidaoAlert = getExamAlert(aptidaoDate, aptidaoStatus)
   const dermatoAlert = getExamAlert(dermatoDate, dermatoStatus)
   const cardioAlert = getExamAlert(cardioDate, cardioStatus)
   const savedParq: ParqValues = {
@@ -237,23 +228,16 @@ export function StudentHealthTab({ student, onSaved }: StudentHealthTabProps) {
             <Printer className="w-4 h-4 mr-1" /> Imprimir ficha
           </Button>
         </div>
-        <ExamAlertLine title="Atestado de Aptidão Física" alert={aptidaoAlert} />
-        <ExamAlertLine title="Exame Dermatológico" alert={dermatoAlert} />
         <ExamAlertLine title="Atestado Cardiológico" alert={cardioAlert} />
+        <ExamAlertLine title="Exame Dermatológico" alert={dermatoAlert} />
       </Card>
 
       {/* Edição dos exames (datas, CRM, status) */}
       <Card className="bg-white border-[#E0E4EA] rounded-xl shadow-xs p-4 space-y-3">
         <h3 className="text-sm font-bold text-[#0F1B3D]">Editar exames</h3>
         <MatriculaExamsSection
-          aptidaoDate={aptidaoDate}
-          aptidaoCrm={aptidaoCrm}
-          aptidaoStatus={aptidaoStatus}
           dermatoDate={dermatoDate}
           dermatoStatus={dermatoStatus}
-          onAptidaoDate={setAptidaoDate}
-          onAptidaoCrm={setAptidaoCrm}
-          onAptidaoStatus={setAptidaoStatus}
           onDermatoDate={setDermatoDate}
           onDermatoStatus={setDermatoStatus}
           cardioDate={cardioDate}

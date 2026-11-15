@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-15T15:07:20.077Z",
+  "generatedAt": "2026-11-15T15:29:41.056Z",
   "collections": [
     {
       "name": "users",
@@ -1403,6 +1403,13 @@
           "required": false,
           "system": false,
           "selectValues": ["entregue", "pendente"]
+        },
+        {
+          "name": "exams_delivered",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": ["sim", "nao"]
         }
       ],
       "indexes": []

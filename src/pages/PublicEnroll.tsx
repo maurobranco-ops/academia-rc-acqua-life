@@ -1,8 +1,10 @@
 // Formulário público de matrícula (/matricula) da RC Acqua Life.
 // Envia a inscrição para a collection enrollment_requests, conferida em /matriculas.
 // Melhorias: checkbox "aluno é o próprio responsável", responsável obrigatório para
-// menor de 18, endereço com busca ViaCEP + edição manual, atestado cardiológico
-// (Lei Estadual nº 9.863/2012-PB) e citação expressa da lei.
+// menor de 18, endereço com busca ViaCEP + edição manual e a declaração de entrega
+// dos DOIS exames (cardiológico + dermatológico — Lei Estadual nº 9.863/2012-PB).
+// Os dados técnicos dos exames (datas, CRM, status) são lançados pelo administrador
+// na aprovação da matrícula em /matriculas — o formulário público não os coleta.
 
 import { useMemo, useState } from 'react'
 import { AlertTriangle, CheckCircle2, Loader2, Send, UserCheck } from 'lucide-react'
@@ -14,7 +16,6 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { LogoFull } from '@/components/Logo'
 import {
-  MatriculaExamsSection,
   ParqSection,
   AnamneseSection,
   type ParqKey,
@@ -28,8 +29,6 @@ import {
 import { maskCpf, maskPhone } from '@/lib/formatters'
 import { FICHA_LEGAL } from '@/lib/matricula'
 import { getErrorMessage } from '@/lib/pocketbase/errors'
-
-type CardStatus = 'entregue' | 'pendente'
 
 interface GuardianData {
   name: string
@@ -76,15 +75,9 @@ export default function PublicEnroll() {
   const [anamnese, setAnamnese] = useState<Record<string, string>>({})
   const [usoImagem, setUsoImagem] = useState<'sim' | 'nao' | ''>('')
 
-  // Exames: aptidão física, dermatológico e cardiológico (Lei PB 9.863/2012)
-  const [aptidaoDate, setAptidaoDate] = useState('')
-  const [aptidaoCrm, setAptidaoCrm] = useState('')
-  const [aptidaoStatus, setAptidaoStatus] = useState<CardStatus>('pendente')
-  const [dermatoDate, setDermatoDate] = useState('')
-  const [dermatoStatus, setDermatoStatus] = useState<CardStatus>('pendente')
-  const [cardioDate, setCardioDate] = useState('')
-  const [cardioCrm, setCardioCrm] = useState('')
-  const [cardioStatus, setCardioStatus] = useState<CardStatus>('pendente')
+  // Exames (Lei PB 9.863/2012): UMA declaração de entrega — os dados técnicos
+  // (datas, CRM, status) são lançados pelo administrador na aprovação.
+  const [examsDelivered, setExamsDelivered] = useState(false)
 
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [submitting, setSubmitting] = useState(false)
@@ -199,14 +192,7 @@ export default function PublicEnroll() {
         neighborhood: address.neighborhood,
         city: address.city,
         uf: address.uf,
-        aptidao_date: aptidaoDate,
-        aptidao_crm: aptidaoCrm,
-        aptidao_status: aptidaoStatus,
-        dermato_date: dermatoDate,
-        dermato_status: dermatoStatus,
-        cardio_date: cardioDate,
-        cardio_crm: cardioCrm,
-        cardio_status: cardioStatus,
+        exams_delivered: examsDelivered ? 'sim' : 'nao',
         status: 'pendente',
       }
       Object.keys(parq).forEach((k) => {
@@ -496,25 +482,25 @@ export default function PublicEnroll() {
         {/* Exames */}
         <Card className="p-4 space-y-3">
           <h2 className="text-sm font-bold text-[#0F1B3D]">4. Exames médicos</h2>
-          <MatriculaExamsSection
-            aptidaoDate={aptidaoDate}
-            aptidaoCrm={aptidaoCrm}
-            aptidaoStatus={aptidaoStatus}
-            onAptidaoDate={setAptidaoDate}
-            onAptidaoCrm={setAptidaoCrm}
-            onAptidaoStatus={setAptidaoStatus}
-            dermatoDate={dermatoDate}
-            dermatoStatus={dermatoStatus}
-            onDermatoDate={setDermatoDate}
-            onDermatoStatus={setDermatoStatus}
-            cardioDate={cardioDate}
-            cardioCrm={cardioCrm}
-            cardioStatus={cardioStatus}
-            onCardioDate={setCardioDate}
-            onCardioCrm={setCardioCrm}
-            onCardioStatus={setCardioStatus}
-          />
-          <p className="text-[11px] text-slate-500">{FICHA_LEGAL.cardioLawText}</p>
+          <p className="text-xs text-slate-600 leading-relaxed">
+            São exigidos apenas os <strong>DOIS exames</strong> abaixo — o{' '}
+            <strong>atestado cardiológico</strong> e o <strong>exame dermatológico</strong>, com
+            validade de 6 meses ({FICHA_LEGAL.law}). Os dados técnicos (datas de emissão, CRM e
+            status) serão lançados pela academia na conferência da matrícula.
+          </p>
+          <div className="flex items-start gap-2 rounded-lg bg-slate-50 border border-slate-200 p-2.5">
+            <Checkbox
+              id="exams-delivered"
+              checked={examsDelivered}
+              onCheckedChange={(v) => setExamsDelivered(v === true)}
+            />
+            <div className="space-y-0.5">
+              <Label htmlFor="exams-delivered" className="text-xs font-semibold text-[#1E2A3A]">
+                Declaro que entreguei os atestados cardiológico e dermatológico
+              </Label>
+              <p className="text-[10px] text-slate-500">{FICHA_LEGAL.cardioLawText}</p>
+            </div>
+          </div>
         </Card>
 
         {/* Termo legal */}
@@ -525,8 +511,8 @@ export default function PublicEnroll() {
           <p className="text-xs text-slate-600 leading-relaxed">{FICHA_LEGAL.riskTerm}</p>
           <p className="text-xs text-slate-600 leading-relaxed">
             <strong>Normas da academia:</strong> Conforme {FICHA_LEGAL.law}, é obrigatória a
-            apresentação do atestado de aptidão física (cardiológico) e do exame médico
-            dermatológico, com validade de 6 (seis) meses.
+            apresentação do atestado cardiológico e do exame médico dermatológico, com validade de 6
+            (seis) meses.
           </p>
           <p className="text-xs text-slate-600 leading-relaxed">{FICHA_LEGAL.lgpd}</p>
         </Card>
