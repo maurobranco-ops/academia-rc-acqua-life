@@ -1,5 +1,7 @@
 /**
  * Utilitário de compressão e redimensionamento de imagens no navegador via HTML Canvas.
+ * Também usado pelo formulário público de matrícula (/matricula) para comprimir a
+ * foto do aluno (photo_file) e o documento do responsável antes do upload.
  * Reduz dramaticamente o payload em MB enviado pela rede antes do upload para o PocketBase,
  * preservando nitidez e proporção adequadas para exibição de fotos de alunos.
  */

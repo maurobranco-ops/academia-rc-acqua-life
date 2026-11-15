@@ -26,6 +26,7 @@ import {
   EMPTY_ADDRESS,
   type EnrollAddressValue,
 } from '@/components/EnrollAddressSection'
+import { compressImage } from '@/lib/imageCompression'
 import { maskCpf, maskPhone } from '@/lib/formatters'
 import {
   FICHA_LEGAL,
@@ -43,6 +44,9 @@ interface GuardianData {
 }
 
 const EMPTY_GUARDIAN: GuardianData = { name: '', cpf: '', phone: '', email: '' }
+
+/** Tamanho máximo aceito para a foto do aluno (comprimida antes do envio). */
+const MAX_PHOTO_MB = 5
 
 /** Idade a partir da data de nascimento (YYYY-MM-DD), considerando o aniversário do ano. */
 function calcAge(birthDate: string): number | null {
@@ -71,6 +75,9 @@ export default function PublicEnroll() {
   const [isSelf, setIsSelf] = useState(false)
   const [guardian, setGuardian] = useState<GuardianData>(EMPTY_GUARDIAN)
   const [rgFile, setRgFile] = useState<File | null>(null)
+  // Foto do aluno (photo_file é OBRIGATÓRIO na collection enrollment_requests).
+  const [photoFile, setPhotoFile] = useState<File | null>(null)
+  const [photoPreview, setPhotoPreview] = useState('')
 
   // Endereço (CEP com busca ViaCEP + edição manual)
   const [address, setAddress] = useState<EnrollAddressValue>({ ...EMPTY_ADDRESS })
@@ -97,7 +104,9 @@ export default function PublicEnroll() {
   const isMinor = age !== null && age < 18
 
   // Checkbox "aluno é o próprio responsável": preenche o responsável com os dados do
-  // aluno e oculta a seção. Ao desmarcar, mantém o que o usuário digitou no aluno.
+  // aluno e oculta apenas os DADOS de contato — o upload do documento de identificação
+  // do responsável continua disponível (com a caixa marcada, é o documento do próprio
+  // aluno respondendo por si). Ao desmarcar, mantém o que o usuário digitou no aluno.
   const handleSelfChange = (checked: boolean) => {
     setIsSelf(checked)
     if (checked) {
@@ -107,14 +116,12 @@ export default function PublicEnroll() {
         phone: studentPhone,
         email: studentEmail,
       })
-      setRgFile(null)
       setErrors((e) => {
         const next = { ...e }
         delete next.guardian_name
         delete next.guardian_cpf
         delete next.guardian_phone
         delete next.guardian_email
-        delete next.guardian_rg
         return next
       })
     }
@@ -125,6 +132,13 @@ export default function PublicEnroll() {
 
     if (!studentName.trim()) next.student_name = 'Informe o nome do aluno.'
     if (!birthDate) next.student_birth = 'Informe a data de nascimento.'
+    // Foto do aluno: obrigatória (photo_file é required no banco) — validação amigável
+    // ANTES do envio, para nunca estourar o "Cannot be blank" cru do backend.
+    if (!photoFile) next.student_photo = 'Anexe a foto do aluno — ela é obrigatória para enviar.'
+    if (photoFile && !photoFile.type.startsWith('image/'))
+      next.student_photo = 'A foto do aluno deve ser uma imagem (JPG, PNG etc.).'
+    if (photoFile && photoFile.size > MAX_PHOTO_MB * 1024 * 1024)
+      next.student_photo = `A foto do aluno é muito grande (máximo ${MAX_PHOTO_MB} MB).`
     if (studentCpf && onlyDigits(studentCpf).length !== 11)
       next.student_cpf = 'CPF do aluno incompleto (11 dígitos).'
     if (studentPhone && onlyDigits(studentPhone).length < 10)
@@ -230,12 +244,24 @@ export default function PublicEnroll() {
       })
       if (usoImagem) payload.uso_imagem_autorizado = usoImagem
 
-      const record = await pb.collection('enrollment_requests').create(payload)
-      if (rgFile) {
-        const fd = new FormData()
-        fd.append('guardian_rg_file', rgFile, rgFile.name)
-        await pb.collection('enrollment_requests').update(record.id, fd)
+      // FOTO do aluno (photo_file) + RG do responsável (guardian_rg_file) no MESMO
+      // POST de criação — com a foto no create, o backend valida tudo de uma vez
+      // (photo_file é required) e a inscrição já nasce completa, com documentos.
+      const fd = new FormData()
+      Object.entries(payload).forEach(([k, v]) => fd.append(k, String(v)))
+      // photo_file é imagem: comprime antes de anexar (mesma rotina da tela de alunos).
+      let photo = photoFile
+      try {
+        const compressed = await compressImage(photoFile, photoFile.name)
+        if (compressed.file instanceof File) photo = compressed.file
+        else photo = new File([compressed.file], 'foto-aluno.jpg', { type: 'image/jpeg' })
+      } catch {
+        // Falhou a compressão: segue com o arquivo original.
       }
+      fd.append('photo_file', photo, photo.name)
+      if (rgFile) fd.append('guardian_rg_file', rgFile, rgFile.name)
+
+      await pb.collection('enrollment_requests').create(fd)
 
       setSubmitted(true)
       window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -363,6 +389,56 @@ export default function PublicEnroll() {
               <Err field="student_email" />
             </div>
           </div>
+          {/* Foto do aluno: campo OBRIGATÓRIO (photo_file, required no banco).
+              Sem ela o envio é bloqueado com mensagem amigável — nunca o erro cru. */}
+          <div className="space-y-1">
+            <Label className="text-xs font-semibold text-[#1E2A3A]">
+              Foto do aluno <span className="text-red-600">*</span>
+            </Label>
+            <div className="flex items-start gap-3">
+              <div className="shrink-0 w-16 h-16 rounded-lg overflow-hidden bg-slate-100 border border-slate-200">
+                {photoPreview ? (
+                  <img
+                    src={photoPreview}
+                    alt="Prévia da foto do aluno"
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-[10px] text-slate-400">
+                    Sem foto
+                  </div>
+                )}
+              </div>
+              <div className="flex-1 space-y-1">
+                <Input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0] ?? null
+                    setPhotoFile(f)
+                    setPhotoPreview((old) => {
+                      if (old) URL.revokeObjectURL(old)
+                      return f ? URL.createObjectURL(f) : ''
+                    })
+                    setErrors((er) => {
+                      if (!er.student_photo) return er
+                      const clean = { ...er }
+                      delete clean.student_photo
+                      return clean
+                    })
+                  }}
+                  className={`h-9 text-xs file:mr-2 file:px-2 file:py-1 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-[#0F1B3D] file:text-white ${errCls(
+                    'student_photo',
+                  )}`}
+                />
+                <Err field="student_photo" />
+                <p className="text-[10px] text-slate-500">
+                  Foto do rosto do aluno (imagem). Obrigatória — usada na ficha e na lista de
+                  alunos.
+                </p>
+              </div>
+            </div>
+          </div>
           {isMinor && (
             <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2">
               Aluno(a) menor de 18 anos: o responsável deve ser identificado na seção 2, com RG
@@ -454,7 +530,8 @@ export default function PublicEnroll() {
               </div>
               <div className="space-y-1">
                 <Label className="text-xs font-semibold text-[#1E2A3A]">
-                  RG do responsável {isMinor && <span className="text-red-600">*</span>}
+                  Documento de identificação do responsável{' '}
+                  {isMinor && <span className="text-red-600">*</span>}
                 </Label>
                 <Input
                   type="file"
@@ -474,10 +551,32 @@ export default function PublicEnroll() {
           )}
 
           {isSelf && (
-            <p className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg p-2 flex items-center gap-1.5">
-              <UserCheck className="w-3.5 h-3.5 shrink-0" />
-              Os dados do responsável serão os mesmos do aluno (seção 1).
-            </p>
+            <div className="space-y-3">
+              <p className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg p-2 flex items-center gap-1.5">
+                <UserCheck className="w-3.5 h-3.5 shrink-0" />
+                Os dados do responsável serão os mesmos do aluno (seção 1).
+              </p>
+              {/* Com a caixa marcada, o documento de identificação do responsável é o
+                  documento do PRÓPRIO aluno respondendo por si — continua disponível. */}
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-[#1E2A3A]">
+                  Documento de identificação do responsável
+                </Label>
+                <Input
+                  type="file"
+                  accept="image/*,.pdf"
+                  onChange={(e) => setRgFile(e.target.files?.[0] ?? null)}
+                  className={`h-9 text-xs file:mr-2 file:px-2 file:py-1 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-[#0F1B3D] file:text-white ${errCls(
+                    'guardian_rg',
+                  )}`}
+                />
+                <Err field="guardian_rg" />
+                <p className="text-[10px] text-slate-500">
+                  Aluno(a) maior de 18 respondendo pela própria matrícula: anexe o documento dele(a)
+                  (imagem ou PDF) — usado na conferência da inscrição. Opcional.
+                </p>
+              </div>
+            </div>
           )}
         </Card>
 

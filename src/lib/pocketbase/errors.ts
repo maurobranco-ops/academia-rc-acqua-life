@@ -20,10 +20,22 @@ export function extractFieldErrors(error: unknown): FieldErrors {
   return errors
 }
 
+/**
+ * Mensagem de erro amigável em pt-BR — nunca vaza o texto cru do backend
+ * (ex.: "Cannot be blank") para a interface.
+ */
 export function getErrorMessage(error: unknown): string {
-  if (!(error instanceof ClientResponseError)) {
-    return error instanceof Error ? error.message : 'An unexpected error occurred.'
+  if (error instanceof ClientResponseError) {
+    if (error.status === 0 || error.status >= 500) {
+      return 'Falha de conexão com o servidor. Verifique sua internet e tente novamente.'
+    }
+    if (error.status >= 400) {
+      // 400 aqui significa validação do backend — cobre os campos obrigatórios
+      // (ex.: a foto do aluno) e qualquer outro dado que tenha chegado inválido.
+      return 'Verifique os campos obrigatórios — a foto do aluno é necessária.'
+    }
+    return 'Não foi possível concluir a operação. Tente novamente.'
   }
-  const msgs = Object.values(extractFieldErrors(error))
-  return msgs.length > 0 ? msgs.join(' ') : error.message || 'An unexpected error occurred.'
+  if (error instanceof Error && error.message) return error.message
+  return 'Ocorreu um erro inesperado. Tente novamente.'
 }
