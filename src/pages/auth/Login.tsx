@@ -70,8 +70,8 @@ export default function Login() {
       <div className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl border border-white/20 p-8 animate-fade-in-up">
         {/* Logo and Brand */}
         <div className="flex flex-col items-center mb-8 text-center">
-          <LogoMark size={72} className="rounded-2xl mb-3" />
-          <h1 className="text-2xl font-bold tracking-tight text-[#0F1B3D]">RC Acqua Life</h1>
+          <LogoMark size={100} className="rounded-3xl mb-3" />
+          <h1 className="text-3xl font-bold tracking-tight text-[#0F1B3D]">RC Acqua Life</h1>
           <p className="text-xs text-[#6C757D] mt-1 font-medium tracking-wide uppercase">
             Natação &amp; Hidroginástica
           </p>

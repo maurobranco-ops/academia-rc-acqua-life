@@ -245,8 +245,13 @@ export default function PublicEnroll() {
       {/* Cabeçalho */}
       <div className="bg-gradient-to-b from-[#0F1B3D] to-[#1a2b57] text-white py-10 px-4">
         <div className="max-w-2xl mx-auto text-center space-y-3">
-          <LogoFull className="mx-auto h-12" />
-          <h1 className="text-2xl font-bold">Matrícula RC Acqua Life</h1>
+          <LogoFull
+            size={72}
+            textClassName="text-lg"
+            subtitleClassName="text-xs"
+            className="mx-auto"
+          />
+          <h1 className="text-3xl font-bold">Matrícula RC Acqua Life</h1>
           <p className="text-sm text-white/80">
             Academia de Natação e Hidroginástica — {FICHA_LEGAL.city}
           </p>

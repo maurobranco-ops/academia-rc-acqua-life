@@ -56,6 +56,7 @@ import { useToast } from '@/hooks/use-toast'
 import { getStudentPhotoUrl } from '@/lib/studentPhoto'
 import { formatPhoneDisplay } from '@/lib/formatters'
 import { getStudentStatusDisplay } from '@/lib/studentStatus'
+import { formatDateBR } from '@/lib/matricula'
 import { StudentHealthTab } from '@/components/StudentHealthTab'
 
 export default function StudentDetail() {
@@ -496,7 +497,7 @@ export default function StudentDetail() {
                 </div>
               </div>
               {/* Tarjas de validade dos DOIS exames (Lei PB 9.863/2012 — 6 meses,
-                  janela âmbar de 15 dias). Edição dos dados na aba Saúde. */}
+                  janela âmbar de 30 dias). Edição dos dados na aba Saúde. */}
               <div className="flex flex-col gap-1.5 sm:grid sm:grid-cols-2 sm:gap-3">
                 {[
                   {

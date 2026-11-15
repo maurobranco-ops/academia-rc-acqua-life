@@ -237,7 +237,7 @@ export interface ExamAlertInfo {
   expiry: string | null
 }
 
-/** Estado do exame frente à validade de 6 meses: vencido (vermelho), ≤15 dias (âmbar) ou ok. */
+/** Estado do exame frente à validade de 6 meses: vencido (vermelho), ≤30 dias (âmbar) ou ok. */
 export function getExamAlert(
   issuedDate?: string | null,
   status?: string | null,
