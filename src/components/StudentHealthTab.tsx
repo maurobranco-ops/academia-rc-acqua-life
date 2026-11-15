@@ -18,9 +18,12 @@ import {
   ANAMNESE_QUESTIONS,
   EMPTY_PARQ,
   EMPTY_ANAMNESE,
+  EMPTY_PARQ_DETAILS,
   formatDateBR,
   type ParqValues,
   type ParqKey,
+  type ParqDetailsMap,
+  type ParqDetailKey,
   type AnamneseValues,
   type AnamneseKey,
 } from '@/lib/matricula'
@@ -121,6 +124,7 @@ export function StudentHealthTab({ student, onSaved }: StudentHealthTabProps) {
   const [cardioCrm, setCardioCrm] = useState('')
   const [cardioStatus, setCardioStatus] = useState<ExamStatus>('pendente')
   const [parq, setParq] = useState<ParqValues>(EMPTY_PARQ)
+  const [parqDetails, setParqDetails] = useState<ParqDetailsMap>({ ...EMPTY_PARQ_DETAILS })
   const [anamnese, setAnamnese] = useState<AnamneseValues>(EMPTY_ANAMNESE)
   const [usoImagem, setUsoImagem] = useState<'sim' | 'nao' | ''>('')
   const [saving, setSaving] = useState(false)
@@ -141,6 +145,11 @@ export function StudentHealthTab({ student, onSaved }: StudentHealthTabProps) {
       parq_5: student.parq_5 || '',
       parq_6: student.parq_6 || '',
       parq_7: student.parq_7 || '',
+    })
+    setParqDetails({
+      parq_5_detail: student.parq_5_detail || '',
+      parq_6_detail: student.parq_6_detail || '',
+      parq_7_detail: student.parq_7_detail || '',
     })
     setAnamnese({
       anamnese_medo_agua: student.anamnese_medo_agua || '',
@@ -168,6 +177,9 @@ export function StudentHealthTab({ student, onSaved }: StudentHealthTabProps) {
         parq_5: parq.parq_5 || '',
         parq_6: parq.parq_6 || '',
         parq_7: parq.parq_7 || '',
+        parq_5_detail: parqDetails.parq_5_detail.trim() || undefined,
+        parq_6_detail: parqDetails.parq_6_detail.trim() || undefined,
+        parq_7_detail: parqDetails.parq_7_detail.trim() || undefined,
         anamnese_medo_agua: anamnese.anamnese_medo_agua || '',
         anamnese_convulsoes: anamnese.anamnese_convulsoes || '',
         anamnese_alergia_cloro: anamnese.anamnese_alergia_cloro || '',
@@ -202,6 +214,11 @@ export function StudentHealthTab({ student, onSaved }: StudentHealthTabProps) {
     parq_5: student.parq_5 || '',
     parq_6: student.parq_6 || '',
     parq_7: student.parq_7 || '',
+  }
+  const savedParqDetails: ParqDetailsMap = {
+    parq_5_detail: student.parq_5_detail || '',
+    parq_6_detail: student.parq_6_detail || '',
+    parq_7_detail: student.parq_7_detail || '',
   }
   const savedParqYes = PARQ_QUESTIONS.filter((q) => savedParq[q.key] === 'sim').length
   const parqAnswered = PARQ_QUESTIONS.some((q) => (savedParq[q.key] || '') !== '')
@@ -279,18 +296,33 @@ export function StudentHealthTab({ student, onSaved }: StudentHealthTabProps) {
           </div>
           {parqAnswered && (
             <div className="space-y-0.5 pt-0.5">
-              {PARQ_QUESTIONS.map((q, i) => (
-                <div key={q.key} className="flex justify-between gap-3 py-0.5">
-                  <span
-                    className={`text-[11px] ${savedParq[q.key] === 'sim' ? 'text-red-700 font-bold' : 'text-slate-600'}`}
-                  >
-                    {i + 1}. {q.text}
-                  </span>
-                  <span className="text-[11px] font-semibold shrink-0">
-                    {savedParq[q.key] === 'sim' ? 'SIM' : savedParq[q.key] === 'nao' ? 'Não' : '—'}
-                  </span>
-                </div>
-              ))}
+              {PARQ_QUESTIONS.map((q, i) => {
+                const dKey = `parq_${i + 1}_detail` as ParqDetailKey
+                const detail = savedParqDetails[dKey]
+                return (
+                  <div key={q.key} className="space-y-0.5 py-0.5">
+                    <div className="flex justify-between gap-3">
+                      <span
+                        className={`text-[11px] ${savedParq[q.key] === 'sim' ? 'text-red-700 font-bold' : 'text-slate-600'}`}
+                      >
+                        {i + 1}. {q.text}
+                      </span>
+                      <span className="text-[11px] font-semibold shrink-0">
+                        {savedParq[q.key] === 'sim'
+                          ? 'SIM'
+                          : savedParq[q.key] === 'nao'
+                            ? 'Não'
+                            : '—'}
+                      </span>
+                    </div>
+                    {savedParq[q.key] === 'sim' && detail && detail.trim() && (
+                      <p className="text-[10px] text-[#0F1B3D] pl-4 border-l-2 border-amber-200 whitespace-pre-line break-words">
+                        {detail}
+                      </p>
+                    )}
+                  </div>
+                )
+              })}
             </div>
           )}
         </div>
@@ -319,6 +351,10 @@ export function StudentHealthTab({ student, onSaved }: StudentHealthTabProps) {
         <HealthReadout parq={savedParq} anamnese={savedAnamnese} />
         <ParqSection
           values={parq}
+          details={parqDetails}
+          onDetailChange={(key: ParqDetailKey, v: string) =>
+            setParqDetails((d) => ({ ...d, [key]: v }))
+          }
           onChange={(key: ParqKey, v: string) => setParq((p) => ({ ...p, [key]: v }))}
         />
         <AnamneseSection

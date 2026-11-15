@@ -7,9 +7,17 @@
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
+import { Textarea } from '@/components/ui/textarea'
 import type { ParqValues, ParqKey, AnamneseValues, AnamneseKey } from '@/lib/matricula'
 export type { ParqKey, AnamneseKey } from '@/lib/matricula'
-import { PARQ_QUESTIONS, ANAMNESE_QUESTIONS, PARQ_YES, PARQ_NO } from '@/lib/matricula'
+import {
+  PARQ_QUESTIONS,
+  ANAMNESE_QUESTIONS,
+  PARQ_YES,
+  PARQ_NO,
+  type ParqDetailsMap,
+  type ParqDetailKey,
+} from '@/lib/matricula'
 
 interface ExamsSectionProps {
   /** Atestado cardiológico (Lei PB 9.863/2012 — exigido para natação e/ou hidroginástica). */
@@ -130,6 +138,9 @@ interface HealthSectionProps {
   anamnese: Partial<Record<AnamneseKey, string>>
   usoImagem: 'sim' | 'nao' | ''
   onParq: (key: ParqKey, v: string) => void
+  /** Detalhes escritos das perguntas 5-7 (opcional — sem eles o PAR-Q fica só sim/não). */
+  parqDetails?: ParqDetailsMap
+  onParqDetail?: (key: ParqDetailKey, v: string) => void
   onAnamnese: (key: AnamneseKey, v: string) => void
   onUsoImagem: (v: 'sim' | 'nao') => void
 }
@@ -138,7 +149,12 @@ interface HealthSectionProps {
 export function MatriculaHealthSection(props: HealthSectionProps) {
   return (
     <div className="space-y-2.5">
-      <ParqSection values={props.parq} onChange={props.onParq} />
+      <ParqSection
+        values={props.parq}
+        onChange={props.onParq}
+        details={props.parqDetails}
+        onDetailChange={props.onParqDetail}
+      />
       <AnamneseSection values={props.anamnese} onChange={props.onAnamnese} />
       <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
         <div className="text-xs font-bold text-[#0F1B3D]">Uso de imagem (LGPD)</div>
@@ -192,33 +208,86 @@ export function YesNoPicker({ value, onChange, name }: YesNoProps) {
 interface ParqSectionProps {
   values: ParqValues
   onChange: (key: ParqKey, v: string) => void
+  /** Detalhes escritos das perguntas 5-7 (parq_5_detail etc.) — opcional. */
+  details?: ParqDetailsMap
+  onDetailChange?: (key: ParqDetailKey, v: string) => void
+  /** Avisos de validação por chave de detalhe (ex.: "SIM" sem descrição). */
+  detailErrors?: Partial<Record<ParqDetailKey, string>>
 }
 
-export function ParqSection({ values, onChange }: ParqSectionProps) {
+/** Perguntas do PAR-Q que aceitam resposta escrita quando a resposta é "SIM". */
+const PARQ_DETAIL_BY_QUESTION: Partial<Record<ParqKey, ParqDetailKey>> = {
+  parq_5: 'parq_5_detail',
+  parq_6: 'parq_6_detail',
+  parq_7: 'parq_7_detail',
+}
+
+export function ParqSection({
+  values,
+  onChange,
+  details,
+  onDetailChange,
+  detailErrors,
+}: ParqSectionProps) {
   return (
     <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2.5">
       <div className="text-xs font-bold text-[#0F1B3D]">
         PAR-Q — Questionário de Prontidão para Atividade Física
       </div>
-      <p className="text-[10px] text-slate-500">Responda todas as perguntas com Sim ou Não.</p>
+      <p className="text-[10px] text-slate-500">
+        Responda todas as perguntas com Sim ou Não. Nas perguntas 5, 6 e 7, se a resposta for "SIM",
+        descreva em poucas linhas.
+      </p>
       <div className="space-y-2">
-        {PARQ_QUESTIONS.map((q, i) => (
-          <div
-            key={q.key}
-            className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 bg-white border border-slate-200 rounded-lg px-2.5 py-2"
-          >
-            <span className="text-[11px] text-[#1E2A3A] sm:pr-3">
-              <strong>{i + 1}.</strong> {q.text}
-            </span>
-            <div className="shrink-0">
-              <YesNoPicker
-                name={q.key}
-                value={values[q.key] || ''}
-                onChange={(v) => onChange(q.key, v)}
-              />
+        {PARQ_QUESTIONS.map((q, i) => {
+          const detailKey = PARQ_DETAIL_BY_QUESTION[q.key]
+          return (
+            <div
+              key={q.key}
+              className="flex flex-col gap-1.5 bg-white border border-slate-200 rounded-lg px-2.5 py-2"
+            >
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                <span className="text-[11px] text-[#1E2A3A] sm:pr-3">
+                  <strong>{i + 1}.</strong> {q.text}
+                </span>
+                <div className="shrink-0">
+                  <YesNoPicker
+                    name={q.key}
+                    value={values[q.key] || ''}
+                    onChange={(v) => onChange(q.key, v)}
+                  />
+                </div>
+              </div>
+              {detailKey && values[q.key] === PARQ_YES && onDetailChange && details && (
+                <div className="space-y-1 pt-0.5">
+                  <Label
+                    htmlFor={`parq-detail-${detailKey}`}
+                    className="text-[10px] font-semibold text-[#1E2A3A]"
+                  >
+                    Detalhe — descreva a situação (aprox. 3 linhas)
+                  </Label>
+                  <Textarea
+                    id={`parq-detail-${detailKey}`}
+                    rows={3}
+                    placeholder="Ex.: descreva o problema/medicação/razão, desde quando e como afeta a atividade na piscina..."
+                    value={details[detailKey] || ''}
+                    onChange={(e) => onDetailChange(detailKey, e.target.value)}
+                    className={`text-xs resize-y ${
+                      detailErrors?.[detailKey]
+                        ? 'border-red-500 focus-visible:ring-red-500'
+                        : 'focus-visible:ring-[#D4AF37]'
+                    }`}
+                  />
+                  {detailErrors?.[detailKey] && (
+                    <p className="text-[10px] text-red-600 font-medium">
+                      {detailErrors[detailKey]}
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
     </div>
   )

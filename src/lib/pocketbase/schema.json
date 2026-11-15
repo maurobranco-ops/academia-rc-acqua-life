@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-15T16:12:15.421Z",
+  "generatedAt": "2026-11-15T20:10:58.004Z",
   "collections": [
     {
       "name": "users",
@@ -509,6 +509,24 @@
           "required": false,
           "system": false,
           "selectValues": ["entregue", "pendente"]
+        },
+        {
+          "name": "parq_5_detail",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "parq_6_detail",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "parq_7_detail",
+          "type": "text",
+          "required": false,
+          "system": false
         }
       ],
       "indexes": [
@@ -1406,6 +1424,45 @@
         },
         {
           "name": "exams_delivered",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": ["sim", "nao"]
+        },
+        {
+          "name": "parq_5_detail",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "parq_6_detail",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "parq_7_detail",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "exams_cardio_delivered",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": ["sim", "nao"]
+        },
+        {
+          "name": "exams_dermato_delivered",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": ["sim", "nao"]
+        },
+        {
+          "name": "term_agreed",
           "type": "select",
           "required": false,
           "system": false,

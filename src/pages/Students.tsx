@@ -63,10 +63,12 @@ import { compressImage } from '@/lib/imageCompression'
 import { StudentPhotoPicker } from '@/components/StudentPhotoPicker'
 import {
   EMPTY_PARQ,
+  EMPTY_PARQ_DETAILS,
   EMPTY_ANAMNESE,
   getParq,
   getAnamnese,
   type ParqValues,
+  type ParqDetailsMap,
   type AnamneseValues,
 } from '@/lib/matricula'
 import { MatriculaExamsSection, MatriculaHealthSection } from '@/components/MatriculaFormSections'
@@ -133,6 +135,7 @@ export default function Students() {
   const [formDermatoDate, setFormDermatoDate] = useState('')
   const [formDermatoStatus, setFormDermatoStatus] = useState<'entregue' | 'pendente'>('pendente')
   const [formParq, setFormParq] = useState<ParqValues>(EMPTY_PARQ)
+  const [formParqDetails, setFormParqDetails] = useState<ParqDetailsMap>({ ...EMPTY_PARQ_DETAILS })
   const [formAnamnese, setFormAnamnese] = useState<AnamneseValues>(EMPTY_ANAMNESE)
   const [formUsoImagem, setFormUsoImagem] = useState<'sim' | 'nao' | ''>('')
   const [submitting, setSubmitting] = useState(false)
@@ -300,6 +303,7 @@ export default function Students() {
     setFormDermatoDate('')
     setFormDermatoStatus('pendente')
     setFormParq({ ...EMPTY_PARQ })
+    setFormParqDetails({ ...EMPTY_PARQ_DETAILS })
     setFormAnamnese({ ...EMPTY_ANAMNESE })
     setFormUsoImagem('')
     setStudentModalOpen(true)
@@ -379,6 +383,11 @@ export default function Students() {
     setFormDermatoDate(st.dermato_date ? st.dermato_date.substring(0, 10) : '')
     setFormDermatoStatus(st.dermato_status === 'entregue' ? 'entregue' : 'pendente')
     setFormParq(getParq(st))
+    setFormParqDetails({
+      parq_5_detail: st.parq_5_detail || '',
+      parq_6_detail: st.parq_6_detail || '',
+      parq_7_detail: st.parq_7_detail || '',
+    })
     setFormAnamnese(getAnamnese(st))
     setFormUsoImagem((st.uso_imagem_autorizado as 'sim' | 'nao' | '') || '')
     setStudentModalOpen(true)
@@ -533,6 +542,9 @@ export default function Students() {
         parq_5: formParq.parq_5 || '',
         parq_6: formParq.parq_6 || '',
         parq_7: formParq.parq_7 || '',
+        parq_5_detail: formParqDetails.parq_5_detail.trim() || undefined,
+        parq_6_detail: formParqDetails.parq_6_detail.trim() || undefined,
+        parq_7_detail: formParqDetails.parq_7_detail.trim() || undefined,
         anamnese_medo_agua: formAnamnese.anamnese_medo_agua || '',
         anamnese_convulsoes: formAnamnese.anamnese_convulsoes || '',
         anamnese_alergia_cloro: formAnamnese.anamnese_alergia_cloro || '',
@@ -1826,6 +1838,8 @@ export default function Students() {
               {/* PAR-Q e anamnese aquática (frente 2) */}
               <MatriculaHealthSection
                 parq={formParq}
+                parqDetails={formParqDetails}
+                onParqDetail={(key, v) => setFormParqDetails((d) => ({ ...d, [key]: v }))}
                 anamnese={formAnamnese}
                 usoImagem={formUsoImagem}
                 onParq={(key, v) => setFormParq((p) => ({ ...p, [key]: v }))}

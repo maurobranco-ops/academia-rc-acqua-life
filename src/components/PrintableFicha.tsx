@@ -11,6 +11,7 @@ import {
   FICHA_LEGAL,
   formatDateBR,
   type ParqValues,
+  type ParqDetailKey,
   type AnamneseKey,
 } from '@/lib/matricula'
 import { addSixMonths, type StudentRecord, type EnrollmentRequestRecord } from '@/types/database'
@@ -32,8 +33,15 @@ export interface PrintableFichaData {
   /** Atestado cardiológico (Lei PB 9.863/2012 — natação e/ou hidroginástica). */
   cardioDate?: string
   cardioCrm?: string
-  /** Declaração do responsável na matrícula on-line (checkbox única). */
+  /** Respostas escritas das perguntas 5-7 do PAR-Q (migration 0022). */
+  parqDetails?: Partial<Record<ParqDetailKey, string>>
+  /** Declarações de entrega separadas por exame (migration 0022; fallback exams_delivered). */
+  examsCardioDelivered?: string
+  examsDermatoDelivered?: string
+  /** Declaração única antiga (inscrições anteriores à migration 0022). */
   examsDelivered?: string
+  /** Concordância com o termo de ciência (migration 0022). */
+  termAgreed?: string
   /** Endereço do(a) aluno(a) (students 0016 / enrollment_requests 0020). */
   cep?: string
   street?: string
@@ -63,6 +71,11 @@ export function studentToPrintable(st: StudentRecord): PrintableFichaData {
       parq_5: st.parq_5 || '',
       parq_6: st.parq_6 || '',
       parq_7: st.parq_7 || '',
+    },
+    parqDetails: {
+      parq_5_detail: st.parq_5_detail || '',
+      parq_6_detail: st.parq_6_detail || '',
+      parq_7_detail: st.parq_7_detail || '',
     },
     anamnese: {
       anamnese_medo_agua: st.anamnese_medo_agua || '',
@@ -104,6 +117,11 @@ export function requestToPrintable(r: EnrollmentRequestRecord): PrintableFichaDa
       parq_6: r.parq_6 || '',
       parq_7: r.parq_7 || '',
     },
+    parqDetails: {
+      parq_5_detail: r.parq_5_detail || '',
+      parq_6_detail: r.parq_6_detail || '',
+      parq_7_detail: r.parq_7_detail || '',
+    },
     anamnese: {
       anamnese_medo_agua: r.anamnese_medo_agua || '',
       anamnese_convulsoes: r.anamnese_convulsoes || '',
@@ -115,6 +133,9 @@ export function requestToPrintable(r: EnrollmentRequestRecord): PrintableFichaDa
     dermatoDate: r.dermato_date,
     cardioDate: r.cardio_date,
     cardioCrm: r.cardio_crm,
+    examsCardioDelivered: r.exams_cardio_delivered,
+    examsDermatoDelivered: r.exams_dermato_delivered,
+    termAgreed: r.term_agreed,
     examsDelivered: r.exams_delivered,
     cep: r.cep,
     street: r.street,
@@ -263,14 +284,25 @@ export function PrintableFichaDialog({
               3. PAR-Q — Prontidão para Atividade Física
             </h3>
             <div className="space-y-0.5">
-              {PARQ_QUESTIONS.map((q, i) => (
-                <div key={q.key} className="flex justify-between gap-3 py-0.5">
-                  <span className="text-[11px] text-slate-700">
-                    {i + 1}. {q.text}
-                  </span>
-                  <YesNo v={data.parq[q.key]} />
-                </div>
-              ))}
+              {PARQ_QUESTIONS.map((q, i) => {
+                const dKey = `parq_${i + 1}_detail` as ParqDetailKey
+                const detail = data.parqDetails?.[dKey]
+                return (
+                  <div key={q.key} className="space-y-0 py-0.5">
+                    <div className="flex justify-between gap-3">
+                      <span className="text-[11px] text-slate-700">
+                        {i + 1}. {q.text}
+                      </span>
+                      <YesNo v={data.parq[q.key]} />
+                    </div>
+                    {data.parq[q.key] === 'sim' && detail && detail.trim() && (
+                      <p className="text-[10px] text-slate-700 pl-4 border-l-2 border-slate-300 whitespace-pre-line break-words">
+                        {detail}
+                      </p>
+                    )}
+                  </div>
+                )
+              })}
             </div>
           </section>
 
@@ -298,10 +330,32 @@ export function PrintableFichaDialog({
             </h3>
             <p className="text-[10px] text-slate-500 mb-1.5">{FICHA_LEGAL.lawText}</p>
             <Row
-              label="Declarou a entrega dos exames (responsável)"
+              label="Declarou a entrega do atestado cardiológico"
               value={
-                data.examsDelivered === 'sim' ? 'Sim' : data.examsDelivered === 'nao' ? 'Não' : null
+                data.examsCardioDelivered === 'sim'
+                  ? 'Sim'
+                  : data.examsCardioDelivered === 'nao'
+                    ? 'Não'
+                    : data.examsDelivered === 'sim'
+                      ? 'Sim (registro antigo unificado)'
+                      : null
               }
+            />
+            <Row
+              label="Declarou a entrega do exame dermatológico"
+              value={
+                data.examsDermatoDelivered === 'sim'
+                  ? 'Sim'
+                  : data.examsDermatoDelivered === 'nao'
+                    ? 'Não'
+                    : data.examsDelivered === 'sim'
+                      ? 'Sim (registro antigo unificado)'
+                      : null
+              }
+            />
+            <Row
+              label="Concordou com o termo de ciência"
+              value={data.termAgreed === 'sim' ? 'Sim' : data.termAgreed === 'nao' ? 'Não' : null}
             />
             <Row
               label="Atestado Cardiológico — emissão"

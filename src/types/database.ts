@@ -71,6 +71,10 @@ export interface StudentRecord extends RecordModel {
   parq_5?: string
   parq_6?: string
   parq_7?: string
+  // Detalhes escritos das perguntas 5-7 do PAR-Q (migration 0022)
+  parq_5_detail?: string
+  parq_6_detail?: string
+  parq_7_detail?: string
   anamnese_medo_agua?: string
   anamnese_convulsoes?: string
   anamnese_alergia_cloro?: string
@@ -205,12 +209,22 @@ export interface EnrollmentRequestRecord extends RecordModel {
   parq_5?: string
   parq_6?: string
   parq_7?: string
+  // Detalhes escritos das perguntas 5-7 do PAR-Q (migration 0022)
+  parq_5_detail?: string
+  parq_6_detail?: string
+  parq_7_detail?: string
   anamnese_medo_agua?: string
   anamnese_convulsoes?: string
   anamnese_alergia_cloro?: string
   anamnese_medicamentos?: string
   anamnese_objetivo?: string
   uso_imagem_autorizado?: 'sim' | 'nao'
+  // Declaração de entrega dos exames (migration 0021 + split 0022)
+  exams_delivered?: 'sim' | 'nao'
+  exams_cardio_delivered?: 'sim' | 'nao'
+  exams_dermato_delivered?: 'sim' | 'nao'
+  // Concordância com o termo de ciência (Lei Estadual nº 9.863/2012-PB, migration 0022)
+  term_agreed?: 'sim' | 'nao'
   student_id?: string
   reviewed_at?: string
 }

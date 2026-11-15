@@ -7,7 +7,14 @@ import type { RecordModel } from 'pocketbase'
 import pb from '@/lib/pocketbase/client'
 import { academyService } from '@/services/academy'
 import type { EnrollmentRequestRecord, StudentRecord } from '@/types/database'
-import { PARQ_QUESTIONS, ANAMNESE_QUESTIONS, formatDateBR } from '@/lib/matricula'
+import {
+  PARQ_QUESTIONS,
+  ANAMNESE_QUESTIONS,
+  formatDateBR,
+  PARQ_YES,
+  PARQ_DETAIL_QUESTION,
+  type ParqDetailKey,
+} from '@/lib/matricula'
 import { FICHA_LEGAL } from '@/lib/matricula'
 import {
   requestToPrintable,
@@ -188,6 +195,10 @@ export default function EnrollmentsReview() {
         parq_5: request.parq_5 || '',
         parq_6: request.parq_6 || '',
         parq_7: request.parq_7 || '',
+        // Detalhes escritos do PAR-Q (migration 0022) — copiados junto com as respostas.
+        parq_5_detail: request.parq_5_detail || undefined,
+        parq_6_detail: request.parq_6_detail || undefined,
+        parq_7_detail: request.parq_7_detail || undefined,
         anamnese_medo_agua: request.anamnese_medo_agua || '',
         anamnese_convulsoes: request.anamnese_convulsoes || '',
         anamnese_alergia_cloro: request.anamnese_alergia_cloro || '',
@@ -373,14 +384,29 @@ export default function EnrollmentsReview() {
           </SectionCard>
 
           <SectionCard title="PAR-Q (7 perguntas)" icon={ClipboardCheck}>
-            {PARQ_QUESTIONS.map((q, i) => (
-              <div key={q.key} className="flex justify-between items-start gap-3 py-0.5">
-                <span className="text-[11px] text-slate-700">
-                  {i + 1}. {q.text}
-                </span>
-                <YesNo v={r[q.key]} />
-              </div>
-            ))}
+            {PARQ_QUESTIONS.map((q, i) => {
+              const detailKey = (
+                Object.entries(PARQ_DETAIL_QUESTION) as Array<[ParqDetailKey, typeof q.key]>
+              ).find(([, qk]) => qk === q.key)?.[0]
+              return (
+                <div key={q.key} className="py-0.5 space-y-1">
+                  <div className="flex justify-between items-start gap-3">
+                    <span className="text-[11px] text-slate-700">
+                      {i + 1}. {q.text}
+                    </span>
+                    <YesNo v={r[q.key]} />
+                  </div>
+                  {detailKey && r[q.key] === PARQ_YES && (
+                    <div className="pl-4 border-l-2 border-amber-200">
+                      <p className="text-[10px] font-semibold text-slate-500">Resposta escrita:</p>
+                      <p className="text-[11px] text-[#0F1B3D] whitespace-pre-line break-words">
+                        {r[detailKey] && r[detailKey].trim() ? r[detailKey] : '(não informado)'}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
           </SectionCard>
 
           <SectionCard title="Anamnese aquática" icon={ClipboardCheck}>
@@ -395,12 +421,19 @@ export default function EnrollmentsReview() {
           </SectionCard>
 
           <SectionCard title="Exames — Lei Estadual nº 9.863/2012-PB" icon={HeartPulse}>
-            <InfoRow
-              label="Declarou a entrega dos exames (cardiológico + dermatológico)"
-              value={
-                r.exams_delivered === 'sim' ? 'Sim' : r.exams_delivered === 'nao' ? 'Não' : null
-              }
-            />
+            {/* Declarações de entrega: DUAS caixas separadas (com fallback p/ inscrições antigas) */}
+            <div className="flex justify-between items-start gap-3 py-0.5">
+              <span className="text-[11px] text-slate-700">
+                Declarou a entrega do atestado cardiológico
+              </span>
+              <YesNo v={r.exams_cardio_delivered ?? r.exams_delivered} />
+            </div>
+            <div className="flex justify-between items-start gap-3 py-0.5">
+              <span className="text-[11px] text-slate-700">
+                Declarou a entrega do exame dermatológico
+              </span>
+              <YesNo v={r.exams_dermato_delivered ?? r.exams_delivered} />
+            </div>
             <InfoRow
               label="Atestado Cardiológico — lançado"
               value={
@@ -417,6 +450,10 @@ export default function EnrollmentsReview() {
                   ? `${formatDateBR(r.dermato_date)} · ${r.dermato_status === 'entregue' ? 'Entregue' : 'Pendente'}`
                   : null
               }
+            />
+            <InfoRow
+              label="Termo de ciência — leu e concordou"
+              value={r.term_agreed === 'sim' ? 'Sim' : r.term_agreed === 'nao' ? 'Não' : null}
             />
             <p className="text-[10px] text-slate-500 pt-1">
               Validade de 6 meses da emissão — dados técnicos lançados pelo administrador na

@@ -40,6 +40,35 @@ export type ParqKey = ParqQuestion['key']
 export type ParqValues = Partial<Record<ParqKey, string>>
 export type AnamneseValues = Partial<Record<AnamneseKey, string>>
 
+/** Perguntas 5-7 do PAR-Q (problema ósseo/articular, medicamentos, outra razão) aceitam resposta escrita quando a resposta é "SIM". */
+export const PARQ_DETAIL_KEYS = ['parq_5_detail', 'parq_6_detail', 'parq_7_detail'] as const
+export type ParqDetailKey = (typeof PARQ_DETAIL_KEYS)[number]
+
+/** Campo de detalhe → pergunta do PAR-Q a que se refere. */
+export const PARQ_DETAIL_QUESTION: Record<ParqDetailKey, ParqKey> = {
+  parq_5_detail: 'parq_5',
+  parq_6_detail: 'parq_6',
+  parq_7_detail: 'parq_7',
+}
+
+/** Detalhes do PAR-Q vazios (estado inicial dos formulários). */
+export const EMPTY_PARQ_DETAILS: Record<ParqDetailKey, string> = {
+  parq_5_detail: '',
+  parq_6_detail: '',
+  parq_7_detail: '',
+}
+
+/** Extrai os detalhes escritos do PAR-Q (campos parq_5/6/7_detail) de um registro. */
+export function getParqDetails(
+  st: Partial<Record<ParqDetailKey, string>>,
+): Record<ParqDetailKey, string> {
+  return {
+    parq_5_detail: st.parq_5_detail || '',
+    parq_6_detail: st.parq_6_detail || '',
+    parq_7_detail: st.parq_7_detail || '',
+  }
+}
+
 export const PARQ_YES = 'sim'
 export const PARQ_NO = 'nao'
 
@@ -66,6 +95,9 @@ export const EMPTY_ANAMNESE: AnamneseValues = {
 /** Aliases usados pelo formulário público /matricula. */
 export const PARQ_EMPTY = EMPTY_PARQ
 export const ANAMNESE_EMPTY = EMPTY_ANAMNESE
+
+/** Mapa de detalhes do PAR-Q por chave (parq_5_detail etc.). */
+export type ParqDetailsMap = Record<ParqDetailKey, string>
 
 /** Extrai o PAR-Q preenchido de um registro de aluno (campos parq_1..parq_7). */
 export function getParq(st: Partial<Record<ParqKey, string>>): ParqValues {

@@ -27,7 +27,12 @@ import {
   type EnrollAddressValue,
 } from '@/components/EnrollAddressSection'
 import { maskCpf, maskPhone } from '@/lib/formatters'
-import { FICHA_LEGAL } from '@/lib/matricula'
+import {
+  FICHA_LEGAL,
+  EMPTY_PARQ_DETAILS,
+  type ParqDetailsMap,
+  type ParqDetailKey,
+} from '@/lib/matricula'
 import { getErrorMessage } from '@/lib/pocketbase/errors'
 
 interface GuardianData {
@@ -70,14 +75,18 @@ export default function PublicEnroll() {
   // Endereço (CEP com busca ViaCEP + edição manual)
   const [address, setAddress] = useState<EnrollAddressValue>({ ...EMPTY_ADDRESS })
 
-  // Saúde (PAR-Q + anamnese)
+  // Saúde (PAR-Q + anamnese). Perguntas 5-7 do PAR-Q aceitam detalhe escrito quando SIM.
   const [parq, setParq] = useState<Record<string, string>>({})
+  const [parqDetails, setParqDetails] = useState<ParqDetailsMap>({ ...EMPTY_PARQ_DETAILS })
   const [anamnese, setAnamnese] = useState<Record<string, string>>({})
   const [usoImagem, setUsoImagem] = useState<'sim' | 'nao' | ''>('')
 
-  // Exames (Lei PB 9.863/2012): UMA declaração de entrega — os dados técnicos
-  // (datas, CRM, status) são lançados pelo administrador na aprovação.
-  const [examsDelivered, setExamsDelivered] = useState(false)
+  // Exames (Lei PB 9.863/2012): UMA declaração de entrega SEPARADA por exame —
+  // os dados técnicos (datas, CRM, status) são lançados pelo administrador na aprovação.
+  const [cardioDelivered, setCardioDelivered] = useState(false)
+  const [dermatoDelivered, setDermatoDelivered] = useState(false)
+  // Termo de ciência (Lei Estadual nº 9.863/2012-PB): leitura e concordância obrigatórias.
+  const [termAgreed, setTermAgreed] = useState(false)
 
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [submitting, setSubmitting] = useState(false)
@@ -156,6 +165,19 @@ export default function PublicEnroll() {
     if (address.cep && onlyDigits(address.cep).length === 8 && !address.city.trim())
       next.city = 'Informe a cidade.'
 
+      // PAR-Q 5-7: se respondeu "SIM", pede a descrição (aviso suave — não bloqueia sozinho).
+    ;(['parq_5', 'parq_6', 'parq_7'] as const).forEach((qk, idx) => {
+      const dk = `parq_${idx + 5}_detail` as ParqDetailKey
+      if (parq[qk] === 'sim' && !parqDetails[dk].trim()) {
+        next[dk] = 'Respondeu "SIM": descreva a situação no campo de texto abaixo da pergunta.'
+      }
+    })
+
+    // Termo de ciência: leitura e concordância OBRIGATÓRIAS.
+    if (!termAgreed)
+      next.term_agreed =
+        'Marque a caixa "Li e concordo com o que está descrito no termo de ciência acima" para enviar.'
+
     setErrors(next)
     return Object.keys(next).length === 0
   }
@@ -192,11 +214,16 @@ export default function PublicEnroll() {
         neighborhood: address.neighborhood,
         city: address.city,
         uf: address.uf,
-        exams_delivered: examsDelivered ? 'sim' : 'nao',
+        exams_cardio_delivered: cardioDelivered ? 'sim' : 'nao',
+        exams_dermato_delivered: dermatoDelivered ? 'sim' : 'nao',
+        term_agreed: termAgreed ? 'sim' : 'nao',
         status: 'pendente',
       }
       Object.keys(parq).forEach((k) => {
         payload[k] = parq[k]
+      })
+      Object.keys(parqDetails).forEach((k) => {
+        if (parqDetails[k as ParqDetailKey].trim()) payload[k] = parqDetails[k as ParqDetailKey]
       })
       Object.keys(anamnese).forEach((k) => {
         payload[k] = anamnese[k]
@@ -459,6 +486,20 @@ export default function PublicEnroll() {
           <h2 className="text-sm font-bold text-[#0F1B3D]">3. Saúde</h2>
           <ParqSection
             values={parq}
+            details={parqDetails}
+            detailErrors={errors as Partial<Record<ParqDetailKey, string>>}
+            onDetailChange={(key: ParqDetailKey, v: string) =>
+              setParqDetails((d) => {
+                const next = { ...d, [key]: v }
+                setErrors((e) => {
+                  if (!next[key].trim() && e[key]) return e
+                  const clean = { ...e }
+                  delete clean[key]
+                  return clean
+                })
+                return next
+              })
+            }
             onChange={(key: ParqKey, v: string) => setParq((q) => ({ ...q, [key]: v }))}
           />
           <AnamneseSection
@@ -493,17 +534,39 @@ export default function PublicEnroll() {
             validade de 6 meses ({FICHA_LEGAL.law}). Os dados técnicos (datas de emissão, CRM e
             status) serão lançados pela academia na conferência da matrícula.
           </p>
+          {/* Uma caixa de seleção SEPARADA para cada exame (Lei Estadual nº 9.863/2012-PB) */}
           <div className="flex items-start gap-2 rounded-lg bg-slate-50 border border-slate-200 p-2.5">
             <Checkbox
-              id="exams-delivered"
-              checked={examsDelivered}
-              onCheckedChange={(v) => setExamsDelivered(v === true)}
+              id="exams-cardio-delivered"
+              checked={cardioDelivered}
+              onCheckedChange={(v) => setCardioDelivered(v === true)}
             />
             <div className="space-y-0.5">
-              <Label htmlFor="exams-delivered" className="text-xs font-semibold text-[#1E2A3A]">
-                Declaro que entreguei os atestados cardiológico e dermatológico
+              <Label
+                htmlFor="exams-cardio-delivered"
+                className="text-xs font-semibold text-[#1E2A3A]"
+              >
+                Declaro que entreguei o <strong>atestado cardiológico</strong>
               </Label>
               <p className="text-[10px] text-slate-500">{FICHA_LEGAL.cardioLawText}</p>
+            </div>
+          </div>
+          <div className="flex items-start gap-2 rounded-lg bg-slate-50 border border-slate-200 p-2.5">
+            <Checkbox
+              id="exams-dermato-delivered"
+              checked={dermatoDelivered}
+              onCheckedChange={(v) => setDermatoDelivered(v === true)}
+            />
+            <div className="space-y-0.5">
+              <Label
+                htmlFor="exams-dermato-delivered"
+                className="text-xs font-semibold text-[#1E2A3A]"
+              >
+                Declaro que entreguei o <strong>exame dermatológico</strong>
+              </Label>
+              <p className="text-[10px] text-slate-500">
+                Exame Médico Dermatológico — {FICHA_LEGAL.law}, validade de 6 meses.
+              </p>
             </div>
           </div>
         </Card>
@@ -520,6 +583,36 @@ export default function PublicEnroll() {
             (seis) meses.
           </p>
           <p className="text-xs text-slate-600 leading-relaxed">{FICHA_LEGAL.lgpd}</p>
+          {/* Concordância obrigatória com o termo de ciência (Lei Estadual nº 9.863/2012-PB) */}
+          <div
+            className={`flex items-start gap-2 rounded-lg p-2.5 border ${
+              errors.term_agreed ? 'border-red-300 bg-red-50' : 'bg-slate-50 border-slate-200'
+            }`}
+          >
+            <Checkbox
+              id="term-agreed"
+              checked={termAgreed}
+              onCheckedChange={(v) => {
+                setTermAgreed(v === true)
+                if (v === true)
+                  setErrors((e) => {
+                    const clean = { ...e }
+                    delete clean.term_agreed
+                    return clean
+                  })
+              }}
+            />
+            <div className="space-y-0.5">
+              <Label htmlFor="term-agreed" className="text-xs font-semibold text-[#1E2A3A]">
+                Li e concordo com o que está descrito no termo de ciência acima{' '}
+                <span className="text-red-600">*</span>
+              </Label>
+              <p className="text-[10px] text-slate-500">
+                Concordância obrigatória para enviar a inscrição — {FICHA_LEGAL.law}.
+              </p>
+              {errors.term_agreed && <Err field="term_agreed" />}
+            </div>
+          </div>
         </Card>
 
         <Button
