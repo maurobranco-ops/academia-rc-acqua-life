@@ -40,7 +40,7 @@ import {
   type ParqDetailsMap,
   type ParqDetailKey,
 } from '@/lib/matricula'
-import { getErrorMessage } from '@/lib/pocketbase/errors'
+import { extractFieldErrors, getErrorMessage } from '@/lib/pocketbase/errors'
 import type { ClassRecord } from '@/types/database'
 
 interface GuardianData {
@@ -67,8 +67,43 @@ function classLabel(c: ClassRecord): string {
 
 const EMPTY_GUARDIAN: GuardianData = { name: '', cpf: '', phone: '', email: '' }
 
-/** Tamanho máximo aceito para a foto do aluno (comprimida antes do envio). */
-const MAX_PHOTO_MB = 5
+/** Tamanho máximo aceito por arquivo no PocketBase (photo_file e guardian_rg_file). */
+const MAX_FILE_MB = 5
+/** Teto do servidor (PocketBase): arquivo individual acima disso é recusado com 400. */
+const SERVER_MAX_FILE_MB = 10
+
+/** Rótulos amigáveis dos campos da collection, para as mensagens de erro. */
+const FIELD_LABELS: Record<string, string> = {
+  student_name: 'nome do aluno',
+  student_birth_date: 'data de nascimento',
+  student_photo: 'foto do aluno',
+  photo_file: 'foto do aluno',
+  guardian_rg_file: 'documento do responsável',
+  guardian_rg: 'documento do responsável',
+  activities: 'atividades pretendidas',
+  preferred_classes: 'turmas pretendidas',
+  due_day: 'dia de vencimento',
+  guardian_name: 'nome do responsável',
+  guardian_cpf: 'CPF do responsável',
+  guardian_phone: 'telefone do responsável',
+  guardian_email: 'e-mail do responsável',
+}
+
+/** Traduz a mensagem crua do PocketBase para um detalhe em português. */
+function translateFieldMessage(field: string, message: string): string {
+  const label =
+    FIELD_LABELS[field] || field.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+  if (/less than|size|5mb|tamanho/i.test(message)) {
+    return `O arquivo "${label}" é maior que o limite de ${MAX_FILE_MB} MB — anexe uma foto/scan menor (o celular costuma reduzir automaticamente ao fotografar de novo).`
+  }
+  if (/cannot be blank|must not be blank|non-empty value|required/i.test(message)) {
+    return `O campo "${label}" é obrigatório.`
+  }
+  if (/invalid value|must be a valid/i.test(message)) {
+    return `O campo "${label}" tem um valor inválido.`
+  }
+  return message
+}
 
 /** Idade a partir da data de nascimento (YYYY-MM-DD), considerando o aniversário do ano. */
 function calcAge(birthDate: string): number | null {
@@ -181,8 +216,8 @@ export default function PublicEnroll() {
     if (!photoFile) next.student_photo = 'Anexe a foto do aluno — ela é obrigatória para enviar.'
     if (photoFile && !photoFile.type.startsWith('image/'))
       next.student_photo = 'A foto do aluno deve ser uma imagem (JPG, PNG etc.).'
-    if (photoFile && photoFile.size > MAX_PHOTO_MB * 1024 * 1024)
-      next.student_photo = `A foto do aluno é muito grande (máximo ${MAX_PHOTO_MB} MB).`
+    if (photoFile && photoFile.size > MAX_FILE_MB * 1024 * 1024)
+      next.student_photo = `A foto do aluno é muito grande (máximo ${MAX_FILE_MB} MB).`
     if (studentCpf && onlyDigits(studentCpf).length !== 11)
       next.student_cpf = 'CPF do aluno incompleto (11 dígitos).'
     if (studentPhone && onlyDigits(studentPhone).length < 10)
@@ -206,6 +241,15 @@ export default function PublicEnroll() {
         next.guardian_email = 'E-mail do responsável é obrigatório para menor de 18.'
       } else if (!/^\S+@\S+\.\S+$/.test(guardian.email)) {
         next.guardian_email = 'E-mail do responsável inválido.'
+      }
+      if (rgFile) {
+        // RG cru do celular chega a 3-8 MB — acima do limite de 5 MB do PocketBase.
+        // Bloqueia antes do envio (a compressão abaixo resolve na maioria dos casos,
+        // mas se ainda ficar grande, o usuário já é avisado aqui sem POST falho).
+        const rgIsImage = rgFile.type.startsWith('image/')
+        if (!rgIsImage && rgFile.size > MAX_FILE_MB * 1024 * 1024) {
+          next.guardian_rg = `O documento do responsável é muito grande (máximo ${MAX_FILE_MB} MB). Tire a foto novamente ou reduza a resolução.`
+        }
       }
       if (!rgFile)
         next.guardian_rg = 'Anexe a foto/scan do RG do responsável (obrigatório p/ menor).'
@@ -265,7 +309,6 @@ export default function PublicEnroll() {
         student_age: String(age ?? ''),
         student_cpf: studentCpf,
         student_phone: studentPhone,
-        student_email: studentEmail,
         guardian_name: effGuardian.name,
         guardian_cpf: effGuardian.cpf,
         guardian_phone: effGuardian.phone,
@@ -302,7 +345,10 @@ export default function PublicEnroll() {
       // Arrays multi-select: cada valor em uma entrada própria do FormData.
       activities.forEach((a) => fd.append('activities', a))
       preferredClasses.forEach((c) => fd.append('preferred_classes', c))
-      // photo_file é imagem: comprime antes de anexar (mesma rotina da tela de alunos).
+      // FOTO DO ALUNO: comprime antes de anexar (mesma rotina da tela de alunos).
+      // RG DO RESPONSÁVEL: também comprime quando é imagem — uma foto de documento
+      // feita no celular chega a 3-8 MB e o PocketBase recusa arquivos acima de 5 MB
+      // (a inscrição inteira volta com 400). O RG cru só passa direto se for PDF.
       let photo = photoFile
       try {
         const compressed = await compressImage(photoFile, photoFile.name)
@@ -312,7 +358,35 @@ export default function PublicEnroll() {
         // Falhou a compressão: segue com o arquivo original.
       }
       fd.append('photo_file', photo, photo.name)
-      if (rgFile) fd.append('guardian_rg_file', rgFile, rgFile.name)
+      if (rgFile) {
+        let rg = rgFile
+        if (rgFile.type.startsWith('image/')) {
+          try {
+            const compressedRg = await compressImage(rgFile, rgFile.name, {
+              maxWidth: 2000,
+              maxHeight: 2000,
+              quality: 0.85,
+            })
+            if (compressedRg.file instanceof File) rg = compressedRg.file
+            else
+              rg = new File([compressedRg.file], 'documento-responsavel.jpg', {
+                type: 'image/jpeg',
+              })
+          } catch {
+            // Falhou a compressão: segue com o original (a validação de tamanho abaixo avisa).
+          }
+        }
+        if (rg.size > SERVER_MAX_FILE_MB * 1024 * 1024) {
+          setErrors((er) => ({
+            ...er,
+            guardian_rg: `O documento do responsável é muito grande (máximo ${SERVER_MAX_FILE_MB} MB) — tire a foto novamente ou envie um PDF/scan menor.`,
+          }))
+          setSubmitting(false)
+          window.scrollTo({ top: 0, behavior: 'smooth' })
+          return
+        }
+        fd.append('guardian_rg_file', rg, rg.name)
+      }
 
       await pb.collection('enrollment_requests').create(fd)
 
@@ -321,14 +395,26 @@ export default function PublicEnroll() {
     } catch (err) {
       // NUNCA tela muda: qualquer falha (400 de validação, queda de rede, erro
       // inesperado no próprio formulário) cai aqui e exibe o banner vermelho
-      // com uma mensagem clara em português.
+      // com uma mensagem clara em português — com o DETALHE do campo recusado.
+      // O PocketBase traz em err.response.data a lista de campos com problema
+      // (ex.: guardian_rg_file: "must be less than 5MB") — traduzimos cada um.
+      console.error('[matricula] Falha ao enviar inscrição:', err)
+      if (err instanceof ClientResponseError && err.response?.data) {
+        console.error('[matricula] Detalhe de validação do PocketBase:', err.response.data)
+      }
       let msg: string
       if (err instanceof ClientResponseError && err.status === 0) {
         msg = 'Falha de conexão com o servidor. Verifique sua internet e tente novamente.'
       } else if (err instanceof ClientResponseError && err.status === 400) {
-        // 400 = recusa de validação do backend — nunca mostrar o texto cru
-        // ("Failed to create record" / "Cannot be blank").
-        msg = 'Não foi possível enviar sua matrícula. Verifique os dados e tente novamente.'
+        const fieldErrors = extractFieldErrors(err)
+        const details = Object.entries(fieldErrors)
+          .map(([field, message]) => translateFieldMessage(field, message))
+          .filter(Boolean)
+        // Sem detalhe traduzido: mensagem genérica, mas indicando que houve
+        // recusa de validação — nunca "erro desconhecido" sem pista.
+        msg = details.length
+          ? `Não foi possível enviar sua matrícula: ${details.join(' ')}`
+          : 'Não foi possível enviar sua matrícula. Verifique os campos obrigatórios e o tamanho dos arquivos (máximo 5 MB por arquivo) e tente novamente.'
       } else {
         const raw = getErrorMessage(err)
         msg =
