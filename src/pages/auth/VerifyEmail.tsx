@@ -35,7 +35,7 @@ export default function VerifyEmail() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#0F1B3D] via-[#1B2A5B] to-[#0A122A] p-4">
       <div className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl p-8 text-center animate-fade-in-up">
         <div className="flex flex-col items-center mb-6">
-          <LogoMark size={56} className="rounded-2xl mb-2" />
+          <LogoMark size={96} className="rounded-2xl mb-2" />
           <h1 className="text-2xl font-bold text-[#0F1B3D]">Verificação de E-mail</h1>
         </div>
 

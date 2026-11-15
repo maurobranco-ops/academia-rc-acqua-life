@@ -246,7 +246,7 @@ export default function PublicEnroll() {
       <div className="bg-gradient-to-b from-[#0F1B3D] to-[#1a2b57] text-white py-10 px-4">
         <div className="max-w-2xl mx-auto text-center space-y-3">
           <LogoFull
-            size={72}
+            size={110}
             textClassName="text-lg"
             subtitleClassName="text-xs"
             className="mx-auto"

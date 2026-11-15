@@ -8,10 +8,17 @@ import logoUrl from '@/assets/logo-sem-fundo-81244.png'
  * fundo navy do app ela desapareceria. Por isso ela sempre é exibida dentro
  * de um "chip" branco arredondado com leve borda dourada, em qualquer
  * contexto (barra mobile, drawer, sidebar e telas de autenticação).
+ *
+ * Pendência da v0.0.56 resolvida: antes o `size` era o CONTÊINER e a imagem
+ * ficava menor dentro dele (sobrando quadro branco). Agora o `size` é a
+ * IMAGEM em si (height: 100% do quadro, object-contain, SEM padding) — a
+ * imagem cresce e preenche o quadro de ponta a ponta, proporcional, sem
+ * distorção. O quadro é só o necessário para conter a imagem (largura
+ * automática pela proporção da arte).
  */
 
 interface LogoProps {
-  /** Tamanho do chip quadrado em px (o conteúdo é ajustado proporcionalmente) */
+  /** Altura visível do LOGO (a imagem) em px — o quadro branco acompanha. */
   size?: number
   className?: string
 }
@@ -23,12 +30,12 @@ export function LogoMark({ size = 40, className }: LogoProps) {
         'shrink-0 rounded-xl bg-white flex items-center justify-center overflow-hidden shadow-md ring-1 ring-[#D4AF37]/50',
         className,
       )}
-      style={{ width: size, height: size, padding: size * 0.09 }}
+      style={{ height: size, width: size * 1.25, padding: 0 }}
     >
       <img
         src={logoUrl}
         alt="Logo RC Acqua Life"
-        className="w-full h-full object-contain"
+        className="h-full w-full object-contain"
         draggable={false}
       />
     </div>

@@ -46,7 +46,7 @@ export default function ForgotPassword() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#0F1B3D] via-[#1B2A5B] to-[#0A122A] p-4">
       <div className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl p-8 animate-fade-in-up">
         <div className="flex flex-col items-center mb-6 text-center">
-          <LogoMark size={80} className="rounded-3xl mb-2" />
+          <LogoMark size={120} className="rounded-3xl mb-2" />
           <h1 className="text-3xl font-bold text-[#0F1B3D]">Recuperar Senha</h1>
           <p className="text-xs text-[#6C757D] mt-1">
             Informe seu e-mail para receber as instruções de recuperação

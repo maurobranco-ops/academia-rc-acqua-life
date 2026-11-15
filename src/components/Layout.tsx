@@ -136,7 +136,7 @@ export default function Layout() {
         {/* Academy Brand */}
         <div className="h-24 flex items-center justify-between px-4 border-b border-[#1B2A5B]">
           <div className="flex items-center gap-3 overflow-hidden">
-            <LogoFull withText={!collapsed} size={52} />
+            <LogoFull withText={!collapsed} size={64} />
           </div>
           <button
             onClick={() => setCollapsed(!collapsed)}
@@ -259,7 +259,7 @@ export default function Layout() {
       {/* ============================================================== */}
       <div className="lg:hidden fixed top-0 inset-x-0 h-16 bg-[#0F1B3D] text-white z-40 flex items-center justify-between px-4 shadow-md">
         <div className="flex items-center gap-2 min-w-0">
-          <LogoMark size={44} />
+          <LogoMark size={56} />
           <span className="font-bold text-lg text-white truncate">RC Acqua Life</span>
         </div>
 
@@ -282,7 +282,7 @@ export default function Layout() {
           <div className="relative w-[280px] bg-[#0F1B3D] text-white h-full flex flex-col z-10 shadow-2xl animate-fade-in">
             <div className="h-16 flex items-center justify-between px-4 border-b border-[#1B2A5B]">
               <div className="flex items-center gap-2.5 min-w-0">
-                <LogoMark size={42} />
+                <LogoMark size={52} />
                 <span className="font-bold text-base truncate">RC Acqua Life</span>
               </div>
               <button

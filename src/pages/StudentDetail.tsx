@@ -52,11 +52,11 @@ import type {
   ClassRecord,
 } from '@/types/database'
 import { getExamAlert } from '@/types/database'
+import { PARQ_QUESTIONS, getParq, formatDateBR } from '@/lib/matricula'
 import { useToast } from '@/hooks/use-toast'
 import { getStudentPhotoUrl } from '@/lib/studentPhoto'
 import { formatPhoneDisplay } from '@/lib/formatters'
 import { getStudentStatusDisplay } from '@/lib/studentStatus'
-import { formatDateBR } from '@/lib/matricula'
 import { StudentHealthTab } from '@/components/StudentHealthTab'
 
 export default function StudentDetail() {
@@ -134,6 +134,81 @@ export default function StudentDetail() {
   useEffect(() => {
     loadData()
   }, [id])
+
+  // Tarjas de status dos EXAMES + PAR-Q (Lei PB 9.863/2012 — validade 6 meses,
+  // janela âmbar de 30 dias). PAR-Q vem dos campos parq_1..7 do aluno (migration
+  // das matrículas): contados os "SIM" registrados, cada um destacado em vermelho.
+  const examStripItems = useMemo(() => {
+    if (!student) return []
+    const strips: {
+      title: string
+      badgeClass: string
+      dot: string
+      detail: string
+    }[] = (
+      [
+        {
+          title: 'Atestado cardiológico',
+          date: student.cardio_date,
+          status: student.cardio_status,
+        },
+        {
+          title: 'Exame dermatológico',
+          date: student.dermato_date,
+          status: student.dermato_status,
+        },
+      ] as const
+    ).map(({ title, date, status }) => {
+      const alert = getExamAlert(date, status)
+      const badgeClass =
+        alert?.level === 'expired'
+          ? 'bg-red-50 border-red-300 text-red-800'
+          : alert?.level === 'warn'
+            ? 'bg-amber-50 border-amber-300 text-amber-800'
+            : alert?.level === 'ok'
+              ? 'bg-emerald-50 border-emerald-300 text-emerald-800'
+              : 'bg-slate-50 border-slate-200 text-slate-500'
+      const dot =
+        alert?.level === 'expired'
+          ? '🔴'
+          : alert?.level === 'warn'
+            ? '🟡'
+            : alert?.level === 'ok'
+              ? '🟢'
+              : '⚪'
+      const detail = alert
+        ? `${alert.level === 'ok' ? 'Válido' : alert.level === 'expired' ? 'Vencido' : alert.label}${alert.expiry ? ` · até ${formatDateBR(alert.expiry)}` : ''}`
+        : 'Sem data de emissão'
+      return { title, badgeClass, dot, detail }
+    })
+
+    const parqValues = getParq(student)
+    const parqYes = PARQ_QUESTIONS.filter((q) => parqValues[q.key] === 'sim')
+    const parqAnswered = PARQ_QUESTIONS.some((q) => (parqValues[q.key] || '') !== '')
+    if (!parqAnswered) {
+      strips.push({
+        title: 'PAR-Q',
+        badgeClass: 'bg-slate-50 border-slate-200 text-slate-500',
+        dot: '⚪',
+        detail: 'Não respondido',
+      })
+    } else if (parqYes.length > 0) {
+      strips.push({
+        title: 'PAR-Q',
+        badgeClass: 'bg-red-50 border-red-300 text-red-800',
+        dot: '🔴',
+        detail: `${parqYes.length} resposta${parqYes.length === 1 ? '' : 's'} "SIM" — avaliar`,
+      })
+    } else {
+      strips.push({
+        title: 'PAR-Q',
+        badgeClass: 'bg-emerald-50 border-emerald-300 text-emerald-800',
+        dot: '🟢',
+        detail: 'Sem resposta "SIM" — apto',
+      })
+    }
+    return strips
+  }, [student])
 
   const handleOpenCancelModal = (charge: ChargeRecord) => {
     setSelectedChargeToCancel(charge)
@@ -496,54 +571,22 @@ export default function StudentDetail() {
                   <span>CPF: {student.cpf || student.guardian_cpf || 'Não informado'}</span>
                 </div>
               </div>
-              {/* Tarjas de validade dos DOIS exames (Lei PB 9.863/2012 — 6 meses,
+              {/* Tarjas de status dos EXAMES + PAR-Q (Lei PB 9.863/2012 — 6 meses,
                   janela âmbar de 30 dias). Edição dos dados na aba Saúde. */}
               <div className="flex flex-col gap-1.5 sm:grid sm:grid-cols-2 sm:gap-3">
-                {[
-                  {
-                    title: 'Atestado cardiológico',
-                    date: student.cardio_date,
-                    status: student.cardio_status,
-                  },
-                  {
-                    title: 'Exame dermatológico',
-                    date: student.dermato_date,
-                    status: student.dermato_status,
-                  },
-                ].map(({ title, date, status }) => {
-                  const alert = getExamAlert(date, status)
-                  const badgeClass =
-                    alert?.level === 'expired'
-                      ? 'bg-red-50 border-red-300 text-red-800'
-                      : alert?.level === 'warn'
-                        ? 'bg-amber-50 border-amber-300 text-amber-800'
-                        : alert?.level === 'ok'
-                          ? 'bg-emerald-50 border-emerald-300 text-emerald-800'
-                          : 'bg-slate-50 border-slate-200 text-slate-500'
-                  const dot =
-                    alert?.level === 'expired'
-                      ? '🔴'
-                      : alert?.level === 'warn'
-                        ? '🟡'
-                        : alert?.level === 'ok'
-                          ? '🟢'
-                          : '⚪'
-                  return (
-                    <div
-                      key={title}
-                      className={`flex items-center justify-between gap-2 border rounded-lg px-2.5 py-1.5 ${badgeClass}`}
-                    >
-                      <span className="text-[11px] font-semibold truncate">
-                        {dot} {title}
-                      </span>
-                      <span className="text-[10px] font-medium shrink-0 text-right">
-                        {alert
-                          ? `${alert.level === 'ok' ? 'Válido' : alert.level === 'expired' ? 'Vencido' : alert.label}${alert.expiry ? ` · até ${formatDateBR(alert.expiry)}` : ''}`
-                          : 'Sem data de emissão'}
-                      </span>
-                    </div>
-                  )
-                })}
+                {examStripItems.map((item) => (
+                  <div
+                    key={item.title}
+                    className={`flex items-center justify-between gap-2 border rounded-lg px-2.5 py-1.5 ${item.badgeClass}`}
+                  >
+                    <span className="text-[11px] font-semibold truncate">
+                      {item.dot} {item.title}
+                    </span>
+                    <span className="text-[10px] font-medium shrink-0 text-right">
+                      {item.detail}
+                    </span>
+                  </div>
+                ))}
               </div>
             </div>
           </div>

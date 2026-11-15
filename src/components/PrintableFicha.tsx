@@ -202,7 +202,7 @@ export function PrintableFichaDialog({
           {/* Cabeçalho */}
           <div className="flex items-center justify-between border-b-2 border-[#D4AF37] pb-3">
             <div className="flex items-center gap-3">
-              <LogoMark className="w-10 h-10" />
+              <LogoMark size={56} />
               <div>
                 <div className="text-sm font-bold text-[#0F1B3D]">RC Acqua Life</div>
                 <div className="text-[11px] text-slate-500">

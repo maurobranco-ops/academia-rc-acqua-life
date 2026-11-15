@@ -203,6 +203,8 @@ export function StudentHealthTab({ student, onSaved }: StudentHealthTabProps) {
     parq_6: student.parq_6 || '',
     parq_7: student.parq_7 || '',
   }
+  const savedParqYes = PARQ_QUESTIONS.filter((q) => savedParq[q.key] === 'sim').length
+  const parqAnswered = PARQ_QUESTIONS.some((q) => (savedParq[q.key] || '') !== '')
   const savedAnamnese: AnamneseValues = {
     anamnese_medo_agua: student.anamnese_medo_agua || '',
     anamnese_convulsoes: student.anamnese_convulsoes || '',
@@ -219,6 +221,13 @@ export function StudentHealthTab({ student, onSaved }: StudentHealthTabProps) {
           <h3 className="text-sm font-bold text-[#0F1B3D]">
             Exames obrigatórios — Lei Estadual nº 9.863/2012-PB
           </h3>
+          <Badge className="bg-blue-50 text-blue-700 border border-blue-200 text-[10px]">
+            {savedParqYes > 0
+              ? `PAR-Q: ${savedParqYes} resposta${savedParqYes === 1 ? '' : 's'} "SIM"`
+              : parqAnswered
+                ? 'PAR-Q: sem resposta "SIM"'
+                : 'PAR-Q: não respondido'}
+          </Badge>
           <Button
             variant="outline"
             size="sm"
@@ -230,6 +239,61 @@ export function StudentHealthTab({ student, onSaved }: StudentHealthTabProps) {
         </div>
         <ExamAlertLine title="Atestado Cardiológico" alert={cardioAlert} />
         <ExamAlertLine title="Exame Dermatológico" alert={dermatoAlert} />
+
+        {/* PAR-Q também no resumo de status dos exames (sete perguntas com SIM em vermelho) */}
+        <div
+          className={`border rounded-lg px-2.5 py-2 space-y-1.5 ${
+            savedParqYes > 0
+              ? 'bg-red-50 border-red-300'
+              : parqAnswered
+                ? 'bg-white border-slate-200'
+                : 'bg-slate-50 border-slate-200'
+          }`}
+        >
+          <div className="flex items-center justify-between gap-3">
+            <span className="flex items-center gap-1.5 text-[11px] font-semibold text-[#1E2A3A]">
+              {savedParqYes > 0 ? (
+                <ShieldAlert className="w-3.5 h-3.5 text-red-600 shrink-0" />
+              ) : (
+                <ShieldCheck
+                  className={`w-3.5 h-3.5 shrink-0 ${parqAnswered ? 'text-emerald-600' : 'text-slate-400'}`}
+                />
+              )}
+              PAR-Q — Prontidão para Atividade Física (7 perguntas)
+            </span>
+            <Badge
+              className={`text-[10px] ${
+                savedParqYes > 0
+                  ? 'bg-red-100 text-red-800 border border-red-300 font-bold'
+                  : parqAnswered
+                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                    : 'bg-slate-50 text-slate-500 border border-slate-200'
+              }`}
+            >
+              {!parqAnswered
+                ? 'Não respondido'
+                : savedParqYes > 0
+                  ? `SIM: ${savedParqYes} · avaliar`
+                  : 'Sem "SIM" — ok'}
+            </Badge>
+          </div>
+          {parqAnswered && (
+            <div className="space-y-0.5 pt-0.5">
+              {PARQ_QUESTIONS.map((q, i) => (
+                <div key={q.key} className="flex justify-between gap-3 py-0.5">
+                  <span
+                    className={`text-[11px] ${savedParq[q.key] === 'sim' ? 'text-red-700 font-bold' : 'text-slate-600'}`}
+                  >
+                    {i + 1}. {q.text}
+                  </span>
+                  <span className="text-[11px] font-semibold shrink-0">
+                    {savedParq[q.key] === 'sim' ? 'SIM' : savedParq[q.key] === 'nao' ? 'Não' : '—'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </Card>
 
       {/* Edição dos exames (datas, CRM, status) */}
