@@ -4,6 +4,7 @@ import {
   LayoutDashboard,
   CalendarDays,
   Users,
+  ClipboardCheck,
   DollarSign,
   CreditCard,
   FileBarChart2,
@@ -43,6 +44,7 @@ const navItems = [
   { label: 'Dashboard', icon: LayoutDashboard, path: '/' },
   { label: 'Turmas', icon: CalendarDays, path: '/turmas' },
   { label: 'Alunos', icon: Users, path: '/alunos' },
+  { label: 'Matrículas', icon: ClipboardCheck, path: '/matriculas' },
   { label: 'Financeiro', icon: DollarSign, path: '/financeiro' },
   { label: 'Cobranças', icon: CreditCard, path: '/cobrancas' },
   { label: 'Relatórios', icon: FileBarChart2, path: '/relatorios' },
@@ -63,6 +65,7 @@ export default function Layout() {
   const [filteredStudents, setFilteredStudents] = useState<StudentRecord[]>([])
   const [overdueCount, setOverdueCount] = useState(0)
   const [overduePayments, setOverduePayments] = useState<PaymentRecord[]>([])
+  const [pendingEnrollCount, setPendingEnrollCount] = useState(0)
 
   // Load students for quick search & overdue count
   useEffect(() => {
@@ -75,6 +78,10 @@ export default function Layout() {
         setOverduePayments(overdue)
       })
       .catch(console.error)
+    academyService
+      .getEnrollmentRequests('pendente')
+      .then((reqs) => setPendingEnrollCount(reqs.length))
+      .catch(() => setPendingEnrollCount(0))
   }, [location.pathname])
 
   // Handle live student search
@@ -171,7 +178,16 @@ export default function Layout() {
                     isActive ? 'text-[#D4AF37]' : 'text-slate-400 group-hover:text-white',
                   )}
                 />
-                {!collapsed && <span className="truncate">{item.label}</span>}
+                {!collapsed && (
+                  <span className="truncate flex-1 flex items-center gap-2">
+                    {item.label}
+                    {item.path === '/matriculas' && pendingEnrollCount > 0 && (
+                      <Badge className="bg-[#D4AF37] text-[#0F1B3D] text-[10px] font-bold px-1.5 py-0 h-4 min-w-4 justify-center">
+                        {pendingEnrollCount}
+                      </Badge>
+                    )}
+                  </span>
+                )}
               </NavLink>
             )
           })}
@@ -301,7 +317,14 @@ export default function Layout() {
                     <Icon
                       className={cn('w-5 h-5', isActive ? 'text-[#D4AF37]' : 'text-slate-400')}
                     />
-                    <span>{item.label}</span>
+                    <span className="flex-1 flex items-center gap-2">
+                      {item.label}
+                      {item.path === '/matriculas' && pendingEnrollCount > 0 && (
+                        <Badge className="bg-[#D4AF37] text-[#0F1B3D] text-[10px] font-bold px-1.5 py-0 h-4 min-w-4 justify-center">
+                          {pendingEnrollCount}
+                        </Badge>
+                      )}
+                    </span>
                   </NavLink>
                 )
               })}

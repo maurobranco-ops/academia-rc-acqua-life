@@ -1565,13 +1565,12 @@ export default function Students() {
                           </div>
                         </div>
                       )
-                    })}
+                    })
                   )}
                 </div>
               </Card>
             )
           })}
-          {/* Unassigned Students Section */}
           {classGroups.unassigned.length > 0 && (
             <Card className="bg-white border-amber-200 rounded-xl overflow-hidden shadow-xs">
               <div className="p-4 bg-amber-50/70 border-b border-amber-200 flex items-center justify-between">

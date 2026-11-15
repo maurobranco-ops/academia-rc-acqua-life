@@ -15,7 +15,7 @@ import Reports from '@/pages/Reports'
 import Settings from '@/pages/Settings'
 import Import from '@/pages/Import'
 import PublicEnroll from '@/pages/PublicEnroll'
-import Enrollments from '@/pages/Enrollments'
+import EnrollmentsReview from '@/pages/EnrollmentsReview'
 
 // Auth Pages
 import Login from '@/pages/auth/Login'
@@ -57,7 +57,7 @@ export default function App() {
             <Route path="/alunos/:id" element={<StudentDetail />} />
             <Route path="/financeiro" element={<Finance />} />
             <Route path="/cobrancas" element={<Charges />} />
-            <Route path="/matriculas" element={<Enrollments />} />
+            <Route path="/matriculas" element={<EnrollmentsReview />} />
             <Route path="/relatorios" element={<Reports />} />
             <Route path="/importar" element={<Import />} />
             <Route path="/configuracoes" element={<Settings />} />
