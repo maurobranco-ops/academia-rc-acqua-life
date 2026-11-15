@@ -31,8 +31,10 @@ import {
   Check,
   ClipboardCheck,
   FileText,
+  HeartPulse,
   IdCard,
   Loader2,
+  MapPin,
   Printer,
   RefreshCw,
   UserCheck,
@@ -162,6 +164,17 @@ export default function EnrollmentsReview() {
         anamnese_medicamentos: request.anamnese_medicamentos || '',
         anamnese_objetivo: request.anamnese_objetivo || '',
         uso_imagem_autorizado: (request.uso_imagem_autorizado as 'sim' | 'nao') || undefined,
+        // Endereço (migration 0016/0020) e atestado cardiológico (Lei PB 9.863/2012)
+        cep: request.cep || undefined,
+        street: request.street || undefined,
+        street_number: request.street_number || undefined,
+        complement: request.complement || undefined,
+        neighborhood: request.neighborhood || undefined,
+        city: request.city || undefined,
+        uf: request.uf || undefined,
+        cardio_date: request.cardio_date || undefined,
+        cardio_crm: request.cardio_crm || undefined,
+        cardio_status: (request.cardio_status as 'entregue' | 'pendente' | undefined) || undefined,
       }
 
       if (studentId) {
@@ -292,6 +305,20 @@ export default function EnrollmentsReview() {
             )}
           </SectionCard>
 
+          <SectionCard title="Endereço" icon={MapPin}>
+            <InfoRow label="CEP" value={r.cep} />
+            <InfoRow
+              label="Logradouro"
+              value={[r.street, r.street_number].filter((v) => v && v.trim()).join(', ') || null}
+            />
+            <InfoRow label="Complemento" value={r.complement} />
+            <InfoRow label="Bairro" value={r.neighborhood} />
+            <InfoRow
+              label="Cidade / UF"
+              value={[r.city, r.uf].filter((v) => v && v.trim()).join(' - ') || null}
+            />
+          </SectionCard>
+
           <SectionCard title="Responsável" icon={IdCard}>
             <InfoRow label="Nome" value={r.guardian_name} />
             <InfoRow label="CPF" value={r.guardian_cpf} />
@@ -330,6 +357,38 @@ export default function EnrollmentsReview() {
             ))}
             <InfoRow label="Medicamentos em uso" value={r.anamnese_medicamentos} />
             <InfoRow label="Objetivo com a natação" value={r.anamnese_objetivo} />
+          </SectionCard>
+
+          <SectionCard title="Exames — Lei Estadual nº 9.863/2012-PB" icon={HeartPulse}>
+            <InfoRow
+              label="Atestado de Aptidão Física"
+              value={
+                r.aptidao_date
+                  ? `${formatDateBR(r.aptidao_date)} · ${r.aptidao_status === 'entregue' ? 'Entregue' : 'Pendente'}`
+                  : null
+              }
+            />
+            <InfoRow label="Atestado de Aptidão Física — CRM" value={r.aptidao_crm} />
+            <InfoRow
+              label="Exame Dermatológico"
+              value={
+                r.dermato_date
+                  ? `${formatDateBR(r.dermato_date)} · ${r.dermato_status === 'entregue' ? 'Entregue' : 'Pendente'}`
+                  : null
+              }
+            />
+            <InfoRow
+              label="Atestado Cardiológico"
+              value={
+                r.cardio_date
+                  ? `${formatDateBR(r.cardio_date)} · ${r.cardio_status === 'entregue' ? 'Entregue' : 'Pendente'}`
+                  : null
+              }
+            />
+            <InfoRow label="Atestado Cardiológico — CRM" value={r.cardio_crm} />
+            <p className="text-[10px] text-slate-500 pt-1">
+              Validade de 6 meses da emissão — exigidos para natação e/ou hidroginástica.
+            </p>
           </SectionCard>
         </div>
 

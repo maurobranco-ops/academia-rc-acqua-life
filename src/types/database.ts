@@ -61,6 +61,9 @@ export interface StudentRecord extends RecordModel {
   aptidao_status?: 'entregue' | 'pendente'
   dermato_date?: string
   dermato_status?: 'entregue' | 'pendente'
+  cardio_date?: string
+  cardio_crm?: string
+  cardio_status?: 'entregue' | 'pendente'
   parq_1?: string
   parq_2?: string
   parq_3?: string
@@ -179,6 +182,17 @@ export interface EnrollmentRequestRecord extends RecordModel {
   guardian_name?: string
   guardian_cpf?: string
   guardian_phone?: string
+  guardian_email?: string
+  cep?: string
+  street?: string
+  street_number?: string
+  complement?: string
+  neighborhood?: string
+  city?: string
+  uf?: string
+  cardio_date?: string
+  cardio_crm?: string
+  cardio_status?: 'entregue' | 'pendente'
   student_age?: number
   photo_file?: string
   guardian_rg_file?: string

@@ -30,6 +30,17 @@ export interface PrintableFichaData {
   aptidaoDate?: string
   aptidaoCrm?: string
   dermatoDate?: string
+  /** Atestado cardiológico (Lei PB 9.863/2012 — natação e/ou hidroginástica). */
+  cardioDate?: string
+  cardioCrm?: string
+  /** Endereço do(a) aluno(a) (students 0016 / enrollment_requests 0020). */
+  cep?: string
+  street?: string
+  streetNumber?: string
+  complement?: string
+  neighborhood?: string
+  city?: string
+  uf?: string
   /** Origem dos dados: aluno cadastrado ou inscrição pendente de conferência. */
   source: 'student' | 'request'
 }
@@ -63,6 +74,15 @@ export function studentToPrintable(st: StudentRecord): PrintableFichaData {
     aptidaoDate: st.aptidao_date,
     aptidaoCrm: st.aptidao_crm,
     dermatoDate: st.dermato_date,
+    cardioDate: st.cardio_date,
+    cardioCrm: st.cardio_crm,
+    cep: st.cep,
+    street: st.street,
+    streetNumber: st.street_number,
+    complement: st.complement,
+    neighborhood: st.neighborhood,
+    city: st.city,
+    uf: st.uf,
     source: 'student',
   }
 }
@@ -93,6 +113,18 @@ export function requestToPrintable(r: EnrollmentRequestRecord): PrintableFichaDa
       anamnese_objetivo: r.anamnese_objetivo || '',
     },
     usoImagem: r.uso_imagem_autorizado || '',
+    aptidaoDate: r.aptidao_date,
+    aptidaoCrm: r.aptidao_crm,
+    dermatoDate: r.dermato_date,
+    cardioDate: r.cardio_date,
+    cardioCrm: r.cardio_crm,
+    cep: r.cep,
+    street: r.street,
+    streetNumber: r.street_number,
+    complement: r.complement,
+    neighborhood: r.neighborhood,
+    city: r.city,
+    uf: r.uf,
     source: 'request',
   }
 }
@@ -201,6 +233,20 @@ export function PrintableFichaDialog({
             {data.source === 'student' && studentId && (
               <Row label="Código do aluno (interno)" value={studentId.slice(-6).toUpperCase()} />
             )}
+            <Row
+              label="Endereço"
+              value={
+                [
+                  [data.street, data.streetNumber].filter((v) => v && v.trim()).join(', '),
+                  data.complement,
+                  data.neighborhood,
+                  [data.city, data.uf].filter((v) => v && v.trim()).join(' - '),
+                  data.cep ? `CEP ${data.cep}` : '',
+                ]
+                  .filter((v) => v && v.trim())
+                  .join(' · ') || null
+              }
+            />
           </section>
 
           {/* Responsável */}
@@ -270,6 +316,15 @@ export function PrintableFichaDialog({
               label="Exame Dermatológico — válido até"
               value={data.dermatoDate ? formatDateBR(addSixMonths(data.dermatoDate)) : null}
             />
+            <Row
+              label="Atestado Cardiológico — emissão"
+              value={data.cardioDate ? formatDateBR(data.cardioDate) : null}
+            />
+            <Row label="Atestado Cardiológico — CRM" value={data.cardioCrm} />
+            <Row
+              label="Atestado Cardiológico — válido até"
+              value={data.cardioDate ? formatDateBR(addSixMonths(data.cardioDate)) : null}
+            />
           </section>
 
           {/* Termo + normas + LGPD */}
@@ -313,6 +368,7 @@ export function PrintableFichaDialog({
                 </p>
               </div>
             </div>
+            <p className="text-[10px] text-slate-500 text-justify pt-2">{FICHA_LEGAL.footer}</p>
             <p className="text-center text-[9px] text-slate-400 pt-4">
               {FICHA_LEGAL.city} · Documento gerado pela RC Acqua Life · {FICHA_LEGAL.law}
             </p>

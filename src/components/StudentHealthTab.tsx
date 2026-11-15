@@ -119,6 +119,9 @@ export function StudentHealthTab({ student, onSaved }: StudentHealthTabProps) {
   const [aptidaoStatus, setAptidaoStatus] = useState<ExamStatus>('pendente')
   const [dermatoDate, setDermatoDate] = useState('')
   const [dermatoStatus, setDermatoStatus] = useState<ExamStatus>('pendente')
+  const [cardioDate, setCardioDate] = useState('')
+  const [cardioCrm, setCardioCrm] = useState('')
+  const [cardioStatus, setCardioStatus] = useState<ExamStatus>('pendente')
   const [parq, setParq] = useState<ParqValues>(EMPTY_PARQ)
   const [anamnese, setAnamnese] = useState<AnamneseValues>(EMPTY_ANAMNESE)
   const [usoImagem, setUsoImagem] = useState<'sim' | 'nao' | ''>('')
@@ -132,6 +135,9 @@ export function StudentHealthTab({ student, onSaved }: StudentHealthTabProps) {
     setAptidaoStatus(student.aptidao_status === 'entregue' ? 'entregue' : 'pendente')
     setDermatoDate(student.dermato_date || '')
     setDermatoStatus(student.dermato_status === 'entregue' ? 'entregue' : 'pendente')
+    setCardioDate(student.cardio_date || '')
+    setCardioCrm(student.cardio_crm || '')
+    setCardioStatus(student.cardio_status === 'entregue' ? 'entregue' : 'pendente')
     setParq({
       parq_1: student.parq_1 || '',
       parq_2: student.parq_2 || '',
@@ -160,6 +166,9 @@ export function StudentHealthTab({ student, onSaved }: StudentHealthTabProps) {
         aptidao_status: aptidaoStatus,
         dermato_date: dermatoDate || undefined,
         dermato_status: dermatoStatus,
+        cardio_date: cardioDate || undefined,
+        cardio_crm: cardioCrm.trim() || undefined,
+        cardio_status: cardioStatus,
         parq_1: parq.parq_1 || '',
         parq_2: parq.parq_2 || '',
         parq_3: parq.parq_3 || '',
@@ -193,6 +202,7 @@ export function StudentHealthTab({ student, onSaved }: StudentHealthTabProps) {
 
   const aptidaoAlert = getExamAlert(aptidaoDate, aptidaoStatus)
   const dermatoAlert = getExamAlert(dermatoDate, dermatoStatus)
+  const cardioAlert = getExamAlert(cardioDate, cardioStatus)
   const savedParq: ParqValues = {
     parq_1: student.parq_1 || '',
     parq_2: student.parq_2 || '',
@@ -229,6 +239,7 @@ export function StudentHealthTab({ student, onSaved }: StudentHealthTabProps) {
         </div>
         <ExamAlertLine title="Atestado de Aptidão Física" alert={aptidaoAlert} />
         <ExamAlertLine title="Exame Dermatológico" alert={dermatoAlert} />
+        <ExamAlertLine title="Atestado Cardiológico" alert={cardioAlert} />
       </Card>
 
       {/* Edição dos exames (datas, CRM, status) */}
@@ -245,6 +256,12 @@ export function StudentHealthTab({ student, onSaved }: StudentHealthTabProps) {
           onAptidaoStatus={setAptidaoStatus}
           onDermatoDate={setDermatoDate}
           onDermatoStatus={setDermatoStatus}
+          cardioDate={cardioDate}
+          cardioCrm={cardioCrm}
+          cardioStatus={cardioStatus}
+          onCardioDate={setCardioDate}
+          onCardioCrm={setCardioCrm}
+          onCardioStatus={setCardioStatus}
         />
       </Card>
 

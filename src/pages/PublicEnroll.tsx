@@ -1,358 +1,555 @@
-// Formulário público de matrícula (frente 3) — sem login, enviável por WhatsApp.
-// Envia para a collection enrollment_requests (regras públicas só para create/list view
-// do próprio registro via @request.query.id — conferência fica na área autenticada).
+// Formulário público de matrícula (/matricula) da RC Acqua Life.
+// Envia a inscrição para a collection enrollment_requests, conferida em /matriculas.
+// Melhorias: checkbox "aluno é o próprio responsável", responsável obrigatório para
+// menor de 18, endereço com busca ViaCEP + edição manual, atestado cardiológico
+// (Lei Estadual nº 9.863/2012-PB) e citação expressa da lei.
 
 import { useMemo, useState } from 'react'
+import { AlertTriangle, CheckCircle2, Loader2, Send, UserCheck } from 'lucide-react'
+import pb from '@/lib/pocketbase/client'
 import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Card } from '@/components/ui/card'
-import { CheckCircle2, Loader2, Upload, Waves } from 'lucide-react'
-import { academyService } from '@/services/academy'
-import { maskCpf, maskPhone } from '@/lib/formatters'
 import { LogoFull } from '@/components/Logo'
-import { calcAge } from '@/types/database'
-import { ParqSection, AnamneseSection } from '@/components/MatriculaFormSections'
 import {
-  PARQ_QUESTIONS,
-  ANAMNESE_QUESTIONS,
-  PARQ_EMPTY,
-  ANAMNESE_EMPTY,
-  type ParqValues,
+  MatriculaExamsSection,
+  ParqSection,
+  AnamneseSection,
+  type ParqKey,
   type AnamneseKey,
-} from '@/lib/matricula'
+} from '@/components/MatriculaFormSections'
+import {
+  EnrollAddressSection,
+  EMPTY_ADDRESS,
+  type EnrollAddressValue,
+} from '@/components/EnrollAddressSection'
+import { maskCpf, maskPhone } from '@/lib/formatters'
+import { FICHA_LEGAL } from '@/lib/matricula'
 import { getErrorMessage } from '@/lib/pocketbase/errors'
 
-const MAX_FILE_MB = 10
+type CardStatus = 'entregue' | 'pendente'
+
+interface GuardianData {
+  name: string
+  cpf: string
+  phone: string
+  email: string
+}
+
+const EMPTY_GUARDIAN: GuardianData = { name: '', cpf: '', phone: '', email: '' }
+
+/** Idade a partir da data de nascimento (YYYY-MM-DD), considerando o aniversário do ano. */
+function calcAge(birthDate: string): number | null {
+  if (!birthDate) return null
+  const b = new Date(`${birthDate}T12:00:00`)
+  if (isNaN(b.getTime())) return null
+  const now = new Date()
+  let age = now.getFullYear() - b.getFullYear()
+  const m = now.getMonth() - b.getMonth()
+  if (m < 0 || (m === 0 && now.getDate() < b.getDate())) age--
+  return age
+}
+
+function onlyDigits(v: string): string {
+  return v.replace(/\D/g, '')
+}
 
 export default function PublicEnroll() {
-  const [submitting, setSubmitting] = useState(false)
-  const [done, setDone] = useState(false)
-  const [error, setError] = useState('')
-  const [photoFile, setPhotoFile] = useState<File | null>(null)
+  const [studentName, setStudentName] = useState('')
+  const [birthDate, setBirthDate] = useState('')
+  const [studentCpf, setStudentCpf] = useState('')
+  const [studentPhone, setStudentPhone] = useState('')
+  const [studentEmail, setStudentEmail] = useState('')
+
+  // Responsável
+  const [isSelf, setIsSelf] = useState(false)
+  const [guardian, setGuardian] = useState<GuardianData>(EMPTY_GUARDIAN)
   const [rgFile, setRgFile] = useState<File | null>(null)
 
-  const [form, setForm] = useState({
-    student_name: '',
-    student_birth_date: '',
-    student_cpf: '',
-    student_phone: '',
-    guardian_name: '',
-    guardian_cpf: '',
-    guardian_phone: '',
-    anamnese_medicamentos: '',
-    anamnese_objetivo: '',
-    uso_imagem_autorizado: '',
-  })
-  const [parq, setParq] = useState<ParqValues>({ ...PARQ_EMPTY })
-  const [anamnese, setAnamnese] = useState<Partial<Record<AnamneseKey, string>>>({
-    ...ANAMNESE_EMPTY,
-  })
+  // Endereço (CEP com busca ViaCEP + edição manual)
+  const [address, setAddress] = useState<EnrollAddressValue>({ ...EMPTY_ADDRESS })
 
-  const age = useMemo(() => calcAge(form.student_birth_date), [form.student_birth_date])
+  // Saúde (PAR-Q + anamnese)
+  const [parq, setParq] = useState<Record<string, string>>({})
+  const [anamnese, setAnamnese] = useState<Record<string, string>>({})
+  const [usoImagem, setUsoImagem] = useState<'sim' | 'nao' | ''>('')
+
+  // Exames: aptidão física, dermatológico e cardiológico (Lei PB 9.863/2012)
+  const [aptidaoDate, setAptidaoDate] = useState('')
+  const [aptidaoCrm, setAptidaoCrm] = useState('')
+  const [aptidaoStatus, setAptidaoStatus] = useState<CardStatus>('pendente')
+  const [dermatoDate, setDermatoDate] = useState('')
+  const [dermatoStatus, setDermatoStatus] = useState<CardStatus>('pendente')
+  const [cardioDate, setCardioDate] = useState('')
+  const [cardioCrm, setCardioCrm] = useState('')
+  const [cardioStatus, setCardioStatus] = useState<CardStatus>('pendente')
+
+  const [errors, setErrors] = useState<Record<string, string>>({})
+  const [submitting, setSubmitting] = useState(false)
+  const [submitted, setSubmitted] = useState(false)
+  const [submitError, setSubmitError] = useState('')
+
+  const age = useMemo(() => calcAge(birthDate), [birthDate])
   const isMinor = age !== null && age < 18
 
-  const set = (k: keyof typeof form, v: string) => setForm((f) => ({ ...f, [k]: v }))
+  // Checkbox "aluno é o próprio responsável": preenche o responsável com os dados do
+  // aluno e oculta a seção. Ao desmarcar, mantém o que o usuário digitou no aluno.
+  const handleSelfChange = (checked: boolean) => {
+    setIsSelf(checked)
+    if (checked) {
+      setGuardian({
+        name: studentName.trim(),
+        cpf: studentCpf,
+        phone: studentPhone,
+        email: studentEmail,
+      })
+      setRgFile(null)
+      setErrors((e) => {
+        const next = { ...e }
+        delete next.guardian_name
+        delete next.guardian_cpf
+        delete next.guardian_phone
+        delete next.guardian_email
+        delete next.guardian_rg
+        return next
+      })
+    }
+  }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    setError('')
-    if (!photoFile) {
-      setError('Envie a foto do rosto do aluno — ela é obrigatória.')
-      return
-    }
-    if (isMinor && (!rgFile || !form.guardian_name || !form.guardian_cpf || !form.guardian_phone)) {
-      setError(
-        'Para menores de 18 anos, os dados do responsável e a imagem do RG são obrigatórios.',
-      )
-      return
-    }
-    setSubmitting(true)
-    try {
-      const fd = new FormData()
-      fd.append('student_name', form.student_name)
-      if (form.student_birth_date) fd.append('student_birth_date', form.student_birth_date)
-      fd.append('student_cpf', form.student_cpf)
-      fd.append('student_phone', form.student_phone)
-      if (isMinor) {
-        fd.append('guardian_name', form.guardian_name)
-        fd.append('guardian_cpf', form.guardian_cpf)
-        fd.append('guardian_phone', form.guardian_phone)
+  const validate = (): boolean => {
+    const next: Record<string, string> = {}
+
+    if (!studentName.trim()) next.student_name = 'Informe o nome do aluno.'
+    if (!birthDate) next.student_birth = 'Informe a data de nascimento.'
+    if (studentCpf && onlyDigits(studentCpf).length !== 11)
+      next.student_cpf = 'CPF do aluno incompleto (11 dígitos).'
+    if (studentPhone && onlyDigits(studentPhone).length < 10)
+      next.student_phone = 'Telefone incompleto.'
+    if (studentEmail && !/^\S+@\S+\.\S+$/.test(studentEmail))
+      next.student_email = 'E-mail inválido.'
+
+    if (isMinor) {
+      if (!guardian.name.trim()) next.guardian_name = 'Responsável é obrigatório para menor de 18.'
+      if (!guardian.cpf.trim()) {
+        next.guardian_cpf = 'CPF do responsável é obrigatório para menor de 18.'
+      } else if (onlyDigits(guardian.cpf).length !== 11) {
+        next.guardian_cpf = 'CPF do responsável incompleto (11 dígitos).'
       }
-      fd.append('student_age', String(age ?? ''))
-      PARQ_QUESTIONS.forEach((q) => fd.append(q.key, parq[q.key] || ''))
-      ANAMNESE_QUESTIONS.forEach((q) => fd.append(q.key, anamnese[q.key] || ''))
-      fd.append('anamnese_medicamentos', form.anamnese_medicamentos)
-      fd.append('anamnese_objetivo', form.anamnese_objetivo)
-      fd.append('uso_imagem_autorizado', form.uso_imagem_autorizado)
-      fd.append('photo_file', photoFile)
-      if (isMinor && rgFile) fd.append('guardian_rg_file', rgFile)
-      await academyService.createEnrollmentRequest(fd)
-      setDone(true)
+      if (!guardian.phone.trim()) {
+        next.guardian_phone = 'Telefone do responsável é obrigatório para menor de 18.'
+      } else if (onlyDigits(guardian.phone).length < 10) {
+        next.guardian_phone = 'Telefone do responsável incompleto.'
+      }
+      if (!guardian.email.trim()) {
+        next.guardian_email = 'E-mail do responsável é obrigatório para menor de 18.'
+      } else if (!/^\S+@\S+\.\S+$/.test(guardian.email)) {
+        next.guardian_email = 'E-mail do responsável inválido.'
+      }
+      if (!rgFile)
+        next.guardian_rg = 'Anexe a foto/scan do RG do responsável (obrigatório p/ menor).'
+    } else if (
+      !isSelf &&
+      guardian.name.trim() &&
+      onlyDigits(guardian.cpf) &&
+      onlyDigits(guardian.cpf).length !== 11
+    ) {
+      next.guardian_cpf = 'CPF do responsável incompleto (11 dígitos).'
+    }
+
+    if (address.cep && onlyDigits(address.cep).length !== 8)
+      next.cep = 'CEP incompleto (8 dígitos).'
+    if (address.cep && onlyDigits(address.cep).length === 8 && !address.city.trim())
+      next.city = 'Informe a cidade.'
+
+    setErrors(next)
+    return Object.keys(next).length === 0
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!validate()) {
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+      return
+    }
+
+    setSubmitting(true)
+    setSubmitError('')
+    try {
+      const effGuardian = isSelf
+        ? { name: studentName.trim(), cpf: studentCpf, phone: studentPhone, email: studentEmail }
+        : guardian
+
+      const payload: Record<string, string> = {
+        student_name: studentName.trim(),
+        student_birth_date: birthDate,
+        student_age: String(age ?? ''),
+        student_cpf: studentCpf,
+        student_phone: studentPhone,
+        student_email: studentEmail,
+        guardian_name: effGuardian.name,
+        guardian_cpf: effGuardian.cpf,
+        guardian_phone: effGuardian.phone,
+        guardian_email: effGuardian.email,
+        cep: address.cep,
+        street: address.street,
+        street_number: address.street_number,
+        complement: address.complement,
+        neighborhood: address.neighborhood,
+        city: address.city,
+        uf: address.uf,
+        aptidao_date: aptidaoDate,
+        aptidao_crm: aptidaoCrm,
+        aptidao_status: aptidaoStatus,
+        dermato_date: dermatoDate,
+        dermato_status: dermatoStatus,
+        cardio_date: cardioDate,
+        cardio_crm: cardioCrm,
+        cardio_status: cardioStatus,
+        status: 'pendente',
+      }
+      Object.keys(parq).forEach((k) => {
+        payload[k] = parq[k]
+      })
+      Object.keys(anamnese).forEach((k) => {
+        payload[k] = anamnese[k]
+      })
+      if (usoImagem) payload.uso_imagem_autorizado = usoImagem
+
+      const record = await pb.collection('enrollment_requests').create(payload)
+      if (rgFile) {
+        const fd = new FormData()
+        fd.append('guardian_rg_file', rgFile, rgFile.name)
+        await pb.collection('enrollment_requests').update(record.id, fd)
+      }
+
+      setSubmitted(true)
       window.scrollTo({ top: 0, behavior: 'smooth' })
     } catch (err) {
-      setError(
-        getErrorMessage(err) || 'Não foi possível enviar. Verifique os dados e tente de novo.',
-      )
+      setSubmitError(getErrorMessage(err))
     } finally {
       setSubmitting(false)
     }
   }
 
-  function FileField({
-    label,
-    hint,
-    accept,
-    file,
-    onSelect,
-    required,
-  }: {
-    label: string
-    hint: string
-    accept: string
-    file: File | null
-    onSelect: (f: File | null) => void
-    required?: boolean
-  }) {
-    return (
-      <div className="space-y-1">
-        <Label className="font-semibold text-[11px] text-[#1E2A3A]">
-          {label} {required && <span className="text-red-600">*</span>}
-        </Label>
-        <label className="flex items-center justify-between gap-2 h-10 px-3 rounded-lg border border-input bg-white cursor-pointer hover:border-[#D4AF37] transition">
-          <span className="text-xs text-[#1E2A3A] truncate">
-            {file ? file.name : 'Selecionar imagem...'}
-          </span>
-          <Upload className="w-4 h-4 text-[#D4AF37] shrink-0" />
-          <input
-            type="file"
-            accept={accept}
-            className="sr-only"
-            onChange={(e) => onSelect(e.target.files?.[0] ?? null)}
-          />
-        </label>
-        <p className="text-[10px] text-slate-500">{hint}</p>
-      </div>
-    )
-  }
-
-  if (done) {
+  if (submitted) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-[#0F1B3D] to-[#1a2b57] flex items-center justify-center p-4">
-        <Card className="w-full max-w-md bg-white rounded-2xl p-8 text-center space-y-4">
-          <CheckCircle2 className="w-14 h-14 text-emerald-500 mx-auto" />
+        <Card className="w-full max-w-md p-8 text-center space-y-4">
+          <CheckCircle2 className="w-12 h-12 text-emerald-600 mx-auto" />
           <h1 className="text-xl font-bold text-[#0F1B3D]">Inscrição enviada!</h1>
-          <p className="text-sm text-[#6C757D]">
-            Recebemos sua solicitação de matrícula. A academia fará a conferência dos dados e dos
-            exames obrigatórios e entrará em contato para confirmar a vaga.
+          <p className="text-sm text-slate-600">
+            Recebemos sua solicitação de matrícula. Nossa equipe fará a conferência dos dados,
+            exames e documentos, e entrará em contato em breve.
           </p>
-          <p className="text-[11px] text-slate-500">
-            RC Acqua Life — Natação e Hidroginástica · Bayeux - PB
-          </p>
+          <p className="text-xs text-slate-500">{FICHA_LEGAL.footer}</p>
         </Card>
       </div>
     )
   }
 
+  const errCls = (field: string) =>
+    errors[field] ? 'border-red-500 focus-visible:ring-red-500' : 'focus-visible:ring-[#D4AF37]'
+  const Err = ({ field }: { field: string }) =>
+    errors[field] ? <p className="text-[10px] text-red-600 font-medium">{errors[field]}</p> : null
+
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[#0F1B3D] to-[#1a2b57] py-8 px-4">
-      <div className="max-w-2xl mx-auto space-y-5">
-        <div className="text-center space-y-2 text-white">
-          <Waves className="w-8 h-8 text-[#D4AF37] mx-auto" />
-          <h1 className="text-2xl font-bold">Ficha de Matrícula</h1>
-          <p className="text-xs text-white/80">
-            RC Acqua Life — Natação e Hidroginástica · Bayeux - PB
+    <div className="min-h-screen bg-slate-50">
+      {/* Cabeçalho */}
+      <div className="bg-gradient-to-b from-[#0F1B3D] to-[#1a2b57] text-white py-10 px-4">
+        <div className="max-w-2xl mx-auto text-center space-y-3">
+          <LogoFull className="mx-auto h-12" />
+          <h1 className="text-2xl font-bold">Matrícula RC Acqua Life</h1>
+          <p className="text-sm text-white/80">
+            Academia de Natação e Hidroginástica — {FICHA_LEGAL.city}
           </p>
+          <p className="text-xs text-white/70 max-w-lg mx-auto">{FICHA_LEGAL.footer}</p>
         </div>
+      </div>
 
-        <Card className="bg-white rounded-2xl p-5 space-y-4">
-          {error && (
-            <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-800 text-xs font-medium">
-              {error}
+      <form onSubmit={handleSubmit} className="max-w-2xl mx-auto px-4 py-8 space-y-6">
+        {submitError && (
+          <div className="flex items-start gap-2 rounded-xl border border-red-300 bg-red-50 p-3">
+            <AlertTriangle className="w-4 h-4 text-red-600 mt-0.5 shrink-0" />
+            <div className="text-xs text-red-700">
+              <p className="font-semibold">Não foi possível enviar a inscrição.</p>
+              <p>{submitError}</p>
             </div>
-          )}
+          </div>
+        )}
+        {Object.keys(errors).length > 0 && (
+          <div className="flex items-start gap-2 rounded-xl border border-amber-300 bg-amber-50 p-3">
+            <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+            <p className="text-xs text-amber-800 font-medium">
+              Verifique os campos destacados abaixo antes de enviar.
+            </p>
+          </div>
+        )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Dados do aluno */}
-            <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2.5">
-              <div className="text-xs font-bold text-[#0F1B3D]">Dados do Aluno</div>
-              <div className="space-y-1">
-                <Label className="font-semibold text-[11px] text-[#1E2A3A]">
-                  Nome Completo <span className="text-red-600">*</span>
-                </Label>
-                <Input
-                  required
-                  placeholder="Ex: Mariana Silva"
-                  value={form.student_name}
-                  onChange={(e) => set('student_name', e.target.value)}
-                  className="h-8 text-xs"
-                />
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                <div className="space-y-1">
-                  <Label className="font-semibold text-[11px] text-[#1E2A3A]">
-                    Data de Nascimento <span className="text-red-600">*</span>
-                  </Label>
-                  <Input
-                    type="date"
-                    required
-                    value={form.student_birth_date}
-                    onChange={(e) => set('student_birth_date', e.target.value)}
-                    className="h-8 text-xs"
-                  />
-                  {age !== null && (
-                    <p className="text-[10px] text-slate-500">
-                      {age} ano{age === 1 ? '' : 's'}
-                      {isMinor && ' — menor de idade: dados do responsável obrigatórios'}
-                    </p>
-                  )}
-                </div>
-                <div className="space-y-1">
-                  <Label className="font-semibold text-[11px] text-[#1E2A3A]">
-                    CPF (se houver)
-                  </Label>
-                  <Input
-                    placeholder="000.000.000-00"
-                    value={form.student_cpf}
-                    onChange={(e) => set('student_cpf', maskCpf(e.target.value))}
-                    className="h-8 text-xs"
-                  />
-                </div>
-              </div>
-              <div className="space-y-1">
-                <Label className="font-semibold text-[11px] text-[#1E2A3A]">
-                  Telefone / WhatsApp
-                </Label>
-                <Input
-                  placeholder="(84) 90000-0000"
-                  value={form.student_phone}
-                  onChange={(e) => set('student_phone', maskPhone(e.target.value))}
-                  className="h-8 text-xs"
-                />
-              </div>
-              <FileField
-                label="Foto do rosto do aluno"
-                hint={`Obrigatória · até ${MAX_FILE_MB}MB (JPG ou PNG)`}
-                accept="image/jpeg,image/png,image/webp"
-                file={photoFile}
-                onSelect={setPhotoFile}
-                required
+        {/* Dados do aluno */}
+        <Card className="p-4 space-y-3">
+          <h2 className="text-sm font-bold text-[#0F1B3D]">1. Dados do(a) aluno(a)</h2>
+          <div className="space-y-1">
+            <Label className="text-xs font-semibold text-[#1E2A3A]">Nome completo *</Label>
+            <Input
+              value={studentName}
+              onChange={(e) => setStudentName(e.target.value)}
+              placeholder="Nome completo do aluno"
+              className={`h-9 text-sm ${errCls('student_name')}`}
+            />
+            <Err field="student_name" />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold text-[#1E2A3A]">Data de nascimento *</Label>
+              <Input
+                type="date"
+                value={birthDate}
+                onChange={(e) => setBirthDate(e.target.value)}
+                className={`h-9 text-sm ${errCls('student_birth')}`}
               />
+              <Err field="student_birth" />
             </div>
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold text-[#1E2A3A]">CPF</Label>
+              <Input
+                value={maskCpf(studentCpf)}
+                onChange={(e) => setStudentCpf(e.target.value)}
+                placeholder="000.000.000-00"
+                className={`h-9 text-sm ${errCls('student_cpf')}`}
+              />
+              <Err field="student_cpf" />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold text-[#1E2A3A]">Telefone / WhatsApp</Label>
+              <Input
+                value={maskPhone(studentPhone)}
+                onChange={(e) => setStudentPhone(e.target.value)}
+                placeholder="(83) 90000-0000"
+                className={`h-9 text-sm ${errCls('student_phone')}`}
+              />
+              <Err field="student_phone" />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold text-[#1E2A3A]">E-mail</Label>
+              <Input
+                type="email"
+                value={studentEmail}
+                onChange={(e) => setStudentEmail(e.target.value)}
+                placeholder="email@exemplo.com"
+                className={`h-9 text-sm ${errCls('student_email')}`}
+              />
+              <Err field="student_email" />
+            </div>
+          </div>
+          {isMinor && (
+            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2">
+              Aluno(a) menor de 18 anos: o responsável deve ser identificado na seção 2, com RG
+              anexado.
+            </p>
+          )}
+        </Card>
 
-            {/* Responsável (obrigatório se menor) */}
-            <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2.5">
-              <div className="text-xs font-bold text-[#0F1B3D]">
-                Dados do Responsável{' '}
-                {isMinor && <span className="text-red-600">(obrigatório — menor de 18 anos)</span>}
-              </div>
+        {/* Endereço com ViaCEP */}
+        <EnrollAddressSection
+          value={address}
+          onChange={(p) => setAddress((a) => ({ ...a, ...p }))}
+          errors={errors}
+        />
+
+        {/* Responsável */}
+        <Card className="p-4 space-y-3">
+          <h2 className="text-sm font-bold text-[#0F1B3D]">2. Dados do responsável</h2>
+          <div className="flex items-start gap-2 rounded-lg bg-slate-50 border border-slate-200 p-2.5">
+            <Checkbox
+              id="self-guardian"
+              checked={isSelf}
+              disabled={isMinor}
+              onCheckedChange={(v) => handleSelfChange(v === true)}
+            />
+            <div className="space-y-0.5">
+              <Label htmlFor="self-guardian" className="text-xs font-semibold text-[#1E2A3A]">
+                O aluno é o próprio responsável?
+              </Label>
+              <p className="text-[10px] text-slate-500">
+                Marque se o aluno é maior de 18 anos e responde pela própria matrícula — os dados
+                serão copiados da seção 1.
+              </p>
+            </div>
+          </div>
+
+          {!isSelf && (
+            <div className="space-y-3">
               <div className="space-y-1">
-                <Label className="font-semibold text-[11px] text-[#1E2A3A]">
+                <Label className="text-xs font-semibold text-[#1E2A3A]">
                   Nome do responsável {isMinor && <span className="text-red-600">*</span>}
                 </Label>
                 <Input
-                  required={isMinor}
-                  value={form.guardian_name}
-                  onChange={(e) => set('guardian_name', e.target.value)}
-                  className="h-8 text-xs"
+                  value={guardian.name}
+                  onChange={(e) => setGuardian((g) => ({ ...g, name: e.target.value }))}
+                  placeholder="Nome completo do responsável"
+                  className={`h-9 text-sm ${errCls('guardian_name')}`}
                 />
+                <Err field="guardian_name" />
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <Label className="font-semibold text-[11px] text-[#1E2A3A]">
-                    CPF do responsável {isMinor && <span className="text-red-600">*</span>}
+                  <Label className="text-xs font-semibold text-[#1E2A3A]">
+                    CPF {isMinor && <span className="text-red-600">*</span>}
                   </Label>
                   <Input
-                    required={isMinor}
+                    value={maskCpf(guardian.cpf)}
+                    onChange={(e) => setGuardian((g) => ({ ...g, cpf: e.target.value }))}
                     placeholder="000.000.000-00"
-                    value={form.guardian_cpf}
-                    onChange={(e) => set('guardian_cpf', maskCpf(e.target.value))}
-                    className="h-8 text-xs"
+                    className={`h-9 text-sm ${errCls('guardian_cpf')}`}
                   />
+                  <Err field="guardian_cpf" />
                 </div>
                 <div className="space-y-1">
-                  <Label className="font-semibold text-[11px] text-[#1E2A3A]">
-                    Celular do responsável {isMinor && <span className="text-red-600">*</span>}
+                  <Label className="text-xs font-semibold text-[#1E2A3A]">
+                    Telefone / WhatsApp {isMinor && <span className="text-red-600">*</span>}
                   </Label>
                   <Input
-                    required={isMinor}
-                    placeholder="(84) 90000-0000"
-                    value={form.guardian_phone}
-                    onChange={(e) => set('guardian_phone', maskPhone(e.target.value))}
-                    className="h-8 text-xs"
+                    value={maskPhone(guardian.phone)}
+                    onChange={(e) => setGuardian((g) => ({ ...g, phone: e.target.value }))}
+                    placeholder="(83) 90000-0000"
+                    className={`h-9 text-sm ${errCls('guardian_phone')}`}
                   />
+                  <Err field="guardian_phone" />
                 </div>
               </div>
-              <FileField
-                label="Imagem do RG do responsável"
-                hint={
-                  isMinor
-                    ? `Obrigatória para menores — comprova nome e CPF · até ${MAX_FILE_MB}MB`
-                    : 'Opcional — enviada apenas quando o aluno é menor de idade'
-                }
-                accept="image/jpeg,image/png,image/webp"
-                file={rgFile}
-                onSelect={setRgFile}
-                required={isMinor}
-              />
-            </div>
-
-            {/* PAR-Q + Anamnese */}
-            <ParqSection
-              values={parq}
-              onChange={(key, v) => setParq((p) => ({ ...p, [key!]: v }))}
-            />
-            <AnamneseSection
-              values={anamnese}
-              onChange={(key, v) => setAnamnese((a) => ({ ...a, [key]: v }))}
-            />
-
-            {/* Uso de imagem */}
-            <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
-              <div className="text-xs font-bold text-[#0F1B3D]">
-                Autorização de uso de imagem (LGPD — Lei nº 13.709/2018)
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-[#1E2A3A]">
+                  E-mail {isMinor && <span className="text-red-600">*</span>}
+                </Label>
+                <Input
+                  type="email"
+                  value={guardian.email}
+                  onChange={(e) => setGuardian((g) => ({ ...g, email: e.target.value }))}
+                  placeholder="email@exemplo.com"
+                  className={`h-9 text-sm ${errCls('guardian_email')}`}
+                />
+                <Err field="guardian_email" />
               </div>
-              <p className="text-[11px] text-slate-600">
-                Concorda com o uso da imagem do(a) aluno(a) em fotos e vídeos institucionais da
-                academia (redes sociais e divulgação)?
-              </p>
-              <div className="flex items-center gap-4">
-                <label className="flex items-center gap-1.5 text-xs cursor-pointer">
-                  <input
-                    type="radio"
-                    name="uso_imagem"
-                    checked={form.uso_imagem_autorizado === 'sim'}
-                    onChange={() => set('uso_imagem_autorizado', 'sim')}
-                  />
-                  Autorizo
-                </label>
-                <label className="flex items-center gap-1.5 text-xs cursor-pointer">
-                  <input
-                    type="radio"
-                    name="uso_imagem"
-                    checked={form.uso_imagem_autorizado === 'nao'}
-                    onChange={() => set('uso_imagem_autorizado', 'nao')}
-                  />
-                  Não autorizo
-                </label>
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-[#1E2A3A]">
+                  RG do responsável {isMinor && <span className="text-red-600">*</span>}
+                </Label>
+                <Input
+                  type="file"
+                  accept="image/*,.pdf"
+                  onChange={(e) => setRgFile(e.target.files?.[0] ?? null)}
+                  className={`h-9 text-xs file:mr-2 file:px-2 file:py-1 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-[#0F1B3D] file:text-white ${errCls(
+                    'guardian_rg',
+                  )}`}
+                />
+                <Err field="guardian_rg" />
+                <p className="text-[10px] text-slate-500">
+                  Foto ou scan do documento (imagem ou PDF).{' '}
+                  {isMinor ? 'Obrigatório para menor de 18.' : 'Opcional.'}
+                </p>
               </div>
             </div>
+          )}
 
-            <Button
-              type="submit"
-              disabled={submitting}
-              className="w-full h-10 bg-[#D4AF37] hover:bg-[#B8953A] text-[#0F1B3D] font-bold"
-            >
-              {submitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-              {submitting ? 'Enviando...' : 'Enviar inscrição'}
-            </Button>
-            <p className="text-center text-[10px] text-slate-400">
-              Lei Estadual nº 9.863/2012-PB · Atestado de aptidão física e exame dermatológico
-              obrigatórios (validade de 6 meses)
+          {isSelf && (
+            <p className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg p-2 flex items-center gap-1.5">
+              <UserCheck className="w-3.5 h-3.5 shrink-0" />
+              Os dados do responsável serão os mesmos do aluno (seção 1).
             </p>
-          </form>
+          )}
         </Card>
-      </div>
+
+        {/* Saúde */}
+        <Card className="p-4 space-y-3">
+          <h2 className="text-sm font-bold text-[#0F1B3D]">3. Saúde</h2>
+          <ParqSection
+            values={parq}
+            onChange={(key: ParqKey, v: string) => setParq((q) => ({ ...q, [key]: v }))}
+          />
+          <AnamneseSection
+            values={anamnese}
+            onChange={(key: AnamneseKey, v: string) => setAnamnese((p) => ({ ...p, [key]: v }))}
+          />
+          {/* Uso de imagem */}
+          <div className="space-y-1">
+            <Label className="text-xs font-semibold text-[#1E2A3A]">
+              Autorização de uso de imagem (LGPD)
+            </Label>
+            <select
+              value={usoImagem}
+              onChange={(e) => setUsoImagem(e.target.value as 'sim' | 'nao' | '')}
+              className={`h-9 w-full text-sm rounded-md border bg-white px-2 outline-none ${
+                errors.uso_imagem ? 'border-red-500' : 'border-slate-200'
+              } focus-visible:ring-[#D4AF37]`}
+            >
+              <option value="">Selecione…</option>
+              <option value="sim">Autorizo o uso de imagem</option>
+              <option value="nao">Não autorizo o uso de imagem</option>
+            </select>
+          </div>
+        </Card>
+
+        {/* Exames */}
+        <Card className="p-4 space-y-3">
+          <h2 className="text-sm font-bold text-[#0F1B3D]">4. Exames médicos</h2>
+          <MatriculaExamsSection
+            aptidaoDate={aptidaoDate}
+            aptidaoCrm={aptidaoCrm}
+            aptidaoStatus={aptidaoStatus}
+            onAptidaoDate={setAptidaoDate}
+            onAptidaoCrm={setAptidaoCrm}
+            onAptidaoStatus={setAptidaoStatus}
+            dermatoDate={dermatoDate}
+            dermatoStatus={dermatoStatus}
+            onDermatoDate={setDermatoDate}
+            onDermatoStatus={setDermatoStatus}
+            cardioDate={cardioDate}
+            cardioCrm={cardioCrm}
+            cardioStatus={cardioStatus}
+            onCardioDate={setCardioDate}
+            onCardioCrm={setCardioCrm}
+            onCardioStatus={setCardioStatus}
+          />
+          <p className="text-[11px] text-slate-500">{FICHA_LEGAL.cardioLawText}</p>
+        </Card>
+
+        {/* Termo legal */}
+        <Card className="p-4 space-y-2">
+          <h2 className="text-sm font-bold text-[#0F1B3D]">
+            5. Termo de ciência — {FICHA_LEGAL.law}
+          </h2>
+          <p className="text-xs text-slate-600 leading-relaxed">{FICHA_LEGAL.riskTerm}</p>
+          <p className="text-xs text-slate-600 leading-relaxed">
+            <strong>Normas da academia:</strong> Conforme {FICHA_LEGAL.law}, é obrigatória a
+            apresentação do atestado de aptidão física (cardiológico) e do exame médico
+            dermatológico, com validade de 6 (seis) meses.
+          </p>
+          <p className="text-xs text-slate-600 leading-relaxed">{FICHA_LEGAL.lgpd}</p>
+        </Card>
+
+        <Button
+          type="submit"
+          disabled={submitting}
+          className="w-full h-11 bg-[#0F1B3D] hover:bg-[#1a2b57] text-white font-bold"
+        >
+          {submitting ? (
+            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+          ) : (
+            <Send className="w-4 h-4 mr-2" />
+          )}
+          {submitting ? 'Enviando…' : 'Enviar inscrição'}
+        </Button>
+      </form>
+
+      <footer className="max-w-2xl mx-auto px-4 pb-10 text-center">
+        <p className="text-[10px] text-slate-400">
+          {FICHA_LEGAL.city} · Documento gerado pela RC Acqua Life · {FICHA_LEGAL.law}
+        </p>
+      </footer>
     </div>
   )
 }

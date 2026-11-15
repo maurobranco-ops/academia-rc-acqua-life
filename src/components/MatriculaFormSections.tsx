@@ -5,7 +5,8 @@
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
-import type { ParqValues, ParqKey, AnamneseKey } from '@/lib/matricula'
+import type { ParqValues, ParqKey, AnamneseValues, AnamneseKey } from '@/lib/matricula'
+export type { ParqKey, AnamneseKey } from '@/lib/matricula'
 import { PARQ_QUESTIONS, ANAMNESE_QUESTIONS, PARQ_YES, PARQ_NO } from '@/lib/matricula'
 
 interface ExamsSectionProps {
@@ -19,18 +20,26 @@ interface ExamsSectionProps {
   onAptidaoStatus: (v: 'entregue' | 'pendente') => void
   onDermatoDate: (v: string) => void
   onDermatoStatus: (v: 'entregue' | 'pendente') => void
+  /** Atestado cardiológico (Lei PB 9.863/2012 — exigido para natação e/ou hidroginástica). */
+  cardioDate?: string
+  cardioCrm?: string
+  cardioStatus?: 'entregue' | 'pendente'
+  onCardioDate?: (v: string) => void
+  onCardioCrm?: (v: string) => void
+  onCardioStatus?: (v: 'entregue' | 'pendente') => void
 }
 
-/** Exames obrigatórios (Lei Estadual PB 9.863/2012): aptidão física + dermatológico. */
+/** Exames obrigatórios (Lei Estadual PB 9.863/2012): aptidão física + dermatológico + cardiológico. */
 export function MatriculaExamsSection(props: ExamsSectionProps) {
+  const hasCardio = !!(props.onCardioDate || props.onCardioStatus)
   return (
     <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2.5">
       <div className="text-xs font-bold text-[#0F1B3D]">
         Exames obrigatórios (Lei Estadual nº 9.863/2012-PB)
       </div>
       <p className="text-[10px] text-slate-500">
-        Atestado de Aptidão Física e Exame Dermatológico, com validade de 6 meses a partir da data
-        de emissão.
+        Atestado de Aptidão Física (cardiológico) e Exame Dermatológico, com validade de 6 meses a
+        partir da data de emissão — condição para a prática de natação e/ou hidroginástica.
       </p>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
         <div className="bg-white border border-slate-200 rounded-lg px-2.5 py-2 space-y-1.5">
@@ -95,6 +104,55 @@ export function MatriculaExamsSection(props: ExamsSectionProps) {
           </div>
           <p className="text-[10px] text-slate-500">Validade: 6 meses da emissão.</p>
         </div>
+        {hasCardio && (
+          <div className="bg-white border border-slate-200 rounded-lg px-2.5 py-2 space-y-1.5">
+            <Label className="text-[11px] font-semibold text-[#1E2A3A]">
+              Atestado Cardiológico{' '}
+              <span
+                className="text-red-600 font-bold"
+                title="Exigido para natação e/ou hidroginástica"
+              >
+                *
+              </span>
+            </Label>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-0.5">
+                <span className="text-[10px] text-slate-500">Data de emissão</span>
+                <Input
+                  type="date"
+                  value={props.cardioDate || ''}
+                  onChange={(e) => props.onCardioDate?.(e.target.value)}
+                  className="h-8 text-xs focus-visible:ring-[#D4AF37]"
+                />
+              </div>
+              <div className="space-y-0.5">
+                <span className="text-[10px] text-slate-500">Status</span>
+                <select
+                  value={props.cardioStatus || 'pendente'}
+                  onChange={(e) =>
+                    props.onCardioStatus?.(e.target.value as 'entregue' | 'pendente')
+                  }
+                  className="h-8 w-full text-xs rounded-md border border-slate-200 bg-white px-2 focus-visible:ring-[#D4AF37] outline-none"
+                >
+                  <option value="pendente">Pendente</option>
+                  <option value="entregue">Entregue</option>
+                </select>
+              </div>
+            </div>
+            <div className="space-y-0.5">
+              <span className="text-[10px] text-slate-500">CRM do médico (registro)</span>
+              <Input
+                placeholder="Ex: CRM 12345 PB"
+                value={props.cardioCrm || ''}
+                onChange={(e) => props.onCardioCrm?.(e.target.value)}
+                className="h-8 text-xs focus-visible:ring-[#D4AF37]"
+              />
+            </div>
+            <p className="text-[10px] text-slate-500">
+              Exigido para as atividades de natação e/ou hidroginástica (validade: 6 meses).
+            </p>
+          </div>
+        )}
       </div>
     </div>
   )
