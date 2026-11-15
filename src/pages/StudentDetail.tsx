@@ -293,6 +293,19 @@ export default function StudentDetail() {
             <ArrowLeft className="w-4 h-4 mr-1.5" /> Voltar para Alunos
           </Button>
 
+          {/* Aluno SEM matrícula em turma: aponta o próximo passo em vez de esconder o botão */}
+          {studentClasses.length === 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate('/turmas')}
+              className="text-xs font-semibold text-[#17A2B8] hover:text-[#0F1B3D] hover:bg-slate-100 w-full justify-center sm:w-auto sm:justify-start"
+              title="Este aluno não está matriculado em nenhuma turma — ir para a lista de Turmas"
+            >
+              <Plus className="w-4 h-4 mr-1.5" /> Matricular em turma
+            </Button>
+          )}
+
           {studentClasses.length === 1 && (
             <Button
               variant="ghost"
