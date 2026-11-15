@@ -55,6 +55,7 @@ import { useToast } from '@/hooks/use-toast'
 import { getStudentPhotoUrl } from '@/lib/studentPhoto'
 import { formatPhoneDisplay } from '@/lib/formatters'
 import { getStudentStatusDisplay } from '@/lib/studentStatus'
+import { StudentHealthTab } from '@/components/StudentHealthTab'
 
 export default function StudentDetail() {
   const { id } = useParams<{ id: string }>()
@@ -507,6 +508,12 @@ export default function StudentDetail() {
           >
             Turmas Matriculadas ({enrollments.length})
           </TabsTrigger>
+          <TabsTrigger
+            value="saude"
+            className="data-[state=active]:bg-[#0F1B3D] data-[state=active]:text-white text-xs font-semibold rounded-lg px-2 py-2 min-w-0 w-full leading-snug whitespace-normal md:w-auto md:px-4 md:py-1.5 md:shrink-0 md:leading-normal md:whitespace-nowrap"
+          >
+            Saúde &amp; Exames
+          </TabsTrigger>
         </TabsList>
 
         {/* ============================================================ */}
@@ -820,6 +827,13 @@ export default function StudentDetail() {
               </div>
             )}
           </Card>
+        </TabsContent>
+
+        {/* ============================================================ */}
+        {/* TAB 4: SAÚDE & EXAMES (Lei PB 9.863/2012)                    */}
+        {/* ============================================================ */}
+        <TabsContent value="saude" className="space-y-4">
+          <StudentHealthTab student={student} onSaved={loadData} />
         </TabsContent>
       </Tabs>
       {/* ============================================================== */}

@@ -3,7 +3,8 @@
 // (cria/atualiza o aluno vinculado, copiando dados e foto) ou RECUSAR com motivo.
 
 import { useCallback, useEffect, useState } from 'react'
-import { pb } from '@/lib/pocketbase/client'
+import type { RecordModel } from 'pocketbase'
+import pb from '@/lib/pocketbase/client'
 import { academyService } from '@/services/academy'
 import type { EnrollmentRequestRecord, StudentRecord } from '@/types/database'
 import { PARQ_QUESTIONS, ANAMNESE_QUESTIONS, formatDateBR } from '@/lib/matricula'
@@ -42,7 +43,7 @@ import {
 function requestFileUrl(record: EnrollmentRequestRecord, filename?: string): string | null {
   if (!filename) return null
   try {
-    return pb.files.getURL(record as unknown as Record, filename)
+    return pb.files.getURL(record as unknown as RecordModel, filename)
   } catch {
     return null
   }
