@@ -11,6 +11,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, CheckCircle2, Loader2, Send, UserCheck } from 'lucide-react'
+import { ClientResponseError } from 'pocketbase'
 import pb from '@/lib/pocketbase/client'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -228,7 +229,7 @@ export default function PublicEnroll() {
       // PAR-Q 5-7: se respondeu "SIM", pede a descrição (aviso suave — não bloqueia sozinho).
     ;(['parq_5', 'parq_6', 'parq_7'] as const).forEach((qk, idx) => {
       const dk = `parq_${idx + 5}_detail` as ParqDetailKey
-      if (parq[qk] === 'sim' && !parqDetails[dk].trim()) {
+      if (parq[qk] === 'sim' && !parqDetails[dk]?.trim()) {
         next[dk] = 'Respondeu "SIM": descreva a situação no campo de texto abaixo da pergunta.'
       }
     })
@@ -244,14 +245,16 @@ export default function PublicEnroll() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!validate()) {
-      window.scrollTo({ top: 0, behavior: 'smooth' })
-      return
-    }
+    if (submitting) return
 
     setSubmitting(true)
     setSubmitError('')
     try {
+      if (!validate()) {
+        window.scrollTo({ top: 0, behavior: 'smooth' })
+        return
+      }
+
       const effGuardian = isSelf
         ? { name: studentName.trim(), cpf: studentCpf, phone: studentPhone, email: studentEmail }
         : guardian
@@ -316,7 +319,25 @@ export default function PublicEnroll() {
       setSubmitted(true)
       window.scrollTo({ top: 0, behavior: 'smooth' })
     } catch (err) {
-      setSubmitError(getErrorMessage(err))
+      // NUNCA tela muda: qualquer falha (400 de validação, queda de rede, erro
+      // inesperado no próprio formulário) cai aqui e exibe o banner vermelho
+      // com uma mensagem clara em português.
+      let msg: string
+      if (err instanceof ClientResponseError && err.status === 0) {
+        msg = 'Falha de conexão com o servidor. Verifique sua internet e tente novamente.'
+      } else if (err instanceof ClientResponseError && err.status === 400) {
+        // 400 = recusa de validação do backend — nunca mostrar o texto cru
+        // ("Failed to create record" / "Cannot be blank").
+        msg = 'Não foi possível enviar sua matrícula. Verifique os dados e tente novamente.'
+      } else {
+        const raw = getErrorMessage(err)
+        msg =
+          raw && !/failed to create|unexpected error|cannot be blank/i.test(raw)
+            ? raw
+            : 'Não foi possível enviar sua matrícula. Verifique os dados e tente novamente.'
+      }
+      setSubmitError(msg)
+      window.scrollTo({ top: 0, behavior: 'smooth' })
     } finally {
       setSubmitting(false)
     }
