@@ -13,7 +13,14 @@ import { maskCpf, maskPhone } from '@/lib/formatters'
 import { LogoFull } from '@/components/Logo'
 import { calcAge } from '@/types/database'
 import { ParqSection, AnamneseSection } from '@/components/MatriculaFormSections'
-import { PARQ_EMPTY, ANAMNESE_EMPTY } from '@/lib/matricula'
+import {
+  PARQ_QUESTIONS,
+  ANAMNESE_QUESTIONS,
+  PARQ_EMPTY,
+  ANAMNESE_EMPTY,
+  type ParqValues,
+  type AnamneseKey,
+} from '@/lib/matricula'
 import { getErrorMessage } from '@/lib/pocketbase/errors'
 
 const MAX_FILE_MB = 10
