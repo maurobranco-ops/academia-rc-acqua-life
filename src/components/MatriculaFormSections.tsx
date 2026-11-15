@@ -1,6 +1,8 @@
 // Componentes de formulário compartilhados: PAR-Q (7 perguntas sim/não),
 // anamnese aquática e seção de exames obrigatórios (Lei PB 9.863/2012).
 // Usados no formulário público /matricula e no cadastro/edição do aluno.
+// Exames: apenas DOIS — cardiológico e dermatológico (o cardiológico é o exame
+// de aptidão física; não há exame de aptidão separado).
 
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -10,16 +12,6 @@ export type { ParqKey, AnamneseKey } from '@/lib/matricula'
 import { PARQ_QUESTIONS, ANAMNESE_QUESTIONS, PARQ_YES, PARQ_NO } from '@/lib/matricula'
 
 interface ExamsSectionProps {
-  aptidaoDate: string
-  aptidaoCrm: string
-  aptidaoStatus: 'entregue' | 'pendente'
-  dermatoDate: string
-  dermatoStatus: 'entregue' | 'pendente'
-  onAptidaoDate: (v: string) => void
-  onAptidaoCrm: (v: string) => void
-  onAptidaoStatus: (v: 'entregue' | 'pendente') => void
-  onDermatoDate: (v: string) => void
-  onDermatoStatus: (v: 'entregue' | 'pendente') => void
   /** Atestado cardiológico (Lei PB 9.863/2012 — exigido para natação e/ou hidroginástica). */
   cardioDate?: string
   cardioCrm?: string
@@ -27,83 +19,32 @@ interface ExamsSectionProps {
   onCardioDate?: (v: string) => void
   onCardioCrm?: (v: string) => void
   onCardioStatus?: (v: 'entregue' | 'pendente') => void
+  dermatoDate?: string
+  dermatoStatus?: 'entregue' | 'pendente'
+  onDermatoDate?: (v: string) => void
+  onDermatoStatus?: (v: 'entregue' | 'pendente') => void
+  /** @deprecated Legado ("aptidão física" = cardiológico). Aceito e ignorado. */
+  aptidaoDate?: string
+  aptidaoCrm?: string
+  aptidaoStatus?: 'entregue' | 'pendente'
+  onAptidaoDate?: (v: string) => void
+  onAptidaoCrm?: (v: string) => void
+  onAptidaoStatus?: (v: 'entregue' | 'pendente') => void
 }
 
-/** Exames obrigatórios (Lei Estadual PB 9.863/2012): aptidão física + dermatológico + cardiológico. */
+/** Exames obrigatórios (Lei Estadual PB 9.863/2012): cardiológico + dermatológico. */
 export function MatriculaExamsSection(props: ExamsSectionProps) {
-  const hasCardio = !!(props.onCardioDate || props.onCardioStatus)
+  const hasCardio = props.onCardioDate != null
   return (
     <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2.5">
       <div className="text-xs font-bold text-[#0F1B3D]">
         Exames obrigatórios (Lei Estadual nº 9.863/2012-PB)
       </div>
       <p className="text-[10px] text-slate-500">
-        Atestado de Aptidão Física (cardiológico) e Exame Dermatológico, com validade de 6 meses a
-        partir da data de emissão — condição para a prática de natação e/ou hidroginástica.
+        Atestado Cardiológico e Exame Dermatológico, com validade de 6 meses a partir da data de
+        emissão — condição para a prática de natação e/ou hidroginástica.
       </p>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-        <div className="bg-white border border-slate-200 rounded-lg px-2.5 py-2 space-y-1.5">
-          <Label className="text-[11px] font-semibold text-[#1E2A3A]">
-            Atestado de Aptidão Física
-          </Label>
-          <div className="grid grid-cols-2 gap-2">
-            <div className="space-y-0.5">
-              <span className="text-[10px] text-slate-500">Data de emissão</span>
-              <Input
-                type="date"
-                value={props.aptidaoDate}
-                onChange={(e) => props.onAptidaoDate(e.target.value)}
-                className="h-8 text-xs focus-visible:ring-[#D4AF37]"
-              />
-            </div>
-            <div className="space-y-0.5">
-              <span className="text-[10px] text-slate-500">Status</span>
-              <select
-                value={props.aptidaoStatus}
-                onChange={(e) => props.onAptidaoStatus(e.target.value as 'entregue' | 'pendente')}
-                className="h-8 w-full text-xs rounded-md border border-slate-200 bg-white px-2 focus-visible:ring-[#D4AF37] outline-none"
-              >
-                <option value="pendente">Pendente</option>
-                <option value="entregue">Entregue</option>
-              </select>
-            </div>
-          </div>
-          <div className="space-y-0.5">
-            <span className="text-[10px] text-slate-500">CRM do médico (registro)</span>
-            <Input
-              placeholder="Ex: CRM 12345 PB"
-              value={props.aptidaoCrm}
-              onChange={(e) => props.onAptidaoCrm(e.target.value)}
-              className="h-8 text-xs focus-visible:ring-[#D4AF37]"
-            />
-          </div>
-        </div>
-        <div className="bg-white border border-slate-200 rounded-lg px-2.5 py-2 space-y-1.5">
-          <Label className="text-[11px] font-semibold text-[#1E2A3A]">Exame Dermatológico</Label>
-          <div className="grid grid-cols-2 gap-2">
-            <div className="space-y-0.5">
-              <span className="text-[10px] text-slate-500">Data de emissão</span>
-              <Input
-                type="date"
-                value={props.dermatoDate}
-                onChange={(e) => props.onDermatoDate(e.target.value)}
-                className="h-8 text-xs focus-visible:ring-[#D4AF37]"
-              />
-            </div>
-            <div className="space-y-0.5">
-              <span className="text-[10px] text-slate-500">Status</span>
-              <select
-                value={props.dermatoStatus}
-                onChange={(e) => props.onDermatoStatus(e.target.value as 'entregue' | 'pendente')}
-                className="h-8 w-full text-xs rounded-md border border-slate-200 bg-white px-2 focus-visible:ring-[#D4AF37] outline-none"
-              >
-                <option value="pendente">Pendente</option>
-                <option value="entregue">Entregue</option>
-              </select>
-            </div>
-          </div>
-          <p className="text-[10px] text-slate-500">Validade: 6 meses da emissão.</p>
-        </div>
         {hasCardio && (
           <div className="bg-white border border-slate-200 rounded-lg px-2.5 py-2 space-y-1.5">
             <Label className="text-[11px] font-semibold text-[#1E2A3A]">
@@ -153,6 +94,32 @@ export function MatriculaExamsSection(props: ExamsSectionProps) {
             </p>
           </div>
         )}
+        <div className="bg-white border border-slate-200 rounded-lg px-2.5 py-2 space-y-1.5">
+          <Label className="text-[11px] font-semibold text-[#1E2A3A]">Exame Dermatológico</Label>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-0.5">
+              <span className="text-[10px] text-slate-500">Data de emissão</span>
+              <Input
+                type="date"
+                value={props.dermatoDate || ''}
+                onChange={(e) => props.onDermatoDate?.(e.target.value)}
+                className="h-8 text-xs focus-visible:ring-[#D4AF37]"
+              />
+            </div>
+            <div className="space-y-0.5">
+              <span className="text-[10px] text-slate-500">Status</span>
+              <select
+                value={props.dermatoStatus || 'pendente'}
+                onChange={(e) => props.onDermatoStatus?.(e.target.value as 'entregue' | 'pendente')}
+                className="h-8 w-full text-xs rounded-md border border-slate-200 bg-white px-2 focus-visible:ring-[#D4AF37] outline-none"
+              >
+                <option value="pendente">Pendente</option>
+                <option value="entregue">Entregue</option>
+              </select>
+            </div>
+          </div>
+          <p className="text-[10px] text-slate-500">Validade: 6 meses da emissão.</p>
+        </div>
       </div>
     </div>
   )
