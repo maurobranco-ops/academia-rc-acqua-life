@@ -68,9 +68,12 @@ function classLabel(c: ClassRecord): string {
 const EMPTY_GUARDIAN: GuardianData = { name: '', cpf: '', phone: '', email: '' }
 
 /** Tamanho máximo aceito por arquivo no PocketBase (photo_file e guardian_rg_file). */
-const MAX_FILE_MB = 5
+const MAX_FILE_MB = 10
 /** Teto do servidor (PocketBase): arquivo individual acima disso é recusado com 400. */
 const SERVER_MAX_FILE_MB = 10
+/** Formatos aceitos no documento do responsável: foto (JPG/PNG/WEBP) ou PDF. */
+const ACCEPTED_DOC_MIMES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf']
+const DOC_FORMAT_HINT = 'Formato não aceito — envie foto (JPG/PNG) ou PDF.'
 
 /** Rótulos amigáveis dos campos da collection, para as mensagens de erro. */
 const FIELD_LABELS: Record<string, string> = {
@@ -93,7 +96,10 @@ const FIELD_LABELS: Record<string, string> = {
 function translateFieldMessage(field: string, message: string): string {
   const label =
     FIELD_LABELS[field] || field.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
-  if (/less than|size|5mb|tamanho/i.test(message)) {
+  if (/mime type/i.test(message)) {
+    return `O arquivo "${label}" está em um formato não aceito — envie foto (JPG/PNG) ou PDF.`
+  }
+  if (/less than|size|5mb|10mb|tamanho/i.test(message)) {
     return `O arquivo "${label}" é maior que o limite de ${MAX_FILE_MB} MB — anexe uma foto/scan menor (o celular costuma reduzir automaticamente ao fotografar de novo).`
   }
   if (/cannot be blank|must not be blank|non-empty value|required/i.test(message)) {
@@ -186,6 +192,93 @@ export default function PublicEnroll() {
   // aluno e oculta apenas os DADOS de contato — o upload do documento de identificação
   // do responsável continua disponível (com a caixa marcada, é o documento do próprio
   // aluno respondendo por si). Ao desmarcar, mantém o que o usuário digitou no aluno.
+  // FOTO DO ALUNO: validação IMEDIATA na escolha do arquivo — só imagem (photo_file
+  // do banco aceita apenas JPEG/PNG/WEBP), até 10 MB. Formato errado ou grande
+  // demais é recusado na hora, com aviso em português e seleção limpa.
+  const handlePhotoFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0] ?? null
+    if (!f) {
+      setPhotoFile(null)
+      setPhotoPreview((old) => {
+        if (old) URL.revokeObjectURL(old)
+        return ''
+      })
+      return
+    }
+    if (!f.type.startsWith('image/')) {
+      e.target.value = ''
+      setPhotoFile(null)
+      setPhotoPreview((old) => {
+        if (old) URL.revokeObjectURL(old)
+        return ''
+      })
+      setErrors((er) => ({
+        ...er,
+        student_photo: 'Formato não aceito — envie uma foto (JPG/PNG).',
+      }))
+      return
+    }
+    if (f.size > MAX_FILE_MB * 1024 * 1024) {
+      e.target.value = ''
+      setPhotoFile(null)
+      setPhotoPreview((old) => {
+        if (old) URL.revokeObjectURL(old)
+        return ''
+      })
+      setErrors((er) => ({
+        ...er,
+        student_photo: `A foto do aluno é muito grande (máximo ${MAX_FILE_MB} MB) — tire a foto novamente ou reduza a resolução.`,
+      }))
+      return
+    }
+    setPhotoFile(f)
+    setPhotoPreview((old) => {
+      if (old) URL.revokeObjectURL(old)
+      return URL.createObjectURL(f)
+    })
+    setErrors((er) => {
+      if (!er.student_photo) return er
+      const clean = { ...er }
+      delete clean.student_photo
+      return clean
+    })
+  }
+
+  // DOCUMENTO DO RESPONSÁVEL: validação IMEDIATA na escolha do arquivo — foto
+  // (JPG/PNG/WEBP) ou PDF, até 10 MB (limite do PocketBase). Formato errado ou
+  // grande demais é recusado na hora, com aviso em português e seleção limpa.
+  const handleRgFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0] ?? null
+    if (!f) {
+      setRgFile(null)
+      return
+    }
+    const isPdf = f.type === 'application/pdf'
+    const isImage = f.type.startsWith('image/')
+    if (!isPdf && !isImage) {
+      e.target.value = ''
+      setRgFile(null)
+      setErrors((er) => ({ ...er, guardian_rg: DOC_FORMAT_HINT }))
+      return
+    }
+    if (f.size > MAX_FILE_MB * 1024 * 1024) {
+      e.target.value = ''
+      setRgFile(null)
+      setErrors((er) => ({
+        ...er,
+        guardian_rg: `Arquivo muito grande (máximo ${MAX_FILE_MB} MB) — tire a foto novamente ou envie um PDF menor.`,
+      }))
+      return
+    }
+    setRgFile(f)
+    setErrors((er) => {
+      if (!er.guardian_rg) return er
+      const clean = { ...er }
+      delete clean.guardian_rg
+      return clean
+    })
+  }
+
   const handleSelfChange = (checked: boolean) => {
     setIsSelf(checked)
     if (checked) {
@@ -243,12 +336,12 @@ export default function PublicEnroll() {
         next.guardian_email = 'E-mail do responsável inválido.'
       }
       if (rgFile) {
-        // RG cru do celular chega a 3-8 MB — acima do limite de 5 MB do PocketBase.
-        // Bloqueia antes do envio (a compressão abaixo resolve na maioria dos casos,
-        // mas se ainda ficar grande, o usuário já é avisado aqui sem POST falho).
-        const rgIsImage = rgFile.type.startsWith('image/')
-        if (!rgIsImage && rgFile.size > MAX_FILE_MB * 1024 * 1024) {
-          next.guardian_rg = `O documento do responsável é muito grande (máximo ${MAX_FILE_MB} MB). Tire a foto novamente ou reduza a resolução.`
+        // Documento do responsável: foto (JPG/PNG/WEBP) ou PDF, até 10 MB.
+        // (A escolha do arquivo já valida — aqui é a segunda barreira, antes do POST.)
+        if (!ACCEPTED_DOC_MIMES.includes(rgFile.type)) {
+          next.guardian_rg = DOC_FORMAT_HINT
+        } else if (rgFile.size > MAX_FILE_MB * 1024 * 1024) {
+          next.guardian_rg = `O documento do responsável é muito grande (máximo ${MAX_FILE_MB} MB). Tire a foto novamente ou envie um PDF menor.`
         }
       }
       if (!rgFile)
@@ -347,8 +440,14 @@ export default function PublicEnroll() {
       preferredClasses.forEach((c) => fd.append('preferred_classes', c))
       // FOTO DO ALUNO: comprime antes de anexar (mesma rotina da tela de alunos).
       // RG DO RESPONSÁVEL: também comprime quando é imagem — uma foto de documento
-      // feita no celular chega a 3-8 MB e o PocketBase recusa arquivos acima de 5 MB
-      // (a inscrição inteira volta com 400). O RG cru só passa direto se for PDF.
+      // feita no celular chega a 3-8 MB; o PDF NÃO é comprimido (a validação na
+      // escolha do arquivo já garantiu o limite de 10 MB).
+      if (!photoFile) {
+        setErrors((er) => ({ ...er, student_photo: 'Anexe a foto do aluno para enviar.' }))
+        setSubmitting(false)
+        window.scrollTo({ top: 0, behavior: 'smooth' })
+        return
+      }
       let photo = photoFile
       try {
         const compressed = await compressImage(photoFile, photoFile.name)
@@ -376,6 +475,7 @@ export default function PublicEnroll() {
             // Falhou a compressão: segue com o original (a validação de tamanho abaixo avisa).
           }
         }
+        // Segunda barreira de tamanho (a primeira já validou na escolha do arquivo).
         if (rg.size > SERVER_MAX_FILE_MB * 1024 * 1024) {
           setErrors((er) => ({
             ...er,
@@ -414,7 +514,7 @@ export default function PublicEnroll() {
         // recusa de validação — nunca "erro desconhecido" sem pista.
         msg = details.length
           ? `Não foi possível enviar sua matrícula: ${details.join(' ')}`
-          : 'Não foi possível enviar sua matrícula. Verifique os campos obrigatórios e o tamanho dos arquivos (máximo 5 MB por arquivo) e tente novamente.'
+          : 'Não foi possível enviar sua matrícula. Verifique os campos obrigatórios e o tamanho dos arquivos (máximo 10 MB por arquivo) e tente novamente.'
       } else {
         const raw = getErrorMessage(err)
         msg =
@@ -570,20 +670,7 @@ export default function PublicEnroll() {
                 <Input
                   type="file"
                   accept="image/*"
-                  onChange={(e) => {
-                    const f = e.target.files?.[0] ?? null
-                    setPhotoFile(f)
-                    setPhotoPreview((old) => {
-                      if (old) URL.revokeObjectURL(old)
-                      return f ? URL.createObjectURL(f) : ''
-                    })
-                    setErrors((er) => {
-                      if (!er.student_photo) return er
-                      const clean = { ...er }
-                      delete clean.student_photo
-                      return clean
-                    })
-                  }}
+                  onChange={handlePhotoFileChange}
                   className={`h-9 text-xs file:mr-2 file:px-2 file:py-1 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-[#0F1B3D] file:text-white ${errCls(
                     'student_photo',
                   )}`}
@@ -803,15 +890,15 @@ export default function PublicEnroll() {
                 </Label>
                 <Input
                   type="file"
-                  accept="image/*,.pdf"
-                  onChange={(e) => setRgFile(e.target.files?.[0] ?? null)}
+                  accept="image/jpeg,image/png,image/webp,application/pdf"
+                  onChange={handleRgFileChange}
                   className={`h-9 text-xs file:mr-2 file:px-2 file:py-1 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-[#0F1B3D] file:text-white ${errCls(
                     'guardian_rg',
                   )}`}
                 />
                 <Err field="guardian_rg" />
                 <p className="text-[10px] text-slate-500">
-                  Foto ou scan do documento (imagem ou PDF).{' '}
+                  Foto ou scan do documento (imagem JPG/PNG ou PDF, até 10 MB).{' '}
                   {isMinor ? 'Obrigatório para menor de 18.' : 'Opcional.'}
                 </p>
               </div>
@@ -832,8 +919,8 @@ export default function PublicEnroll() {
                 </Label>
                 <Input
                   type="file"
-                  accept="image/*,.pdf"
-                  onChange={(e) => setRgFile(e.target.files?.[0] ?? null)}
+                  accept="image/jpeg,image/png,image/webp,application/pdf"
+                  onChange={handleRgFileChange}
                   className={`h-9 text-xs file:mr-2 file:px-2 file:py-1 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-[#0F1B3D] file:text-white ${errCls(
                     'guardian_rg',
                   )}`}
@@ -841,7 +928,7 @@ export default function PublicEnroll() {
                 <Err field="guardian_rg" />
                 <p className="text-[10px] text-slate-500">
                   Aluno(a) maior de 18 respondendo pela própria matrícula: anexe o documento dele(a)
-                  (imagem ou PDF) — usado na conferência da inscrição. Opcional.
+                  (imagem JPG/PNG ou PDF, até 10 MB) — usado na conferência da inscrição. Opcional.
                 </p>
               </div>
             </div>
@@ -992,7 +1079,11 @@ export default function PublicEnroll() {
           ) : (
             <Send className="w-4 h-4 mr-2" />
           )}
-          {submitting ? 'Enviando…' : 'Enviar inscrição'}
+          {submitting
+            ? 'Enviando…'
+            : submitError
+              ? 'Enviar inscrição novamente'
+              : 'Enviar inscrição'}
         </Button>
       </form>
 
