@@ -38,9 +38,58 @@ export const PARQ_QUESTIONS: ParqQuestion[] = [
 
 export type ParqKey = ParqQuestion['key']
 export type ParqValues = Partial<Record<ParqKey, string>>
+export type AnamneseValues = Partial<Record<AnamneseKey, string>>
 
 export const PARQ_YES = 'sim'
 export const PARQ_NO = 'nao'
+
+/** PAR-Q todo vazio (estado inicial dos formulários). */
+export const EMPTY_PARQ: ParqValues = {
+  parq_1: '',
+  parq_2: '',
+  parq_3: '',
+  parq_4: '',
+  parq_5: '',
+  parq_6: '',
+  parq_7: '',
+}
+
+/** Anamnese aquática vazia (estado inicial dos formulários). */
+export const EMPTY_ANAMNESE: AnamneseValues = {
+  anamnese_medo_agua: '',
+  anamnese_convulsoes: '',
+  anamnese_alergia_cloro: '',
+  anamnese_medicamentos: '',
+  anamnese_objetivo: '',
+}
+
+/** Aliases usados pelo formulário público /matricula. */
+export const PARQ_EMPTY = EMPTY_PARQ
+export const ANAMNESE_EMPTY = EMPTY_ANAMNESE
+
+/** Extrai o PAR-Q preenchido de um registro de aluno (campos parq_1..parq_7). */
+export function getParq(st: Partial<Record<ParqKey, string>>): ParqValues {
+  return {
+    parq_1: st.parq_1 || '',
+    parq_2: st.parq_2 || '',
+    parq_3: st.parq_3 || '',
+    parq_4: st.parq_4 || '',
+    parq_5: st.parq_5 || '',
+    parq_6: st.parq_6 || '',
+    parq_7: st.parq_7 || '',
+  }
+}
+
+/** Extrai a anamnese preenchida de um registro de aluno (campos anamnese_*). */
+export function getAnamnese(st: Partial<Record<AnamneseKey, string>>): AnamneseValues {
+  return {
+    anamnese_medo_agua: st.anamnese_medo_agua || '',
+    anamnese_convulsoes: st.anamnese_convulsoes || '',
+    anamnese_alergia_cloro: st.anamnese_alergia_cloro || '',
+    anamnese_medicamentos: st.anamnese_medicamentos || '',
+    anamnese_objetivo: st.anamnese_objetivo || '',
+  }
+}
 
 export interface AnamneseQuestion {
   key: 'anamnese_medo_agua' | 'anamnese_convulsoes' | 'anamnese_alergia_cloro'

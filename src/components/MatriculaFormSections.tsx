@@ -8,6 +8,132 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import type { ParqValues, AnamneseKey } from '@/lib/matricula'
 import { PARQ_QUESTIONS, ANAMNESE_QUESTIONS, PARQ_YES, PARQ_NO } from '@/lib/matricula'
 
+interface ExamsSectionProps {
+  aptidaoDate: string
+  aptidaoCrm: string
+  aptidaoStatus: 'entregue' | 'pendente'
+  dermatoDate: string
+  dermatoStatus: 'entregue' | 'pendente'
+  onAptidaoDate: (v: string) => void
+  onAptidaoCrm: (v: string) => void
+  onAptidaoStatus: (v: 'entregue' | 'pendente') => void
+  onDermatoDate: (v: string) => void
+  onDermatoStatus: (v: 'entregue' | 'pendente') => void
+}
+
+/** Exames obrigatórios (Lei Estadual PB 9.863/2012): aptidão física + dermatológico. */
+export function MatriculaExamsSection(props: ExamsSectionProps) {
+  return (
+    <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2.5">
+      <div className="text-xs font-bold text-[#0F1B3D]">
+        Exames obrigatórios (Lei Estadual nº 9.863/2012-PB)
+      </div>
+      <p className="text-[10px] text-slate-500">
+        Atestado de Aptidão Física e Exame Dermatológico, com validade de 6 meses a partir da data
+        de emissão.
+      </p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+        <div className="bg-white border border-slate-200 rounded-lg px-2.5 py-2 space-y-1.5">
+          <Label className="text-[11px] font-semibold text-[#1E2A3A]">
+            Atestado de Aptidão Física
+          </Label>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-0.5">
+              <span className="text-[10px] text-slate-500">Data de emissão</span>
+              <Input
+                type="date"
+                value={props.aptidaoDate}
+                onChange={(e) => props.onAptidaoDate(e.target.value)}
+                className="h-8 text-xs focus-visible:ring-[#D4AF37]"
+              />
+            </div>
+            <div className="space-y-0.5">
+              <span className="text-[10px] text-slate-500">Status</span>
+              <select
+                value={props.aptidaoStatus}
+                onChange={(e) => props.onAptidaoStatus(e.target.value as 'entregue' | 'pendente')}
+                className="h-8 w-full text-xs rounded-md border border-slate-200 bg-white px-2 focus-visible:ring-[#D4AF37] outline-none"
+              >
+                <option value="pendente">Pendente</option>
+                <option value="entregue">Entregue</option>
+              </select>
+            </div>
+          </div>
+          <div className="space-y-0.5">
+            <span className="text-[10px] text-slate-500">CRM do médico (registro)</span>
+            <Input
+              placeholder="Ex: CRM 12345 PB"
+              value={props.aptidaoCrm}
+              onChange={(e) => props.onAptidaoCrm(e.target.value)}
+              className="h-8 text-xs focus-visible:ring-[#D4AF37]"
+            />
+          </div>
+        </div>
+        <div className="bg-white border border-slate-200 rounded-lg px-2.5 py-2 space-y-1.5">
+          <Label className="text-[11px] font-semibold text-[#1E2A3A]">Exame Dermatológico</Label>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-0.5">
+              <span className="text-[10px] text-slate-500">Data de emissão</span>
+              <Input
+                type="date"
+                value={props.dermatoDate}
+                onChange={(e) => props.onDermatoDate(e.target.value)}
+                className="h-8 text-xs focus-visible:ring-[#D4AF37]"
+              />
+            </div>
+            <div className="space-y-0.5">
+              <span className="text-[10px] text-slate-500">Status</span>
+              <select
+                value={props.dermatoStatus}
+                onChange={(e) => props.onDermatoStatus(e.target.value as 'entregue' | 'pendente')}
+                className="h-8 w-full text-xs rounded-md border border-slate-200 bg-white px-2 focus-visible:ring-[#D4AF37] outline-none"
+              >
+                <option value="pendente">Pendente</option>
+                <option value="entregue">Entregue</option>
+              </select>
+            </div>
+          </div>
+          <p className="text-[10px] text-slate-500">Validade: 6 meses da emissão.</p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+interface HealthSectionProps {
+  parq: ParqValues
+  anamnese: Partial<Record<AnamneseKey, string>>
+  usoImagem: 'sim' | 'nao' | ''
+  onParq: (key: ParqValues[keyof ParqValues], v: string) => void
+  onAnamnese: (key: AnamneseKey, v: string) => void
+  onUsoImagem: (v: 'sim' | 'nao') => void
+}
+
+/** PAR-Q (7 perguntas) + anamnese aquática + autorização de uso de imagem. */
+export function MatriculaHealthSection(props: HealthSectionProps) {
+  return (
+    <div className="space-y-2.5">
+      <ParqSection values={props.parq} onChange={props.onParq} />
+      <AnamneseSection values={props.anamnese} onChange={props.onAnamnese} />
+      <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+        <div className="text-xs font-bold text-[#0F1B3D]">Uso de imagem (LGPD)</div>
+        <div className="bg-white border border-slate-200 rounded-lg px-2.5 py-2 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+          <span className="text-[11px] text-[#1E2A3A] sm:pr-3">
+            Autoriza o uso da imagem do(a) aluno(a) em fotos e vídeos institucionais?
+          </span>
+          <div className="shrink-0">
+            <YesNoPicker
+              name="uso-imagem"
+              value={props.usoImagem}
+              onChange={(v) => props.onUsoImagem(v === 'sim' ? 'sim' : 'nao')}
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 interface YesNoProps {
   value: string
   onChange: (v: string) => void

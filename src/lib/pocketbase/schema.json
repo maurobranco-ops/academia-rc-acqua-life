@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-15T11:59:17.395Z",
+  "generatedAt": "2026-11-15T12:55:19.875Z",
   "collections": [
     {
       "name": "users",
@@ -371,6 +371,123 @@
         {
           "name": "uf",
           "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "aptidao_date",
+          "type": "date",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "aptidao_crm",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "aptidao_status",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": ["entregue", "pendente"]
+        },
+        {
+          "name": "dermato_date",
+          "type": "date",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "dermato_status",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": ["entregue", "pendente"]
+        },
+        {
+          "name": "parq_1",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "parq_2",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "parq_3",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "parq_4",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "parq_5",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "parq_6",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "parq_7",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "anamnese_medo_agua",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "anamnese_convulsoes",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "anamnese_alergia_cloro",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "anamnese_medicamentos",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "anamnese_objetivo",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "uso_imagem_autorizado",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": ["sim", "nao"]
+        },
+        {
+          "name": "guardian_rg_file",
+          "type": "file",
           "required": false,
           "system": false
         }
@@ -1018,6 +1135,177 @@
         "CREATE UNIQUE INDEX idx_webhook_events_key ON webhook_events (event_key)",
         "CREATE INDEX idx_webhook_events_order_nsu ON webhook_events (order_nsu)"
       ]
+    },
+    {
+      "name": "enrollment_requests",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "",
+        "update": "@request.auth.id != ''",
+        "delete": "@request.auth.id != ''"
+      },
+      "fields": [
+        {
+          "name": "student_name",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "student_birth_date",
+          "type": "date",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "student_cpf",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "student_phone",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "student_age",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "guardian_name",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "guardian_cpf",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "guardian_phone",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "photo_file",
+          "type": "file",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "guardian_rg_file",
+          "type": "file",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "parq_1",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "parq_2",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "parq_3",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "parq_4",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "parq_5",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "parq_6",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "parq_7",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "anamnese_medo_agua",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "anamnese_convulsoes",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "anamnese_alergia_cloro",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "anamnese_medicamentos",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "anamnese_objetivo",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "uso_imagem_autorizado",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "status",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["pendente", "aprovada", "recusada"]
+        },
+        {
+          "name": "review_notes",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "reviewed_student_id",
+          "type": "text",
+          "required": false,
+          "system": false
+        }
+      ],
+      "indexes": []
     }
   ]
 }
