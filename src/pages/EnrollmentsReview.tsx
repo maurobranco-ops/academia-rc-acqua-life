@@ -96,9 +96,11 @@ export default function EnrollmentsReview() {
   const [rejectTarget, setRejectTarget] = useState<EnrollmentRequestRecord | null>(null)
   const [rejectNotes, setRejectNotes] = useState('')
   const [fichaData, setFichaData] = useState<PrintableFichaData | null>(null)
+  const [loadError, setLoadError] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
+    setLoadError(false)
     try {
       const [reqs, sts] = await Promise.all([
         academyService.getEnrollmentRequests(),
@@ -108,15 +110,12 @@ export default function EnrollmentsReview() {
       setStudents(sts)
     } catch (err) {
       console.error(err)
-      toast({
-        title: 'Erro ao carregar inscrições',
-        description: err instanceof Error ? err.message : 'Tente novamente.',
-        variant: 'destructive',
-      })
+      // Mensagem amigável em pt-BR — nunca vazar o erro cru do backend na UI.
+      setLoadError(true)
     } finally {
       setLoading(false)
     }
-  }, [toast])
+  }, [])
 
   useEffect(() => {
     load()
@@ -402,7 +401,24 @@ export default function EnrollmentsReview() {
         </Button>
       </div>
 
-      {loading && requests.length === 0 ? (
+      {loadError ? (
+        <Card className="rounded-xl border-red-200 bg-red-50 p-8 text-center">
+          <p className="text-sm font-semibold text-red-700">
+            Não foi possível carregar as inscrições.
+          </p>
+          <p className="mt-1 text-xs text-red-600">Verifique a conexão e tente novamente.</p>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={load}
+            disabled={loading}
+            className="mt-4 border-red-300 text-red-700 hover:bg-red-100"
+          >
+            <RefreshCw className={loading ? 'w-4 h-4 mr-1 animate-spin' : 'w-4 h-4 mr-1'} />
+            Tentar novamente
+          </Button>
+        </Card>
+      ) : loading && requests.length === 0 ? (
         <div className="flex items-center justify-center py-16 text-slate-500 text-sm gap-2">
           <Loader2 className="w-5 h-5 animate-spin" /> Carregando inscrições...
         </div>
