@@ -10,6 +10,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Loader2,
+  Printer,
   Users,
   List,
   Sparkles,
@@ -1118,6 +1119,16 @@ export default function Students() {
                                 <DollarSign className="w-4 h-4" />
                               </button>
                               <button
+                                onClick={() => {
+                                  setSelectedStudent(st)
+                                  setFichaOpen(true)
+                                }}
+                                className="p-1.5 rounded-lg text-slate-500 hover:text-[#D4AF37] hover:bg-amber-50 transition"
+                                title="Imprimir ficha"
+                              >
+                                <Printer className="w-4 h-4" />
+                              </button>
+                              <button
                                 onClick={() => handleOpenEditModal(st)}
                                 className="p-1.5 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-slate-100 transition"
                                 title="Editar aluno"
@@ -1285,6 +1296,16 @@ export default function Students() {
                                 title="Registrar pagamento / cobrança"
                               >
                                 <DollarSign className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setSelectedStudent(st)
+                                  setFichaOpen(true)
+                                }}
+                                className="p-1.5 rounded-lg text-slate-500 hover:text-[#D4AF37] hover:bg-amber-50 transition"
+                                title="Imprimir ficha"
+                              >
+                                <Printer className="w-4 h-4" />
                               </button>
                               <button
                                 onClick={() => handleOpenEditModal(st)}
@@ -1517,6 +1538,16 @@ export default function Students() {
                                 <DollarSign className="w-4 h-4" />
                               </button>
                               <button
+                                onClick={() => {
+                                  setSelectedStudent(st)
+                                  setFichaOpen(true)
+                                }}
+                                className="p-1.5 rounded-lg text-slate-500 hover:text-[#D4AF37] hover:bg-amber-50 transition"
+                                title="Imprimir ficha"
+                              >
+                                <Printer className="w-4 h-4" />
+                              </button>
+                              <button
                                 onClick={() => handleOpenEditModal(st)}
                                 className="p-1.5 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-slate-100 transition"
                                 title="Editar aluno"
@@ -1534,13 +1565,12 @@ export default function Students() {
                           </div>
                         </div>
                       )
-                    })
+                    })}
                   )}
                 </div>
               </Card>
             )
           })}
-
           {/* Unassigned Students Section */}
           {classGroups.unassigned.length > 0 && (
             <Card className="bg-white border-amber-200 rounded-xl overflow-hidden shadow-xs">
@@ -1622,6 +1652,16 @@ export default function Students() {
                             title="Visualizar detalhes"
                           >
                             <Eye className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => {
+                              setSelectedStudent(st)
+                              setFichaOpen(true)
+                            }}
+                            className="p-1.5 rounded-lg text-slate-500 hover:text-[#D4AF37] hover:bg-amber-50 transition"
+                            title="Imprimir ficha"
+                          >
+                            <Printer className="w-4 h-4" />
                           </button>
                           <button
                             onClick={() => handleOpenEditModal(st)}
@@ -1788,8 +1828,8 @@ export default function Students() {
                 parq={formParq}
                 anamnese={formAnamnese}
                 usoImagem={formUsoImagem}
-                onParq={setFormParq}
-                onAnamnese={setFormAnamnese}
+                onParq={(key, v) => setFormParq((p) => ({ ...p, [key]: v }))}
+                onAnamnese={(key, v) => setFormAnamnese((p) => ({ ...p, [key]: v }))}
                 onUsoImagem={setFormUsoImagem}
               />
 

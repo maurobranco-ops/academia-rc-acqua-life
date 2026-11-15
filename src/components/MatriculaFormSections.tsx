@@ -5,7 +5,7 @@
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
-import type { ParqValues, AnamneseKey } from '@/lib/matricula'
+import type { ParqValues, ParqKey, AnamneseKey } from '@/lib/matricula'
 import { PARQ_QUESTIONS, ANAMNESE_QUESTIONS, PARQ_YES, PARQ_NO } from '@/lib/matricula'
 
 interface ExamsSectionProps {
@@ -104,7 +104,7 @@ interface HealthSectionProps {
   parq: ParqValues
   anamnese: Partial<Record<AnamneseKey, string>>
   usoImagem: 'sim' | 'nao' | ''
-  onParq: (key: ParqValues[keyof ParqValues], v: string) => void
+  onParq: (key: ParqKey, v: string) => void
   onAnamnese: (key: AnamneseKey, v: string) => void
   onUsoImagem: (v: 'sim' | 'nao') => void
 }
@@ -166,7 +166,7 @@ export function YesNoPicker({ value, onChange, name }: YesNoProps) {
 
 interface ParqSectionProps {
   values: ParqValues
-  onChange: (key: ParqValues[keyof ParqValues], v: string) => void
+  onChange: (key: ParqKey, v: string) => void
 }
 
 export function ParqSection({ values, onChange }: ParqSectionProps) {

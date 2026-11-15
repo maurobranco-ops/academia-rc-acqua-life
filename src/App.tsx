@@ -14,6 +14,8 @@ import Charges from '@/pages/Charges'
 import Reports from '@/pages/Reports'
 import Settings from '@/pages/Settings'
 import Import from '@/pages/Import'
+import PublicEnroll from '@/pages/PublicEnroll'
+import Enrollments from '@/pages/Enrollments'
 
 // Auth Pages
 import Login from '@/pages/auth/Login'
@@ -37,6 +39,9 @@ export default function App() {
           <Route path="/verify-email" element={<VerifyEmail />} />
           <Route path="/confirm-email-change" element={<ConfirmEmailChange />} />
 
+          {/* Public enrollment form (Lei 9.863/2012-PB) — sem login */}
+          <Route path="/matricula" element={<PublicEnroll />} />
+
           {/* Protected Routes inside Global Layout */}
           <Route
             element={
@@ -52,6 +57,7 @@ export default function App() {
             <Route path="/alunos/:id" element={<StudentDetail />} />
             <Route path="/financeiro" element={<Finance />} />
             <Route path="/cobrancas" element={<Charges />} />
+            <Route path="/matriculas" element={<Enrollments />} />
             <Route path="/relatorios" element={<Reports />} />
             <Route path="/importar" element={<Import />} />
             <Route path="/configuracoes" element={<Settings />} />

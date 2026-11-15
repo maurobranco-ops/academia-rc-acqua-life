@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-15T12:55:19.875Z",
+  "generatedAt": "2026-11-15T13:12:04.028Z",
   "collections": [
     {
       "name": "users",
@@ -1299,7 +1299,7 @@
           "system": false
         },
         {
-          "name": "reviewed_student_id",
+          "name": "student_id",
           "type": "text",
           "required": false,
           "system": false
