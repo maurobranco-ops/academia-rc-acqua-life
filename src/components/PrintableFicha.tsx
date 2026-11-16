@@ -1,16 +1,21 @@
 // Dialog da ficha de matrícula imprimível com contêiner de impressão DEDICADO.
 //
-// Mecânica de impressão (corrige 2 defeitos reportados na /matriculas):
-// 1. Fichas acumuladas: antes de cada impressão o contêiner #ficha-print-root
-//    é ZERADO (replaceChildren) e recebe EXATAMENTE a ficha aberta no dialog —
-//    cada Ctrl+P/impressão sai com uma única ficha.
-// 2. Ficha cortada na 1ª página: o CSS de impressão (main.css) esconde o app
+// Mecânica de impressão (corrige 3 defeitos reportados na /matriculas):
+// 1. Página em branco: a renderização do React 18 é assíncrona — chamar
+//    window.print() na mesma linha após root.render() chegava à impressora
+//    ANTES de a ficha ser gravada no contêiner. Agora o render é forçado a
+//    acontecer na hora com flushSync, e só então a impressão dispara.
+// 2. Fichas acumuladas: antes de cada impressão o contêiner #ficha-print-root
+//    é ZERADO (replaceChildren, inclusive divs vazios residuais) e recebe
+//    EXATAMENTE a ficha aberta no dialog — cada impressão sai com uma ficha.
+// 3. Ficha cortada na 1ª página: o CSS de impressão (main.css) esconde o app
 //    inteiro (body.ficha-printing > #root) e imprime só o nó clonado para
 //    #ficha-print-root, que fica NO FLUXO NORMAL do body — conteúdo
 //    multipáginas (termo, normas, assinaturas) paginado pelo navegador, sem
 //    position:absolute (que corta após a 1ª folha no Chrome).
 
 import { createRoot, type Root } from 'react-dom/client'
+import { flushSync } from 'react-dom'
 import { Button } from '@/components/ui/button'
 import { Printer, X } from 'lucide-react'
 import {
@@ -29,41 +34,55 @@ const BODY_CLASS = 'ficha-printing'
 
 let printReactRoot: Root | null = null
 
-/** Limpa o contêiner de impressão dedicado e devolve-o, criando-o se preciso. */
+/** Desmonta o React root e remove TODO o conteúdo do contêiner de impressão. */
+function destroyPrintRoot() {
+  if (printReactRoot) {
+    printReactRoot.unmount()
+    printReactRoot = null
+  }
+  document.getElementById(PRINT_ROOT_ID)?.replaceChildren()
+}
+
+/** Cria (ou recicla) o contêiner de impressão dedicado, vazio, com um holder novo. */
 function preparePrintRoot(): HTMLElement {
+  destroyPrintRoot()
+
   let root = document.getElementById(PRINT_ROOT_ID)
   if (!root) {
     root = document.createElement('div')
     root.id = PRINT_ROOT_ID
     document.body.appendChild(root)
   }
-  // Zera qualquer ficha de impressão anterior (defeito das fichas acumuladas).
-  if (printReactRoot) {
-    printReactRoot.unmount()
-    printReactRoot = null
-  } else {
-    root.replaceChildren()
-  }
+  // Garante contêiner sem resíduos (nem div vazio de impressão anterior).
+  root.replaceChildren()
+
+  const holder = document.createElement('div')
+  root.appendChild(holder)
+  printReactRoot = createRoot(holder)
   return root
 }
 
 /**
- * Imprime a ficha: clona a folha para o contêiner dedicado, marca o body para
- * o CSS esconder o app e chama window.print de forma sincronizada.
+ * Imprime a ficha: grava a folha no contêiner dedicado de forma SINCRONA
+ * (flushSync), marca o body para o CSS esconder o app e chama window.print.
  */
 export function printFicha(data: PrintableFichaData, studentId?: string) {
   const root = preparePrintRoot()
+  if (!printReactRoot) return
 
-  if (!printReactRoot) {
-    const holder = document.createElement('div')
-    root.appendChild(holder)
-    printReactRoot = createRoot(holder)
-  }
-  printReactRoot.render(<FichaSheet data={data} studentId={studentId} />)
+  // flushSync força o React a gravar a ficha no DOM AGORA — sem isso o
+  // window.print() disparava com o contêiner ainda vazio (página em branco).
+  flushSync(() => {
+    printReactRoot!.render(<FichaSheet data={data} studentId={studentId} />)
+  })
 
   document.body.classList.add(BODY_CLASS)
   window.print()
   document.body.classList.remove(BODY_CLASS)
+
+  // Cleanup pós-impressão: remove a ficha do contêiner para não deixar
+  // conteúdo residual entre impressões.
+  window.setTimeout(destroyPrintRoot, 300)
 }
 
 export function PrintableFichaDialog({
