@@ -35,6 +35,7 @@ import { academyService } from '@/services/academy'
 import { useRealtime } from '@/hooks/use-realtime'
 import type { TransactionRecord, PaymentRecord } from '@/types/database'
 import { useToast } from '@/hooks/use-toast'
+import { getErrorMessage } from '@/lib/pocketbase/errors'
 import {
   BarChart,
   Bar,
@@ -260,7 +261,11 @@ export default function Finance() {
       loadData()
     } catch (err) {
       console.error(err)
-      toast({ title: 'Erro ao excluir', variant: 'destructive' })
+      toast({
+        title: 'Erro ao excluir',
+        description: getErrorMessage(err),
+        variant: 'destructive',
+      })
     }
   }
 

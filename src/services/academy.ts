@@ -1,4 +1,5 @@
 import pb from '@/lib/pocketbase/client'
+import { isNotFoundError } from '@/lib/pocketbase/errors'
 import type {
   PlanRecord,
   InstructorRecord,
@@ -13,6 +14,21 @@ import type {
 } from '@/types/database'
 
 export const academyService = {
+  /**
+   * DELETE tolerante: um 404 ("The requested resource wasn't found.") não é erro —
+   * significa que o registro JÁ foi excluído (ex. disparo duplo, aba duplicada),
+   * então o resultado desejado já aconteceu. Resolve como sucesso e jamais vaza
+   * a mensagem crua do PocketBase para o usuário.
+   */
+  async _deleteTolerant(collection: string, id: string): Promise<boolean> {
+    try {
+      return await pb.collection(collection).delete(id)
+    } catch (err) {
+      if (isNotFoundError(err)) return true
+      throw err
+    }
+  },
+
   // Plans
   async getPlans(): Promise<PlanRecord[]> {
     return pb.collection('plans').getFullList<PlanRecord>({ sort: 'name' })
@@ -24,7 +40,7 @@ export const academyService = {
     return pb.collection('plans').update<PlanRecord>(id, data)
   },
   async deletePlan(id: string): Promise<boolean> {
-    return pb.collection('plans').delete(id)
+    return this._deleteTolerant('plans', id)
   },
 
   // Enrollment requests — inscrições do formulário público /matricula
@@ -47,7 +63,7 @@ export const academyService = {
     return pb.collection('enrollment_requests').update<EnrollmentRequestRecord>(id, data)
   },
   async deleteEnrollmentRequest(id: string): Promise<boolean> {
-    return pb.collection('enrollment_requests').delete(id)
+    return this._deleteTolerant('enrollment_requests', id)
   },
 
   // Instructors
@@ -61,7 +77,7 @@ export const academyService = {
     return pb.collection('instructors').update<InstructorRecord>(id, data)
   },
   async deleteInstructor(id: string): Promise<boolean> {
-    return pb.collection('instructors').delete(id)
+    return this._deleteTolerant('instructors', id)
   },
 
   // Students
@@ -103,16 +119,13 @@ export const academyService = {
         filter: `student_id = "${id}"`,
       })
       for (const enr of enrollments) {
-        await pb
-          .collection('enrollments')
-          .delete(enr.id)
-          .catch(() => {})
+        await this.deleteEnrollment(enr.id).catch(() => {})
       }
     } catch {
       /* intentionally ignored */
     }
 
-    return pb.collection('students').delete(id)
+    return this._deleteTolerant('students', id)
   },
 
   async deleteStudentWithHistory(
@@ -257,7 +270,7 @@ export const academyService = {
     return pb.collection('classes').update<ClassRecord>(id, data)
   },
   async deleteClass(id: string): Promise<boolean> {
-    return pb.collection('classes').delete(id)
+    return this._deleteTolerant('classes', id)
   },
 
   // Enrollments
@@ -279,7 +292,7 @@ export const academyService = {
     })
   },
   async deleteEnrollment(id: string): Promise<boolean> {
-    return pb.collection('enrollments').delete(id)
+    return this._deleteTolerant('enrollments', id)
   },
 
   // Charges
@@ -616,7 +629,7 @@ export const academyService = {
     return pb.collection('transactions').create<TransactionRecord>(data)
   },
   async deleteTransaction(id: string): Promise<boolean> {
-    return pb.collection('transactions').delete(id)
+    return this._deleteTolerant('transactions', id)
   },
 
   // Settings

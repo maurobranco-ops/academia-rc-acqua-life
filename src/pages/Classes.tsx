@@ -50,6 +50,7 @@ import type {
   EnrollmentRecord,
 } from '@/types/database'
 import { useToast } from '@/hooks/use-toast'
+import { getErrorMessage } from '@/lib/pocketbase/errors'
 import { getStudentPhotoUrl } from '@/lib/studentPhoto'
 import { getStudentStatusDisplay } from '@/lib/studentStatus'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -148,6 +149,7 @@ export default function Classes() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const { toast } = useToast()
+  const [isDeleting, setIsDeleting] = useState(false)
 
   const [classes, setClasses] = useState<ClassRecord[]>([])
   const [instructors, setInstructors] = useState<InstructorRecord[]>([])
@@ -341,7 +343,8 @@ export default function Classes() {
   }
 
   const handleDeleteClass = async () => {
-    if (!selectedClass) return
+    if (!selectedClass || isDeleting) return
+    setIsDeleting(true)
     try {
       await academyService.deleteClass(selectedClass.id)
       toast({ title: 'Turma removida com sucesso' })
@@ -350,7 +353,13 @@ export default function Classes() {
       loadData()
     } catch (err) {
       console.error(err)
-      toast({ title: 'Falha ao remover turma', variant: 'destructive' })
+      toast({
+        title: 'Falha ao remover turma',
+        description: getErrorMessage(err),
+        variant: 'destructive',
+      })
+    } finally {
+      setIsDeleting(false)
     }
   }
 
@@ -375,7 +384,11 @@ export default function Classes() {
       loadData()
     } catch (err) {
       console.error(err)
-      toast({ title: 'Erro ao desvincular aluno', variant: 'destructive' })
+      toast({
+        title: 'Erro ao desvincular aluno',
+        description: getErrorMessage(err),
+        variant: 'destructive',
+      })
     }
   }
 
@@ -993,16 +1006,22 @@ export default function Classes() {
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2">
-            <Button variant="outline" size="sm" onClick={() => setDeleteConfirmOpen(false)}>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={isDeleting}
+              onClick={() => setDeleteConfirmOpen(false)}
+            >
               Cancelar
             </Button>
             <Button
               variant="destructive"
               size="sm"
+              disabled={isDeleting}
               onClick={handleDeleteClass}
               className="font-bold"
             >
-              Sim, Excluir Turma
+              {isDeleting ? 'Excluindo...' : 'Sim, Excluir Turma'}
             </Button>
           </DialogFooter>
         </DialogContent>

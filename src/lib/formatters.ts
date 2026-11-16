@@ -113,6 +113,20 @@ export const isValidCpf = (value: string): boolean => {
   return digit1 === parseInt(cpf[9], 10) && digit2 === parseInt(cpf[10], 10)
 }
 
+/** Mensagem padrão exibida quando o CPF digitado falha nos dígitos verificadores. */
+export const CPF_INVALID_MESSAGE = 'CPF inválido — verifique os números digitados.'
+
+/**
+ * Erro de CPF para exibição INLINE no campo, enquanto o usuário digita:
+ *  - '' (vazio) = ok, ou ainda incompleto (não adianta acusar erro antes dos 11 dígitos);
+ *  - string = mensagem de erro (CPF completo e com dígitos verificadores inválidos).
+ */
+export const cpfFieldError = (value: string): string => {
+  const d = onlyDigits(value)
+  if (d.length !== 11) return ''
+  return isValidCpf(value) ? '' : CPF_INVALID_MESSAGE
+}
+
 /** Valida formato de e-mail simples: nome@dominio.tld */
 export const isValidEmail = (value: string): boolean => {
   const v = (value || '').trim()

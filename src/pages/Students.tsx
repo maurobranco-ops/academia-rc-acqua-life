@@ -44,6 +44,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { academyService } from '@/services/academy'
+import { getErrorMessage } from '@/lib/pocketbase/errors'
 import { useRealtime } from '@/hooks/use-realtime'
 import { MapPin } from 'lucide-react'
 import { getStudentPhotoUrl } from '@/lib/studentPhoto'
@@ -57,7 +58,15 @@ import type {
   ClassRecord,
 } from '@/types/database'
 import { useToast } from '@/hooks/use-toast'
-import { maskCpf, maskPhone, maskCep, isValidCpf, isValidEmail } from '@/lib/formatters'
+import {
+  maskCpf,
+  maskPhone,
+  maskCep,
+  isValidCpf,
+  isValidEmail,
+  cpfFieldError,
+  CPF_INVALID_MESSAGE,
+} from '@/lib/formatters'
 import { fetchAddressByCep } from '@/lib/viacep'
 import { compressImage } from '@/lib/imageCompression'
 import { StudentPhotoPicker } from '@/components/StudentPhotoPicker'
@@ -458,11 +467,11 @@ export default function Students() {
     const errors: Record<string, string> = {}
     const cpfValue = formCpf.trim()
     if (cpfValue && !isValidCpf(cpfValue)) {
-      errors.cpf = 'CPF inválido'
+      errors.cpf = CPF_INVALID_MESSAGE
     }
     const guardianCpfValue = formGuardianCpf.trim()
     if (guardianCpfValue && !isValidCpf(guardianCpfValue)) {
-      errors.guardianCpf = 'CPF do responsável inválido'
+      errors.guardianCpf = `CPF do ${CPF_INVALID_MESSAGE.charAt(0).toLowerCase()}${CPF_INVALID_MESSAGE.slice(1)}`
     }
     const emailValue = formEmail.trim()
     if (emailValue && !isValidEmail(emailValue)) {
@@ -694,7 +703,7 @@ export default function Students() {
       await loadData()
     } catch (err: unknown) {
       console.error(err)
-      const msg = err instanceof Error ? err.message : 'Falha ao remover aluno'
+      const msg = getErrorMessage(err) || 'Falha ao remover aluno'
       toast({
         title: 'Erro ao remover aluno',
         description: msg,
@@ -1776,7 +1785,18 @@ export default function Students() {
                     <Input
                       placeholder="000.000.000-00"
                       value={formCpf}
-                      onChange={(e) => setFormCpf(maskCpf(e.target.value))}
+                      onChange={(e) => {
+                        const v = maskCpf(e.target.value)
+                        setFormCpf(v)
+                        // Erro INLINE na digitação, assim que os 11 dígitos completam
+                        setFormErrors((fe) => {
+                          const live = cpfFieldError(v)
+                          const next = { ...fe }
+                          if (live) next.cpf = live
+                          else delete next.cpf
+                          return next
+                        })
+                      }}
                       className={
                         formErrors.cpf
                           ? 'h-8 text-xs border-red-500 focus-visible:ring-red-500'
@@ -1785,6 +1805,11 @@ export default function Students() {
                     />
                     {formErrors.cpf && (
                       <p className="text-[10px] text-red-600 font-medium">{formErrors.cpf}</p>
+                    )}
+                    {!formErrors.cpf && cpfFieldError(formCpf) && (
+                      <p className="text-[10px] text-red-600 font-medium">
+                        {cpfFieldError(formCpf)}
+                      </p>
                     )}
                   </div>
                   <div className="space-y-1">
@@ -1899,7 +1924,18 @@ export default function Students() {
                     <Input
                       placeholder="000.000.000-00"
                       value={formGuardianCpf}
-                      onChange={(e) => setFormGuardianCpf(maskCpf(e.target.value))}
+                      onChange={(e) => {
+                        const v = maskCpf(e.target.value)
+                        setFormGuardianCpf(v)
+                        // Erro INLINE na digitação, assim que os 11 dígitos completam
+                        setFormErrors((fe) => {
+                          const live = cpfFieldError(v)
+                          const next = { ...fe }
+                          if (live) next.guardianCpf = live
+                          else delete next.guardianCpf
+                          return next
+                        })
+                      }}
                       disabled={formSelfResponsible}
                       className={
                         formErrors.guardianCpf
@@ -1910,6 +1946,11 @@ export default function Students() {
                     {formErrors.guardianCpf && (
                       <p className="text-[10px] text-red-600 font-medium">
                         {formErrors.guardianCpf}
+                      </p>
+                    )}
+                    {!formErrors.guardianCpf && cpfFieldError(formGuardianCpf) && (
+                      <p className="text-[10px] text-red-600 font-medium">
+                        {cpfFieldError(formGuardianCpf)}
                       </p>
                     )}
                   </div>

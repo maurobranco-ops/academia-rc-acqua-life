@@ -46,6 +46,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { academyService } from '@/services/academy'
+import { getErrorMessage } from '@/lib/pocketbase/errors'
 import type { PlanRecord, InstructorRecord } from '@/types/database'
 import { useToast } from '@/hooks/use-toast'
 import { onlyDigits, maskCnpj, maskPhoneIntl } from '@/lib/formatters'
@@ -403,7 +404,11 @@ export default function Settings() {
       loadData()
     } catch (err) {
       console.error(err)
-      toast({ title: 'Erro ao excluir plano', variant: 'destructive' })
+      toast({
+        title: 'Erro ao excluir plano',
+        description: getErrorMessage(err),
+        variant: 'destructive',
+      })
     }
   }
 
@@ -463,7 +468,11 @@ export default function Settings() {
       loadData()
     } catch (err) {
       console.error(err)
-      toast({ title: 'Erro ao excluir instrutor', variant: 'destructive' })
+      toast({
+        title: 'Erro ao excluir instrutor',
+        description: getErrorMessage(err),
+        variant: 'destructive',
+      })
     }
   }
 

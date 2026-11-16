@@ -31,7 +31,7 @@ import {
   type EnrollAddressValue,
 } from '@/components/EnrollAddressSection'
 import { compressImage } from '@/lib/imageCompression'
-import { maskCpf, maskPhone } from '@/lib/formatters'
+import { maskCpf, maskPhone, cpfFieldError, CPF_INVALID_MESSAGE } from '@/lib/formatters'
 import {
   FICHA_LEGAL,
   EMPTY_PARQ_DETAILS,
@@ -126,6 +126,10 @@ function calcAge(birthDate: string): number | null {
 function onlyDigits(v: string): string {
   return v.replace(/\D/g, '')
 }
+
+// CPF: erro INLINE no campo, na hora da digitação (assim que os 11 dígitos
+// completam, se os dígitos verificadores não baterem). Bloqueia o envio.
+const isCpfInvalid = (v: string): boolean => cpfFieldError(v) !== ''
 
 export default function PublicEnroll() {
   const [studentName, setStudentName] = useState('')
@@ -313,6 +317,7 @@ export default function PublicEnroll() {
       next.student_photo = `A foto do aluno é muito grande (máximo ${MAX_FILE_MB} MB).`
     if (studentCpf && onlyDigits(studentCpf).length !== 11)
       next.student_cpf = 'CPF do aluno incompleto (11 dígitos).'
+    else if (studentCpf && isCpfInvalid(studentCpf)) next.student_cpf = CPF_INVALID_MESSAGE
     if (studentPhone && onlyDigits(studentPhone).length < 10)
       next.student_phone = 'Telefone incompleto.'
     if (studentEmail && !/^\S+@\S+\.\S+$/.test(studentEmail))
@@ -324,6 +329,8 @@ export default function PublicEnroll() {
         next.guardian_cpf = 'CPF do responsável é obrigatório para menor de 18.'
       } else if (onlyDigits(guardian.cpf).length !== 11) {
         next.guardian_cpf = 'CPF do responsável incompleto (11 dígitos).'
+      } else if (isCpfInvalid(guardian.cpf)) {
+        next.guardian_cpf = CPF_INVALID_MESSAGE
       }
       if (!guardian.phone.trim()) {
         next.guardian_phone = 'Telefone do responsável é obrigatório para menor de 18.'
@@ -346,13 +353,12 @@ export default function PublicEnroll() {
       }
       if (!rgFile)
         next.guardian_rg = 'Anexe a foto/scan do RG do responsável (obrigatório p/ menor).'
-    } else if (
-      !isSelf &&
-      guardian.name.trim() &&
-      onlyDigits(guardian.cpf) &&
-      onlyDigits(guardian.cpf).length !== 11
-    ) {
-      next.guardian_cpf = 'CPF do responsável incompleto (11 dígitos).'
+    } else if (!isSelf && guardian.name.trim() && guardian.cpf.trim()) {
+      if (onlyDigits(guardian.cpf).length !== 11) {
+        next.guardian_cpf = 'CPF do responsável incompleto (11 dígitos).'
+      } else if (isCpfInvalid(guardian.cpf)) {
+        next.guardian_cpf = CPF_INVALID_MESSAGE
+      }
     }
 
     if (activities.length === 0)
@@ -384,6 +390,17 @@ export default function PublicEnroll() {
     e.preventDefault()
     if (submitting) return
 
+    // CPF com dígitos verificadores inválidos BLOQUEIA o envio (valida antes de
+    // ligar o submitting, para o botão não ficar travado com o formulário sujo).
+    if (isCpfInvalid(studentCpf) || isCpfInvalid(guardian.cpf)) {
+      setErrors((er) => ({
+        ...er,
+        ...(isCpfInvalid(studentCpf) ? { student_cpf: CPF_INVALID_MESSAGE } : {}),
+        ...(isCpfInvalid(guardian.cpf) ? { guardian_cpf: CPF_INVALID_MESSAGE } : {}),
+      }))
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+      return
+    }
     setSubmitting(true)
     setSubmitError('')
     try {
@@ -616,10 +633,23 @@ export default function PublicEnroll() {
               <Label className="text-xs font-semibold text-[#1E2A3A]">CPF</Label>
               <Input
                 value={maskCpf(studentCpf)}
-                onChange={(e) => setStudentCpf(e.target.value)}
+                onChange={(e) => {
+                  setStudentCpf(e.target.value)
+                  setErrors((er) => {
+                    const live = cpfFieldError(e.target.value)
+                    const next = { ...er }
+                    if (live) next.student_cpf = live
+                    else delete next.student_cpf
+                    return next
+                  })
+                }}
                 placeholder="000.000.000-00"
+                inputMode="numeric"
                 className={`h-9 text-sm ${errCls('student_cpf')}`}
               />
+              {cpfFieldError(studentCpf) && !errors.student_cpf && (
+                <p className="text-[11px] text-red-600 font-medium">{cpfFieldError(studentCpf)}</p>
+              )}
               <Err field="student_cpf" />
             </div>
           </div>
@@ -851,8 +881,19 @@ export default function PublicEnroll() {
                   </Label>
                   <Input
                     value={maskCpf(guardian.cpf)}
-                    onChange={(e) => setGuardian((g) => ({ ...g, cpf: e.target.value }))}
+                    onChange={(e) => {
+                      const v = e.target.value
+                      setGuardian((g) => ({ ...g, cpf: v }))
+                      setErrors((er) => {
+                        const live = cpfFieldError(v)
+                        const next = { ...er }
+                        if (live) next.guardian_cpf = live
+                        else delete next.guardian_cpf
+                        return next
+                      })
+                    }}
                     placeholder="000.000.000-00"
+                    inputMode="numeric"
                     className={`h-9 text-sm ${errCls('guardian_cpf')}`}
                   />
                   <Err field="guardian_cpf" />

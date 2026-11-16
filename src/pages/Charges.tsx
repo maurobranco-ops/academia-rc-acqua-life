@@ -54,6 +54,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { academyService } from '@/services/academy'
+import { getErrorMessage } from '@/lib/pocketbase/errors'
 import { useRealtime } from '@/hooks/use-realtime'
 import type { ChargeRecord, StudentRecord, PlanRecord } from '@/types/database'
 import { useToast } from '@/hooks/use-toast'
@@ -265,7 +266,7 @@ export default function Charges() {
       setNewModalOpen(false)
       loadData()
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Falha ao emitir cobrança'
+      const msg = getErrorMessage(err)
       toast({
         title: 'Erro ao emitir cobrança',
         description: msg,
@@ -342,7 +343,7 @@ export default function Charges() {
       setSelectedChargeToCancel(null)
       loadData()
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Falha ao cancelar cobrança'
+      const msg = getErrorMessage(err)
       toast({
         title: 'Erro ao cancelar cobrança',
         description: msg,
@@ -387,7 +388,7 @@ export default function Charges() {
       })
       loadData()
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Falha ao disparar mensagem'
+      const msg = getErrorMessage(err)
       toast({
         title: 'Erro ao enviar WhatsApp',
         description: msg,

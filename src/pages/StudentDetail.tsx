@@ -43,6 +43,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { academyService } from '@/services/academy'
+import { getErrorMessage } from '@/lib/pocketbase/errors'
 import type {
   StudentRecord,
   PlanRecord,
@@ -270,6 +271,7 @@ export default function StudentDetail() {
           description: res.message || `O aluno ${student.name} e suas cobranças foram apagados.`,
         })
       } else {
+        // 404 aqui = o registro JÁ foi excluído (ex.: duplo clique): trata como sucesso.
         await academyService.deleteStudent(student.id)
         toast({
           title: 'Aluno removido com sucesso',
@@ -280,7 +282,7 @@ export default function StudentDetail() {
       navigate('/alunos')
     } catch (err: unknown) {
       console.error(err)
-      const msg = err instanceof Error ? err.message : 'Falha ao remover aluno'
+      const msg = getErrorMessage(err) || 'Falha ao remover aluno'
       toast({
         title: 'Erro ao remover aluno',
         description: msg,
@@ -298,7 +300,11 @@ export default function StudentDetail() {
       loadData()
     } catch (err) {
       console.error(err)
-      toast({ title: 'Falha ao desvincular da turma', variant: 'destructive' })
+      toast({
+        title: 'Falha ao desvincular da turma',
+        description: getErrorMessage(err),
+        variant: 'destructive',
+      })
     }
   }
 
@@ -1048,6 +1054,8 @@ export default function StudentDetail() {
       <Dialog
         open={deleteModalOpen}
         onOpenChange={(open) => {
+          // Durante a exclusão o diálogo NÃO fecha (evita duplo disparo do DELETE).
+          if (isDeleting) return
           setDeleteModalOpen(open)
           if (!open) {
             setDeleteWithHistory(false)

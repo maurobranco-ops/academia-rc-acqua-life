@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from 'react'
 import type { RecordModel } from 'pocketbase'
 import pb from '@/lib/pocketbase/client'
 import { academyService } from '@/services/academy'
+import { getErrorMessage } from '@/lib/pocketbase/errors'
 import type { ClassRecord, EnrollmentRequestRecord, StudentRecord } from '@/types/database'
 import {
   PARQ_QUESTIONS,
@@ -278,7 +279,7 @@ export default function EnrollmentsReview() {
       console.error(err)
       toast({
         title: 'Erro ao aprovar inscrição',
-        description: err instanceof Error ? err.message : 'Tente novamente.',
+        description: getErrorMessage(err),
         variant: 'destructive',
       })
     } finally {
@@ -303,7 +304,7 @@ export default function EnrollmentsReview() {
       console.error(err)
       toast({
         title: 'Erro ao recusar inscrição',
-        description: err instanceof Error ? err.message : 'Tente novamente.',
+        description: getErrorMessage(err),
         variant: 'destructive',
       })
     } finally {
