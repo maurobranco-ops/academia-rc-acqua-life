@@ -7,6 +7,43 @@
 // POST /backend/v1/students/delete-with-history
 // Body: { student_id: string, confirmation_name: string }
 // -------------------------------------------------------------
+// -------------------------------------------------------------
+// 0. Cascade: ao excluir um ALUNO, apagar também a ficha de matrícula
+// (enrollment_requests) que o originou, se existir — sem deixar ficha
+// órfã "Aprovada · aluno vinculado" apontando para aluno inexistente.
+// Tolerante: se a ficha já não existir, segue sem erro.
+// -------------------------------------------------------------
+onRecordDelete((e) => {
+  if (e.collection.name !== 'students') {
+    return e.next()
+  }
+  const studentId = e.record.id
+  let fichas = []
+  try {
+    fichas = $app.findRecordsByFilter(
+      'enrollment_requests',
+      "student_id = '" + studentId + "'",
+      '-created',
+      50,
+      0,
+    )
+  } catch (errF) {
+    console.log('[student-cleanup] Erro ao buscar fichas do aluno:', errF)
+    return e.next()
+  }
+  for (let i = 0; i < fichas.length; i++) {
+    try {
+      $app.delete(fichas[i])
+      console.log('[student-cleanup] Ficha de matrícula removida em cascade:', fichas[i].id)
+    } catch (errDel) {
+      // 404 = ficha já excluída — tolerante, segue sem erro
+      console.log('[student-cleanup] Falha ao remover ficha (ignorado):', errDel)
+    }
+  }
+  // Obrigatório: sem e.next() a exclusão do aluno é abortada silenciosamente
+  return e.next()
+}, 'students')
+
 routerAdd('POST', '/backend/v1/students/delete-with-history', (e) => {
   const info = e.requestInfo()
   const body = info.body || {}

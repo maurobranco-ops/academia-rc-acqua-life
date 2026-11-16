@@ -50,6 +50,7 @@ import {
   MapPin,
   Printer,
   RefreshCw,
+  Trash2,
   UserCheck,
   X,
 } from 'lucide-react'
@@ -144,6 +145,10 @@ export default function EnrollmentsReview() {
   const [rejectTarget, setRejectTarget] = useState<EnrollmentRequestRecord | null>(null)
   const [rejectNotes, setRejectNotes] = useState('')
   const [fichaData, setFichaData] = useState<PrintableFichaData | null>(null)
+  // Exclusão de ficha: guarda a inscrição alvo e trava enquanto a exclusão roda
+  // (404 = já excluída, tratado como sucesso pela service tolerante).
+  const [deleteTarget, setDeleteTarget] = useState<EnrollmentRequestRecord | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
   // Aprovação: diálogo que coleta os dados dos DOIS exames (cardiológico e
   // dermatológico) antes de confirmar — a inscrição só traz a declaração.
   const [approveTarget, setApproveTarget] = useState<EnrollmentRequestRecord | null>(null)
@@ -284,6 +289,27 @@ export default function EnrollmentsReview() {
       })
     } finally {
       setBusyId(null)
+    }
+  }
+
+  /** Exclui a ficha alvo — tolerante: 404 já era excluída, segue como sucesso. */
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget || isDeleting) return
+    setIsDeleting(true)
+    try {
+      await academyService.deleteEnrollmentRequest(deleteTarget.id)
+      toast({ title: 'Ficha excluída' })
+      setDeleteTarget(null)
+      await load()
+    } catch (err) {
+      console.error(err)
+      toast({
+        title: 'Erro ao excluir ficha',
+        description: getErrorMessage(err),
+        variant: 'destructive',
+      })
+    } finally {
+      setIsDeleting(false)
     }
   }
 
@@ -543,6 +569,16 @@ export default function EnrollmentsReview() {
           >
             <Printer className="w-4 h-4 mr-1" /> Imprimir ficha
           </Button>
+          {/* Disponível em TODAS as fichas, qualquer status (pedido do usuário). */}
+          <Button
+            variant="outline"
+            size="sm"
+            className="text-xs text-red-600 border-red-300 hover:bg-red-50"
+            disabled={isBusy}
+            onClick={() => setDeleteTarget(r)}
+          >
+            <Trash2 className="w-4 h-4 mr-1" /> Excluir ficha
+          </Button>
           {r.status === 'pendente' && (
             <>
               <Button
@@ -631,6 +667,51 @@ export default function EnrollmentsReview() {
           )}
         </>
       )}
+
+      {/* Diálogo de confirmação de exclusão da ficha — ação definitiva */}
+      <Dialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => {
+          if (!open && !isDeleting) setDeleteTarget(null)
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Excluir ficha</DialogTitle>
+            <DialogDescription>
+              Excluir definitivamente a ficha de <strong>{deleteTarget?.student_name}</strong>? A
+              ação é irreversível: a inscrição e os anexos enviados (foto e RG do responsável) são
+              apagados junto.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={isDeleting}
+              onClick={() => setDeleteTarget(null)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              size="sm"
+              className="bg-red-600 hover:bg-red-700 text-white font-bold"
+              disabled={isDeleting}
+              onClick={handleDeleteConfirm}
+            >
+              {isDeleting ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-1 animate-spin" /> Excluindo...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="w-4 h-4 mr-1" /> Excluir
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Diálogo de recusa com motivo */}
       <Dialog

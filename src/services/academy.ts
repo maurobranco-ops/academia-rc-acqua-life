@@ -125,6 +125,24 @@ export const academyService = {
       /* intentionally ignored */
     }
 
+    // Cascade de ficha de matrícula: se o aluno nasceu de uma ficha enviada pelo
+    // /matricula (enrollment_requests com o student_id gravado na aprovação), a
+    // ficha é apagada junto — sem deixar registro órfão "Aprovada · aluno
+    // vinculado" apontando para aluno inexistente. Tolerante a falha: se a ficha
+    // já não existir (ou o hook servidor já a removeu), segue sem erro.
+    try {
+      const fichas = await pb
+        .collection('enrollment_requests')
+        .getFullList<EnrollmentRequestRecord>({
+          filter: `student_id = "${id}"`,
+        })
+      for (const ficha of fichas) {
+        await this.deleteEnrollmentRequest(ficha.id).catch(() => {})
+      }
+    } catch {
+      /* intentionally ignored — a exclusão do aluno não pode ser bloqueada pela ficha */
+    }
+
     return this._deleteTolerant('students', id)
   },
 
