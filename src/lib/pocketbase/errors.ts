@@ -2,14 +2,6 @@ import { ClientResponseError } from 'pocketbase'
 
 export type FieldErrors = Record<string, string>
 
-/** 404 do PocketBase = o registro já não existe (ex. disparo duplo de exclusão). */
-export function isNotFoundError(error: unknown): boolean {
-  return (
-    error instanceof ClientResponseError &&
-    (error.status === 404 || (error as unknown as { status?: number }).status === 404)
-  )
-}
-
 export function extractFieldErrors(error: unknown): FieldErrors {
   if (!(error instanceof ClientResponseError)) return {}
   const data = error.response?.data
@@ -26,6 +18,12 @@ export function extractFieldErrors(error: unknown): FieldErrors {
     }
   }
   return errors
+}
+
+/** 404 ("recurso não encontrado") não é erro para exclusão tolerante — o
+ * registro já foi apagado (disparo duplo, aba duplicada). */
+export function isNotFoundError(error: unknown): boolean {
+  return error instanceof ClientResponseError && error.status === 404
 }
 
 export function getErrorMessage(error: unknown): string {
