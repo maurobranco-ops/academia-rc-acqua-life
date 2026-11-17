@@ -44,6 +44,46 @@ onRecordDelete((e) => {
   return e.next()
 }, 'students')
 
+// -------------------------------------------------------------
+// 0.1 Cascade: ao excluir um ALUNO, apagar seus vínculos obrigatórios
+// (matrículas em turmas, pagamentos e cobranças). student_id é texto, sem
+// relação no PocketBase; sem isso a exclusão é recusada com "required relation
+// reference". Ordem: pagamentos -> cobranças -> matrículas.
+// Tolerante a 404 (registro já removido). Sempre chama e.next().
+// -------------------------------------------------------------
+onRecordDelete((e) => {
+  if (e.collection.name !== 'students') {
+    return e.next()
+  }
+  const studentId = e.record.id
+  const collections = ['payments', 'charges', 'enrollments']
+  for (let c = 0; c < collections.length; c++) {
+    let rows = []
+    try {
+      rows = $app.findRecordsByFilter(
+        collections[c],
+        "student_id = '" + studentId + "'",
+        '-created',
+        2000,
+        0,
+      )
+    } catch (errFind) {
+      // Nenhum registro encontrado (ou coleção ausente) — segue
+      rows = []
+    }
+    for (let i = 0; i < rows.length; i++) {
+      try {
+        $app.delete(rows[i])
+      } catch (errDel) {
+        // 404 = já excluído — tolerante
+        console.log('[student-cleanup] Falha ao remover vínculo do aluno (ignorado):', errDel)
+      }
+    }
+  }
+  // Obrigatório: sem e.next() a exclusão do aluno é abortada silenciosamente
+  return e.next()
+}, 'students')
+
 routerAdd('POST', '/backend/v1/students/delete-with-history', (e) => {
   const info = e.requestInfo()
   const body = info.body || {}

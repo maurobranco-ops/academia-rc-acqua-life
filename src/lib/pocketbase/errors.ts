@@ -20,13 +20,6 @@ export function extractFieldErrors(error: unknown): FieldErrors {
   return errors
 }
 
-/** True quando o erro é um 404 do PocketBase (registro já excluído / não existe). */
-export function isNotFoundError(error: unknown): boolean {
-  return (
-    error instanceof ClientResponseError && (error.status === 404 || error.response?.code === 404)
-  )
-}
-
 export function getErrorMessage(error: unknown): string {
   if (!(error instanceof ClientResponseError)) {
     return error instanceof Error ? error.message : 'An unexpected error occurred.'

@@ -851,25 +851,20 @@ export default function Classes() {
       <Dialog open={detailModalOpen} onOpenChange={setDetailModalOpen}>
         <DialogContent className="sm:max-w-[650px] bg-white rounded-2xl">
           <DialogHeader>
-            <div className="flex items-center justify-between pr-6">
-              <div>
-                <DialogTitle className="text-xl font-bold text-[#0F1B3D]">
-                  {selectedClass?.name}
-                </DialogTitle>
-                <DialogDescription className="text-xs text-[#6C757D]">
-                  Instrutor: {selectedClass?.expand?.instructor_id?.name || 'Geral'} • Horário:{' '}
-                  {selectedClass?.schedule_time}
-                </DialogDescription>
-              </div>
-              <Badge className="bg-[#0F1B3D] text-[#D4AF37] font-bold uppercase text-[10px]">
-                {selectedClass?.type}
-              </Badge>
+            <div className="pr-6">
+              <DialogTitle className="text-xl font-bold text-[#0F1B3D]">
+                {selectedClass?.name}
+              </DialogTitle>
+              <DialogDescription className="text-xs text-[#6C757D]">
+                Instrutor: {selectedClass?.expand?.instructor_id?.name || 'Geral'} • Horário:{' '}
+                {selectedClass?.schedule_time}
+              </DialogDescription>
             </div>
           </DialogHeader>
 
           <div className="py-4 space-y-4">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-bold text-[#1E2A3A]">
+            <div className="flex flex-col gap-2 min-w-0">
+              <span className="text-sm font-bold text-[#1E2A3A] break-words">
                 Alunos Matriculados (
                 {selectedClassEnrollments.active.length + selectedClassEnrollments.inactive.length}{' '}
                 de {selectedClass?.capacity})
@@ -877,7 +872,7 @@ export default function Classes() {
               <Button
                 size="sm"
                 onClick={() => setAddStudentModalOpen(true)}
-                className="bg-[#17A2B8] hover:bg-[#138496] text-white text-xs font-bold h-8 rounded-lg flex items-center gap-1.5"
+                className="self-start bg-[#17A2B8] hover:bg-[#138496] text-white text-xs font-bold h-8 rounded-lg flex items-center gap-1.5"
               >
                 <UserPlus className="w-3.5 h-3.5" /> Adicionar Aluno
               </Button>
@@ -895,9 +890,6 @@ export default function Classes() {
               <div className="space-y-4">
                 {/* Bloco 1: alunos ativos (inclui "Isento" — mensalidade congelada) */}
                 <div>
-                  <p className="text-sm font-bold text-[#1E2A3A] mb-2">
-                    Alunos Matriculados ({selectedClassEnrollments.active.length})
-                  </p>
                   {selectedClassEnrollments.active.length === 0 ? (
                     <p className="text-xs text-[#6C757D] italic px-3 py-3 border border-dashed rounded-xl border-[#E0E4EA]">
                       Nenhum aluno ativo matriculado nesta turma.
