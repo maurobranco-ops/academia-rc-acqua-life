@@ -1,5 +1,5 @@
 import pb from '@/lib/pocketbase/client'
-import { isNotFoundError } from '@/lib/pocketbase/errors'
+import { isNotFoundError, translateBackendMessage } from '@/lib/pocketbase/errors'
 import type {
   PlanRecord,
   InstructorRecord,
@@ -12,6 +12,21 @@ import type {
   SettingRecord,
   EnrollmentRequestRecord,
 } from '@/types/database'
+
+/**
+ * Erro lançado quando a rota servidor /backend/v1/students/delete-with-history
+ * ESTÁ no ar e respondeu (status != 2xx) com mensagem já traduzida. Diferencia
+ * "rota respondeu erro" de "rota indisponível" — o deleteStudent só usa o
+ * fallback cliente no segundo caso, para nunca duplicar DELETEs.
+ */
+export class RouteRespondedError extends Error {
+  status: number
+  constructor(message: string, status: number) {
+    super(message)
+    this.name = 'RouteRespondedError'
+    this.status = status
+  }
+}
 
 export const academyService = {
   /**
@@ -112,10 +127,44 @@ export const academyService = {
     }
     return pb.collection('students').update<StudentRecord>(id, formData)
   },
+  /**
+   * Exclusão simples de aluno (botão "Confirmar Exclusão", sem histórico).
+   *
+   * Usa a MESMA rota robusta do servidor POST /backend/v1/students/delete-with-history
+   * (cascade atômico de matrículas, cobranças, pagamentos e fichas dentro de uma
+   * transação) — o DELETE direto na API do PocketBase é recusado com
+   * "required relation reference" (student_id é relação OBRIGATÓRIA em
+   * enrollments/charges/payments). O nome de confirmação exigido pela rota é
+   * lido do PRÓPRIO registro (getOne), então a chamada nunca diverge.
+   *
+   * - 404 no aluno: já excluído (ex. disparo duplo) → sucesso.
+   * - Rota respondeu com erro: repropaga JÁ TRADUZIDO (nunca mensagem crua).
+   * - Rota indisponível (falha de rede): fallback cliente — cascade completo
+   *   (pagamentos -> cobranças -> matrículas -> fichas) antes do DELETE do aluno.
+   */
   async deleteStudent(id: string): Promise<boolean> {
-    // Cascade financeiro: pagamentos -> cobranças -> matrículas. student_id é texto
-    // (sem relação no PocketBase); o hook servidor (student_cleanup.js) faz o mesmo,
-    // este é o fallback do cliente. Tolerante a 404.
+    // O nome de confirmação vem do próprio registro. 404 aqui = aluno já excluído.
+    let studentName = ''
+    try {
+      const student = await pb.collection('students').getOne<StudentRecord>(id)
+      studentName = student.name || ''
+    } catch (err) {
+      if (isNotFoundError(err)) return true
+      throw err
+    }
+
+    try {
+      await this.deleteStudentWithHistory(id, studentName)
+      return true
+    } catch (routeErr) {
+      if (routeErr instanceof RouteRespondedError) {
+        // A rota ESTÁ no ar e respondeu com erro (ex.: falha da transação).
+        // Repropaga — a mensagem já vem traduzida para português.
+        throw routeErr
+      }
+      // Rota indisponível (falha de rede/DNS/CORS): fallback cliente abaixo.
+    }
+
     for (const collection of ['payments', 'charges', 'enrollments'] as const) {
       try {
         const rows = await pb.collection(collection).getFullList<{ id: string }>({
@@ -169,6 +218,7 @@ export const academyService = {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        Authorization: pb.authStore.token,
       },
       body: JSON.stringify({
         student_id: studentId,
@@ -178,11 +228,18 @@ export const academyService = {
 
     const data = await response.json().catch(() => ({}))
     if (!response.ok) {
-      throw new Error(data.message || `Erro HTTP ${response.status} ao excluir aluno com histórico`)
+      // Qualquer resposta do servidor (mesmo erro) prova que a rota está no ar:
+      // marca com RouteRespondedError para o deleteStudent NÃO rodar o fallback
+      // cliente nesses casos. Mensagem sempre traduzida para português.
+      throw new RouteRespondedError(
+        translateBackendMessage(
+          data.message || `Erro HTTP ${response.status} ao excluir aluno com histórico`,
+        ),
+        response.status,
+      )
     }
     return data
   },
-
   async previewSampleDataCleanup(): Promise<{
     success: boolean
     summary: {
