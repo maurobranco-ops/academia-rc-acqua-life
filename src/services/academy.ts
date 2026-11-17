@@ -113,16 +113,20 @@ export const academyService = {
     return pb.collection('students').update<StudentRecord>(id, formData)
   },
   async deleteStudent(id: string): Promise<boolean> {
-    // Exclui matrículas vinculadas primeiro se houver
-    try {
-      const enrollments = await pb.collection('enrollments').getFullList<EnrollmentRecord>({
-        filter: `student_id = "${id}"`,
-      })
-      for (const enr of enrollments) {
-        await this.deleteEnrollment(enr.id).catch(() => {})
+    // Cascade financeiro: pagamentos -> cobranças -> matrículas. student_id é texto
+    // (sem relação no PocketBase); o hook servidor (student_cleanup.js) faz o mesmo,
+    // este é o fallback do cliente. Tolerante a 404.
+    for (const collection of ['payments', 'charges', 'enrollments'] as const) {
+      try {
+        const rows = await pb.collection(collection).getFullList<{ id: string }>({
+          filter: `student_id = "${id}"`,
+        })
+        for (const row of rows) {
+          await this._deleteTolerant(collection, row.id).catch(() => {})
+        }
+      } catch {
+        /* intentionally ignored — a exclusão do aluno não pode ser bloqueada aqui */
       }
-    } catch {
-      /* intentionally ignored */
     }
 
     // Cascade de ficha de matrícula: se o aluno nasceu de uma ficha enviada pelo

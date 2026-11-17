@@ -20,6 +20,15 @@ export function extractFieldErrors(error: unknown): FieldErrors {
   return errors
 }
 
+/**
+ * Verdadeiro quando o PocketBase respondeu 404 (registro inexistente / já excluído).
+ * Usado para tratar DELETE repetido como sucesso.
+ */
+export function isNotFoundError(error: unknown): boolean {
+  if (error instanceof ClientResponseError) return error.status === 404
+  return false
+}
+
 export function getErrorMessage(error: unknown): string {
   if (!(error instanceof ClientResponseError)) {
     return error instanceof Error ? error.message : 'An unexpected error occurred.'

@@ -82,7 +82,7 @@ function ClassEnrollmentRow({ enrollment, onOpenStudent, onRemove }: ClassEnroll
           onOpenStudent()
         }
       }}
-      className="p-3 flex items-center justify-between hover:bg-slate-50 cursor-pointer transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#17A2B8]"
+      className="p-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 hover:bg-slate-50 cursor-pointer transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#17A2B8]"
       title="Abrir ficha do aluno"
     >
       <div className="flex items-center gap-2.5 min-w-0">
@@ -849,7 +849,7 @@ export default function Classes() {
       {/* Class Detail / Students Enrolled Modal */}
       {/* ============================================================== */}
       <Dialog open={detailModalOpen} onOpenChange={setDetailModalOpen}>
-        <DialogContent className="sm:max-w-[650px] bg-white rounded-2xl">
+        <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-[650px] bg-white rounded-2xl">
           <DialogHeader>
             <div className="pr-6">
               <DialogTitle className="text-xl font-bold text-[#0F1B3D]">
