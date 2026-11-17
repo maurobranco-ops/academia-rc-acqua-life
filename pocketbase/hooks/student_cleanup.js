@@ -14,7 +14,23 @@
 // Tolerante: se a ficha já não existir, segue sem erro.
 // -------------------------------------------------------------
 onRecordDelete((e) => {
-  if (e.collection.name !== 'students') {
+  // Guarda defensiva: dentro da transação da rota delete-with-history, o
+  // PocketBase pode entregar o evento sem e.collection populado — ler o nome
+  // da coleção pelo próprio registro (e.record.collection().name) e só
+  // então comparar. Nunca acessar e.collection.name diretamente.
+  // Sintaxe ES5 (sem optional chaining) para o goja do PocketBase.
+  var collectionName = ''
+  try {
+    if (e.record && e.record.collection && e.record.collection()) {
+      collectionName = e.record.collection().name || ''
+    }
+  } catch (errColl) {
+    collectionName = ''
+  }
+  if (!collectionName && e.collection && e.collection.name) {
+    collectionName = e.collection.name
+  }
+  if (collectionName !== 'students') {
     return e.next()
   }
   const studentId = e.record.id
@@ -52,7 +68,21 @@ onRecordDelete((e) => {
 // Tolerante a 404 (registro já removido). Sempre chama e.next().
 // -------------------------------------------------------------
 onRecordDelete((e) => {
-  if (e.collection.name !== 'students') {
+  // Guarda defensiva (mesma razão do handler acima): e.collection pode chegar
+  // undefined dentro da transação da rota — usar e.record.collection().name.
+  // Sintaxe ES5 (sem optional chaining) para o goja do PocketBase.
+  var collectionName = ''
+  try {
+    if (e.record && e.record.collection && e.record.collection()) {
+      collectionName = e.record.collection().name || ''
+    }
+  } catch (errColl) {
+    collectionName = ''
+  }
+  if (!collectionName && e.collection && e.collection.name) {
+    collectionName = e.collection.name
+  }
+  if (collectionName !== 'students') {
     return e.next()
   }
   const studentId = e.record.id

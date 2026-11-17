@@ -25,42 +25,42 @@ export function getErrorMessage(error: unknown): string {
     return error instanceof Error ? error.message : 'An unexpected error occurred.'
   }
   const msgs = Object.values(extractFieldErrors(error))
-  return msgs.length > 0 ? msgs.join(' ') : translateBackendMessage(error.message)
+  return msgs.length > 0 ? msgs.join(' ') : error.message || 'An unexpected error occurred.'
 }
 
 /**
- * 404 tolerante: o registro já não existe (exclusão dupla, aba duplicada,
- * disparo concorrente). Não é falha do usuário — significa que o resultado
- * desejado já aconteceu.
+ * 404 do PocketBase = o registro já não existe. Nas exclusões tolerantes isso
+ * é SUCESSO (registro já removido por outro caminho ou duplo clique), nunca erro.
  */
 export function isNotFoundError(error: unknown): boolean {
   return error instanceof ClientResponseError && error.status === 404
 }
 
 /**
- * Traduz mensagens cruas do PocketBase/servidor para português. Mensagens que
- * já chegam em português (rotas próprias) passam intocadas.
+ * Traduz para português as mensagens cruas que o PocketBase/devolve de rotas
+ * e validações de campo. O que já está em português passa intacto.
  */
-const MESSAGE_TRANSLATIONS: Array<[RegExp, string]> = [
-  [/the requested resource wasn'?t found/i, 'Registro não encontrado.'],
-  [
-    /make sure that the record (?:is|exists)/i,
-    'O registro não pôde ser excluído ou atualizado — verifique se ainda existe.',
-  ],
-  [/failed to delete record/i, 'Falha ao excluir o registro no banco de dados.'],
-  [
-    /required relation reference/i,
-    'Existem registros vinculados a este aluno que impedem a exclusão.',
-  ],
-  [/cannot be blank/i, 'Campo obrigatório em branco.'],
-  [/validation_not_unique/i, 'Este valor já está em uso por outro registro.'],
-]
+const TRANSLATIONS: Record<string, string> = {
+  'Failed to delete record. Make sure that the record is not referenced by other collections.':
+    'Falha ao remover o registro: ele ainda é referenciado por outros cadastros (turmas, cobranças ou pagamentos).',
+  'Cannot be blank': 'Campo obrigatório não preenchido.',
+  'The request is valid but the record could not be saved':
+    'A requisição é válida, mas o registro não pôde ser salvo.',
+  'Validation not passed': 'Validação não passou.',
+  'Something went wrong while processing your request':
+    'Algo deu errado ao processar sua requisição.',
+  'Insufficient permissions': 'Permissões insuficientes.',
+}
 
-export function translateBackendMessage(message: string | undefined | null): string {
+export function translateBackendMessage(message: string): string {
   const raw = String(message || '').trim()
-  if (!raw) return 'Ocorreu um erro inesperado. Tente novamente.'
-  for (const [pattern, translated] of MESSAGE_TRANSLATIONS) {
-    if (pattern.test(raw)) return translated
+  if (!raw) return 'Ocorreu um erro inesperado no servidor.'
+  const direct = TRANSLATIONS[raw]
+  if (direct) return direct
+
+  // Mensagens de validação "field: message" — traduz o trecho conhecido.
+  for (const [en, pt] of Object.entries(TRANSLATIONS)) {
+    if (raw.indexOf(en) !== -1) return raw.replace(en, pt)
   }
   return raw
 }
