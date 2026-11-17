@@ -209,6 +209,21 @@ routerAdd('POST', '/backend/v1/students/delete-with-history', (e) => {
     })
   }
 
+  // PROVA de que a exclusão foi efetivada: só responde sucesso se o registro
+  // realmente não existir mais. Nunca responder 200 sem exclusão no banco.
+  try {
+    $app.findRecordById('students', studentId)
+    // Se chegou aqui, o registro AINDA existe — a exclusão não aconteceu.
+    console.log('[delete-with-history] CRÍTICO: aluno ainda existe após transação:', studentId)
+    return e.json(500, {
+      success: false,
+      message:
+        'Não foi possível excluir o aluno — nenhuma alteração foi feita. Tente novamente ou contate o suporte.',
+    })
+  } catch (_) {
+    // Aluno não encontrado = exclusão efetivada. Fluxo normal.
+  }
+
   return e.json(200, {
     success: true,
     message: `Aluno ${realName} e todo o seu histórico financeiro foram excluídos permanentemente.`,

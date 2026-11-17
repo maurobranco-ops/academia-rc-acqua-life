@@ -20,55 +20,47 @@ export function extractFieldErrors(error: unknown): FieldErrors {
   return errors
 }
 
-// Tradução de erros crus do backend (inglês) para mensagens em português.
-// Usada em exclusões e outras operações para que o usuário NUNCA veja
-// mensagens como "Failed to delete record ... required relation reference".
-const PT_MESSAGES: Array<[RegExp, string]> = [
-  [
-    /required relation reference|failed to delete record/i,
-    'Não foi possível remover: o registro ainda está vinculado a outros dados (matrículas, cobranças ou pagamentos). Use a opção de excluir também o histórico financeiro.',
-  ],
-  [
-    /requested resource wasn'?t found|doesn'?t exist/i,
-    'Registro não encontrado — ele já deve ter sido excluído.',
-  ],
-  [
-    /unauthorized|authentication required|missing or invalid .*token/i,
-    'Sessão expirada. Faça login novamente.',
-  ],
-  [
-    /forbidden|only admins can perform this action/i,
-    'Você não tem permissão para executar esta ação.',
-  ],
-  [
-    /failed to fetch|networkerror|load failed/i,
-    'Falha de conexão com o servidor. Verifique sua internet e tente novamente.',
-  ],
-]
-
-export function isNotFoundError(error: unknown): boolean {
-  if (!(error instanceof ClientResponseError)) return false
-  const status = (error as { status?: number }).status
-  if (status === 404) return true
-  // PocketBase às vezes devolve 400 com essa mensagem em operações de exclusão
-  return /requested resource wasn'?t found/i.test(error.message || '')
-}
-
-export function translateBackendMessage(message: string): string {
-  for (const [re, pt] of PT_MESSAGES) {
-    if (re.test(message)) return pt
-  }
-  return message
-}
-
 export function getErrorMessage(error: unknown): string {
   if (!(error instanceof ClientResponseError)) {
-    return translateBackendMessage(
-      error instanceof Error ? error.message : 'Ocorreu um erro inesperado.',
-    )
+    return error instanceof Error ? error.message : 'An unexpected error occurred.'
   }
   const msgs = Object.values(extractFieldErrors(error))
-  return translateBackendMessage(
-    msgs.length > 0 ? msgs.join(' ') : error.message || 'Ocorreu um erro inesperado.',
-  )
+  return msgs.length > 0 ? msgs.join(' ') : translateBackendMessage(error.message)
+}
+
+/**
+ * 404 tolerante: o registro já não existe (exclusão dupla, aba duplicada,
+ * disparo concorrente). Não é falha do usuário — significa que o resultado
+ * desejado já aconteceu.
+ */
+export function isNotFoundError(error: unknown): boolean {
+  return error instanceof ClientResponseError && error.status === 404
+}
+
+/**
+ * Traduz mensagens cruas do PocketBase/servidor para português. Mensagens que
+ * já chegam em português (rotas próprias) passam intocadas.
+ */
+const MESSAGE_TRANSLATIONS: Array<[RegExp, string]> = [
+  [/the requested resource wasn'?t found/i, 'Registro não encontrado.'],
+  [
+    /make sure that the record (?:is|exists)/i,
+    'O registro não pôde ser excluído ou atualizado — verifique se ainda existe.',
+  ],
+  [/failed to delete record/i, 'Falha ao excluir o registro no banco de dados.'],
+  [
+    /required relation reference/i,
+    'Existem registros vinculados a este aluno que impedem a exclusão.',
+  ],
+  [/cannot be blank/i, 'Campo obrigatório em branco.'],
+  [/validation_not_unique/i, 'Este valor já está em uso por outro registro.'],
+]
+
+export function translateBackendMessage(message: string | undefined | null): string {
+  const raw = String(message || '').trim()
+  if (!raw) return 'Ocorreu um erro inesperado. Tente novamente.'
+  for (const [pattern, translated] of MESSAGE_TRANSLATIONS) {
+    if (pattern.test(raw)) return translated
+  }
+  return raw
 }

@@ -266,19 +266,29 @@ export default function StudentDetail() {
     try {
       if (deleteWithHistory) {
         const res = await academyService.deleteStudentWithHistory(student.id, confirmationNameInput)
+        // A rota só responde success:true com o registro confirmadamente removido
+        // (validação pós-transação no servidor). Sem isso, trata como falha.
+        if (!res.success) {
+          throw new Error(
+            res.message ||
+              'Não foi possível excluir o aluno — nenhuma alteração foi feita. Tente novamente ou contate o suporte.',
+          )
+        }
         toast({
-          title: 'Aluno e histórico excluídos!',
-          description: res.message || `O aluno ${student.name} e suas cobranças foram apagados.`,
+          title: 'Aluno excluído com sucesso',
+          description: `O registro de ${student.name} e todo o histórico financeiro foram apagados permanentemente.`,
         })
       } else {
         // 404 aqui = o registro JÁ foi excluído (ex.: duplo clique): trata como sucesso.
         await academyService.deleteStudent(student.id)
         toast({
-          title: 'Aluno removido com sucesso',
+          title: 'Aluno excluído com sucesso',
           description: `O registro de ${student.name} foi excluído permanentemente.`,
         })
       }
       setDeleteModalOpen(false)
+      setDeleteWithHistory(false)
+      setConfirmationNameInput('')
       navigate('/alunos')
     } catch (err: unknown) {
       console.error(err)

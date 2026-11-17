@@ -680,19 +680,26 @@ export default function Students() {
           studentToDeleteId,
           confirmationNameInput,
         )
+        // A rota só responde success:true com o registro confirmadamente removido
+        // (validação pós-transação no servidor). Sem isso, trata como falha.
+        if (!res.success) {
+          throw new Error(
+            res.message ||
+              'Não foi possível excluir o aluno — nenhuma alteração foi feita. Tente novamente ou contate o suporte.',
+          )
+        }
         // Atualização instantânea em memória: remove o aluno da lista
         setStudents((prev) => prev.filter((s) => s.id !== studentToDeleteId))
         toast({
-          title: 'Aluno e histórico excluídos!',
-          description:
-            res.message || `Aluno ${selectedStudent.name} e suas cobranças foram apagados.`,
+          title: 'Aluno excluído com sucesso',
+          description: `O registro de ${selectedStudent.name} e todo o histórico financeiro foram apagados permanentemente.`,
         })
       } else {
         await academyService.deleteStudent(studentToDeleteId)
         // Atualização instantânea em memória: remove o aluno da lista
         setStudents((prev) => prev.filter((s) => s.id !== studentToDeleteId))
         toast({
-          title: 'Aluno removido com sucesso',
+          title: 'Aluno excluído com sucesso',
           description: `O registro de ${selectedStudent.name} foi excluído permanentemente.`,
         })
       }
