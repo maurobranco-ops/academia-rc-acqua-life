@@ -1072,6 +1072,7 @@ export default function PublicEnroll() {
             6. Termo de ciência — {FICHA_LEGAL.law}
           </h2>{' '}
           <p className="text-xs text-slate-600 leading-relaxed">{FICHA_LEGAL.riskTerm}</p>
+          <p className="text-xs text-slate-600 leading-relaxed">{FICHA_LEGAL.scienceTerm}</p>
           <p className="text-xs text-slate-600 leading-relaxed">
             <strong>Normas da academia:</strong> Conforme {FICHA_LEGAL.law}, é obrigatória a
             apresentação do atestado cardiológico e do exame médico dermatológico, com validade de 6

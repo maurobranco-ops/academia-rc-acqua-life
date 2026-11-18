@@ -344,6 +344,9 @@ export function FichaSheet({ data, studentId }: { data: PrintableFichaData; stud
           <strong>Termo de ciência de riscos:</strong> {FICHA_LEGAL.riskTerm}
         </p>
         <p className="text-[11px] leading-relaxed text-slate-700 text-justify">
+          <strong>Termo de ciência:</strong> {FICHA_LEGAL.scienceTerm}
+        </p>
+        <p className="text-[11px] leading-relaxed text-slate-700 text-justify">
           <strong>Normas da academia:</strong> {FICHA_LEGAL.rules}
         </p>
         <p className="text-[11px] leading-relaxed text-slate-700 text-justify">

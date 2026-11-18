@@ -16,7 +16,7 @@ export const PARQ_QUESTIONS: ParqQuestion[] = [
   { key: 'parq_2', text: 'Você sente dor no peito quando pratica atividade física?' },
   {
     key: 'parq_3',
-    text: 'No último mês, você sentiu dor no peito quando praticou atividade física sem estar praticando?',
+    text: 'Você sentiu dor no peito no último mês sem praticar atividade física?',
   },
   {
     key: 'parq_4',
@@ -148,6 +148,8 @@ export const FICHA_LEGAL = {
     'Conforme a Lei Estadual nº 9.863/2012-PB: atestado cardiológico e exame médico dermatológico obrigatórios, com validade de 6 (seis) meses.',
   riskTerm:
     'Declaro estar ciente de que a prática de natação/hidroginástica envolve riscos inerentes à atividade física em meio aquático, e me comprometo a informar à academia qualquer alteração de saúde que venha a ocorrer durante o período de matrícula.',
+  scienceTerm:
+    'Estou ciente das propostas da professora Carmem Rachel Bezerra Campos, e informo ter ciência dos meus direitos e responsabilidades quanto a usuário dos serviços prestados por ela e assumo a veracidade das informações prestadas no questionário "PAR Q"',
   rules:
     'Autorizo a participação do aluno(a) nas atividades da academia e me comprometo a cumprir as normas internas: uso de touca e traje de banho adequados, ducha obrigatória antes de entrar na piscina, pontualidade nos horários das aulas, e comunicação prévia em caso de falta ou de restrição médica.',
   lgpd: 'Autorização de uso de imagem (LGPD — Lei nº 13.709/2018): concorda com o uso da imagem do(a) aluno(a) em fotos e vídeos institucionais da academia (redes sociais e divulgação)?',
