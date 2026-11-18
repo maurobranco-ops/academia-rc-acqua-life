@@ -130,7 +130,7 @@ export function PrintableFichaDialog({
       setSigned(true)
       toast({
         title: 'Assinatura registrada!',
-        description: `Ficha de ${data.studentName} assinada em ${new Date().toLocaleDateString('pt-BR')} — pendência de reimpressão removida.`,
+        description: `Ficha de ${data.name} assinada em ${new Date().toLocaleDateString('pt-BR')} — pendência de reimpressão removida.`,
       })
       onSignatureRegistered?.()
     } catch (err) {
