@@ -111,8 +111,34 @@ export const academyService = {
   async createStudent(data: Partial<StudentRecord>): Promise<StudentRecord> {
     return pb.collection('students').create<StudentRecord>(data)
   },
+  /**
+   * Atualização de cadastro de aluno: SEMPRE marca ficha_pendente = true —
+   * qualquer alteração no cadastro desatualiza a ficha impressa, que precisa
+   * ser reimpressa para nova assinatura (controle de reimpressão, migration 0030).
+   * Exceção: registrarAssinaturaFicha, que precisa limpar o pendente sem
+   * remarcá-lo — por isso este método não deve ser usado para esse fluxo.
+   */
   async updateStudent(id: string, data: Partial<StudentRecord> | FormData): Promise<StudentRecord> {
-    return pb.collection('students').update<StudentRecord>(id, data)
+    const dataWithFlag: Partial<StudentRecord> | FormData =
+      data instanceof FormData
+        ? (data.append('ficha_pendente', 'true'), data)
+        : { ...data, ficha_pendente: true }
+    return pb.collection('students').update<StudentRecord>(id, dataWithFlag)
+  },
+
+  /**
+   * Registro de assinatura da ficha impressa (botão "Registrar assinatura" no
+   * diálogo da ficha): grava ficha_assinada_em = data de hoje e limpa
+   * ficha_pendente — SEM passar pelo updateStudent (que remarcaria o pendente).
+   */
+  async registrarAssinaturaFicha(id: string): Promise<StudentRecord> {
+    const today = new Date()
+    const pad = (n: number) => String(n).padStart(2, '0')
+    const todayStr = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`
+    return pb.collection('students').update<StudentRecord>(id, {
+      ficha_assinada_em: `${todayStr} 00:00:00.000Z`,
+      ficha_pendente: false,
+    })
   },
   async uploadStudentPhoto(
     id: string,
@@ -125,6 +151,8 @@ export const academyService = {
     } else {
       formData.append('photo_file', file, filename || 'photo.jpg')
     }
+    // A foto consta na ficha impressa: upload de foto também desatualiza a ficha.
+    formData.append('ficha_pendente', 'true')
     return pb.collection('students').update<StudentRecord>(id, formData)
   },
   /**

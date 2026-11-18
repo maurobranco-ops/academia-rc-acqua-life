@@ -82,6 +82,7 @@ import {
 } from '@/lib/matricula'
 import { MatriculaExamsSection, MatriculaHealthSection } from '@/components/MatriculaFormSections'
 import { PrintableFichaDialog, studentToPrintable } from '@/components/PrintableFicha'
+import { FichaPendenteBadge } from '@/components/FichaPendenteBadge'
 
 // Rota de retorno à ficha do aluno após a edição aberta a partir do detalhe.
 // O botão "Voltar para Turma" da ficha é derivado dos dados de matrícula do aluno
@@ -1094,6 +1095,7 @@ export default function Students() {
                                 >
                                   {getStudentStatusDisplay(st).label}
                                 </Badge>
+                                {st.ficha_pendente && <FichaPendenteBadge />}
                                 {studentClasses.length > 0 && (
                                   <span className="text-[11px] text-[#6C757D]">
                                     Turma: <strong>{studentClasses.join(', ')}</strong>
@@ -1523,6 +1525,7 @@ export default function Students() {
                                 <Badge className={getStudentStatusDisplay(st).badgeClass}>
                                   {getStudentStatusDisplay(st).label}
                                 </Badge>
+                                {st.ficha_pendente && <FichaPendenteBadge />}
                                 {st.guardian_name && (
                                   <span className="text-[11px] text-[#6C757D]">
                                     Resp: <strong>{st.guardian_name}</strong>
@@ -2296,6 +2299,18 @@ export default function Students() {
         onOpenChange={setFichaOpen}
         data={selectedStudent ? studentToPrintable(selectedStudent) : null}
         studentId={selectedStudent?.id}
+        onSignatureRegistered={async () => {
+          if (!selectedStudent) return
+          try {
+            const updated = await academyService.getStudent(selectedStudent.id)
+            setSelectedStudent({ ...selectedStudent, ...updated })
+            setStudents((prev) =>
+              prev.map((s) => (s.id === selectedStudent.id ? { ...s, ...updated } : s)),
+            )
+          } catch (err) {
+            console.error(err)
+          }
+        }}
       />
 
       {/* ============================================================== */}

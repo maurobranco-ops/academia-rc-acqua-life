@@ -882,6 +882,7 @@ export default function EnrollmentsReview() {
           if (!open) setFichaData(null)
         }}
         data={fichaData}
+        /* ficha de inscrição (ainda não é aluno cadastrado): botão fica desabilitado */
       />
     </div>
   )

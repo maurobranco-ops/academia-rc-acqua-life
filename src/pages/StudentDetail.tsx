@@ -59,6 +59,7 @@ import { getStudentPhotoUrl } from '@/lib/studentPhoto'
 import { formatPhoneDisplay } from '@/lib/formatters'
 import { getStudentStatusDisplay } from '@/lib/studentStatus'
 import { StudentHealthTab } from '@/components/StudentHealthTab'
+import { FichaPendenteBadge } from '@/components/FichaPendenteBadge'
 
 export default function StudentDetail() {
   const { id } = useParams<{ id: string }>()
@@ -527,6 +528,7 @@ export default function StudentDetail() {
                   const st = getStudentStatusDisplay(student)
                   return <Badge className={st.badgeClass}>{st.label}</Badge>
                 })()}
+                {student.ficha_pendente && <FichaPendenteBadge />}
                 {student.situation === 'atestado' && (
                   <Badge
                     variant="outline"

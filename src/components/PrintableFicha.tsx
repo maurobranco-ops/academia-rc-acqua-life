@@ -13,11 +13,19 @@
 //    #ficha-print-root, que fica NO FLUXO NORMAL do body — conteúdo
 //    multipáginas (termo, normas, assinaturas) paginado pelo navegador, sem
 //    position:absolute (que corta após a 1ª folha no Chrome).
+//
+// Controle de reimpressão (migration 0030): o botão "Registrar assinatura"
+// grava ficha_assinada_em = hoje e limpa ficha_pendente do aluno — nunca pela
+// academyService.updateStudent, que remarcaria o pendente (ver comentario do
+// método). Opcional (onSignatureRegistered) para quem quiser recarregar a lista.
 
 import { createRoot, type Root } from 'react-dom/client'
 import { flushSync } from 'react-dom'
+import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { Printer, X } from 'lucide-react'
+import { PenLine, Printer, X } from 'lucide-react'
+import { useToast } from '@/hooks/use-toast'
+import { academyService } from '@/services/academy'
 import {
   FichaSheet,
   requestToPrintable,
@@ -90,13 +98,52 @@ export function PrintableFichaDialog({
   onOpenChange,
   data,
   studentId,
+  onSignatureRegistered,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   data: PrintableFichaData | null
   studentId?: string
+  /** Chamado após a assinatura ser gravada (para o chamador recarregar o aluno). */
+  onSignatureRegistered?: () => void
 }) {
+  const { toast } = useToast()
+  const [signing, setSigning] = useState(false)
+  const [signed, setSigned] = useState(false)
+
+  // O diálogo fica montado entre aberturas: ao fechar, limpa o estado para a
+  // próxima ficha (de outro aluno) reabrir com o botão "Registrar assinatura" ativo.
+  useEffect(() => {
+    if (!open) {
+      setSigned(false)
+      setSigning(false)
+    }
+  }, [open])
+
   if (!open || !data) return null
+
+  const handleRegisterSignature = async () => {
+    if (!studentId || signing) return
+    setSigning(true)
+    try {
+      await academyService.registrarAssinaturaFicha(studentId)
+      setSigned(true)
+      toast({
+        title: 'Assinatura registrada!',
+        description: `Ficha de ${data.studentName} assinada em ${new Date().toLocaleDateString('pt-BR')} — pendência de reimpressão removida.`,
+      })
+      onSignatureRegistered?.()
+    } catch (err) {
+      console.error(err)
+      toast({
+        title: 'Erro ao registrar assinatura',
+        description: err instanceof Error ? err.message : 'Tente novamente.',
+        variant: 'destructive',
+      })
+    } finally {
+      setSigning(false)
+    }
+  }
 
   return (
     <div className="ficha-overlay fixed inset-0 z-[70] bg-black/60 overflow-y-auto p-4">
@@ -112,6 +159,21 @@ export function PrintableFichaDialog({
           <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>
             <X className="w-4 h-4 mr-1" />
             Fechar
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="border-emerald-300 text-emerald-700 hover:bg-emerald-50 font-bold"
+            disabled={!studentId || signing || signed}
+            onClick={handleRegisterSignature}
+            title={
+              studentId
+                ? 'Grava a data de hoje como assinatura da ficha e remove a pendência de reimpressão.'
+                : 'Disponível apenas para fichas de alunos já cadastrados.'
+            }
+          >
+            <PenLine className="w-4 h-4 mr-1" />
+            {signed ? 'Assinatura registrada' : signing ? 'Registrando...' : 'Registrar assinatura'}
           </Button>
           <Button
             size="sm"

@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-18T00:48:53.951Z",
+  "generatedAt": "2026-11-18T02:11:41.633Z",
   "collections": [
     {
       "name": "users",
@@ -543,6 +543,18 @@
         {
           "name": "parq_8_detail",
           "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "ficha_assinada_em",
+          "type": "date",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "ficha_pendente",
+          "type": "bool",
           "required": false,
           "system": false
         }

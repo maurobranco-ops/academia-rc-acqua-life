@@ -83,6 +83,11 @@ export interface StudentRecord extends RecordModel {
   uso_imagem_autorizado?: 'sim' | 'nao'
   // Referência das preferências escolhidas na matrícula on-line (migration 0023)
   observacoes_matricula?: string
+  // Controle de reimpressão da ficha de matrícula (migration 0030):
+  // ficha_assinada_em = data da última assinatura da ficha impressa;
+  // ficha_pendente = cadastro editado e ficha precisa ser reimpressa.
+  ficha_assinada_em?: string
+  ficha_pendente?: boolean
   expand?: {
     plan_id?: PlanRecord
   }

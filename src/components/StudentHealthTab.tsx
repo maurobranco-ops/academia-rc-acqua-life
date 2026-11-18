@@ -395,6 +395,8 @@ export function StudentHealthTab({ student, onSaved }: StudentHealthTabProps) {
         open={fichaOpen}
         onOpenChange={setFichaOpen}
         data={studentToPrintable(student)}
+        studentId={student.id}
+        onSignatureRegistered={onSaved}
       />
     </div>
   )
