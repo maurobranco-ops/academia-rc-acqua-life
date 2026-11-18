@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-17T23:51:56.237Z",
+  "generatedAt": "2026-11-18T00:04:23.094Z",
   "collections": [
     {
       "name": "users",
@@ -530,6 +530,18 @@
         },
         {
           "name": "observacoes_matricula",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "parq_8",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "parq_8_detail",
           "type": "text",
           "required": false,
           "system": false
@@ -1491,6 +1503,18 @@
         {
           "name": "due_day",
           "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "parq_8",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "parq_8_detail",
+          "type": "text",
           "required": false,
           "system": false
         }
