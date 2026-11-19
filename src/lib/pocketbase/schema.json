@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-19T19:06:30.599Z",
+  "generatedAt": "2026-11-19T20:03:23.912Z",
   "collections": [
     {
       "name": "users",
@@ -29,14 +29,19 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         }
       ],
       "indexes": [
@@ -84,14 +89,19 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         }
       ],
       "indexes": []
@@ -130,7 +140,11 @@
           "type": "select",
           "required": false,
           "system": false,
-          "selectValues": ["natacao", "hidroginastica", "ambos"]
+          "selectValues": [
+            "natacao",
+            "hidroginastica",
+            "ambos"
+          ]
         },
         {
           "name": "is_active",
@@ -143,14 +157,19 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         }
       ],
       "indexes": []
@@ -214,21 +233,29 @@
           "type": "select",
           "required": false,
           "system": false,
-          "selectValues": ["ativo", "inativo"]
+          "selectValues": [
+            "ativo",
+            "inativo"
+          ]
         },
         {
           "name": "created",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         },
         {
           "name": "bubble_id",
@@ -391,7 +418,10 @@
           "type": "select",
           "required": false,
           "system": false,
-          "selectValues": ["entregue", "pendente"]
+          "selectValues": [
+            "entregue",
+            "pendente"
+          ]
         },
         {
           "name": "dermato_date",
@@ -404,7 +434,10 @@
           "type": "select",
           "required": false,
           "system": false,
-          "selectValues": ["entregue", "pendente"]
+          "selectValues": [
+            "entregue",
+            "pendente"
+          ]
         },
         {
           "name": "parq_1",
@@ -483,7 +516,10 @@
           "type": "select",
           "required": false,
           "system": false,
-          "selectValues": ["sim", "nao"]
+          "selectValues": [
+            "sim",
+            "nao"
+          ]
         },
         {
           "name": "guardian_rg_file",
@@ -508,7 +544,10 @@
           "type": "select",
           "required": false,
           "system": false,
-          "selectValues": ["entregue", "pendente"]
+          "selectValues": [
+            "entregue",
+            "pendente"
+          ]
         },
         {
           "name": "parq_5_detail",
@@ -604,7 +643,11 @@
           "type": "select",
           "required": true,
           "system": false,
-          "selectValues": ["natacao", "hidroginastica", "funcional"]
+          "selectValues": [
+            "natacao",
+            "hidroginastica",
+            "funcional"
+          ]
         },
         {
           "name": "instructor_id",
@@ -618,7 +661,15 @@
           "type": "select",
           "required": false,
           "system": false,
-          "selectValues": ["seg", "ter", "qua", "qui", "sex", "sab", "dom"]
+          "selectValues": [
+            "seg",
+            "ter",
+            "qua",
+            "qui",
+            "sex",
+            "sab",
+            "dom"
+          ]
         },
         {
           "name": "schedule_time",
@@ -649,14 +700,19 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         }
       ],
       "indexes": []
@@ -703,14 +759,19 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         }
       ],
       "indexes": [
@@ -759,14 +820,25 @@
           "type": "select",
           "required": false,
           "system": false,
-          "selectValues": ["em_aberto", "paga", "vencida", "cancelada"]
+          "selectValues": [
+            "em_aberto",
+            "paga",
+            "vencida",
+            "cancelada"
+          ]
         },
         {
           "name": "payment_method",
           "type": "select",
           "required": false,
           "system": false,
-          "selectValues": ["pix", "cartao", "boleto", "dinheiro", "transferencia"]
+          "selectValues": [
+            "pix",
+            "cartao",
+            "boleto",
+            "dinheiro",
+            "transferencia"
+          ]
         },
         {
           "name": "infinipay_payment_id",
@@ -785,14 +857,19 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         },
         {
           "name": "discount_amount",
@@ -931,14 +1008,26 @@
           "type": "select",
           "required": false,
           "system": false,
-          "selectValues": ["pendente", "pago", "vencido", "cancelado", "reembolsado"]
+          "selectValues": [
+            "pendente",
+            "pago",
+            "vencido",
+            "cancelado",
+            "reembolsado"
+          ]
         },
         {
           "name": "payment_method",
           "type": "select",
           "required": false,
           "system": false,
-          "selectValues": ["pix", "cartao", "boleto", "dinheiro", "transferencia"]
+          "selectValues": [
+            "pix",
+            "cartao",
+            "boleto",
+            "dinheiro",
+            "transferencia"
+          ]
         },
         {
           "name": "payment_link",
@@ -957,14 +1046,19 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         },
         {
           "name": "discount_amount",
@@ -1028,7 +1122,10 @@
           "type": "select",
           "required": true,
           "system": false,
-          "selectValues": ["receita", "despesa"]
+          "selectValues": [
+            "receita",
+            "despesa"
+          ]
         },
         {
           "name": "description",
@@ -1067,14 +1164,23 @@
           "type": "select",
           "required": false,
           "system": false,
-          "selectValues": ["pix", "cartao", "boleto", "dinheiro", "transferencia"]
+          "selectValues": [
+            "pix",
+            "cartao",
+            "boleto",
+            "dinheiro",
+            "transferencia"
+          ]
         },
         {
           "name": "status",
           "type": "select",
           "required": false,
           "system": false,
-          "selectValues": ["confirmado", "pendente"]
+          "selectValues": [
+            "confirmado",
+            "pendente"
+          ]
         },
         {
           "name": "notes",
@@ -1087,14 +1193,19 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         }
       ],
       "indexes": [
@@ -1130,17 +1241,24 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         }
       ],
-      "indexes": ["CREATE UNIQUE INDEX idx_settings_key ON settings (key)"]
+      "indexes": [
+        "CREATE UNIQUE INDEX idx_settings_key ON settings (key)"
+      ]
     },
     {
       "name": "webhook_events",
@@ -1206,14 +1324,19 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         }
       ],
       "indexes": [
@@ -1375,7 +1498,11 @@
           "type": "select",
           "required": true,
           "system": false,
-          "selectValues": ["pendente", "aprovada", "recusada"]
+          "selectValues": [
+            "pendente",
+            "aprovada",
+            "recusada"
+          ]
         },
         {
           "name": "review_notes",
@@ -1394,14 +1521,19 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         },
         {
           "name": "cep",
@@ -1468,14 +1600,20 @@
           "type": "select",
           "required": false,
           "system": false,
-          "selectValues": ["entregue", "pendente"]
+          "selectValues": [
+            "entregue",
+            "pendente"
+          ]
         },
         {
           "name": "exams_delivered",
           "type": "select",
           "required": false,
           "system": false,
-          "selectValues": ["sim", "nao"]
+          "selectValues": [
+            "sim",
+            "nao"
+          ]
         },
         {
           "name": "parq_5_detail",
@@ -1500,28 +1638,40 @@
           "type": "select",
           "required": false,
           "system": false,
-          "selectValues": ["sim", "nao"]
+          "selectValues": [
+            "sim",
+            "nao"
+          ]
         },
         {
           "name": "exams_dermato_delivered",
           "type": "select",
           "required": false,
           "system": false,
-          "selectValues": ["sim", "nao"]
+          "selectValues": [
+            "sim",
+            "nao"
+          ]
         },
         {
           "name": "term_agreed",
           "type": "select",
           "required": false,
           "system": false,
-          "selectValues": ["sim", "nao"]
+          "selectValues": [
+            "sim",
+            "nao"
+          ]
         },
         {
           "name": "activities",
           "type": "select",
           "required": false,
           "system": false,
-          "selectValues": ["natacao", "hidroginastica"]
+          "selectValues": [
+            "natacao",
+            "hidroginastica"
+          ]
         },
         {
           "name": "preferred_classes",
