@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-19T02:44:25.666Z",
+  "generatedAt": "2026-11-19T18:49:34.065Z",
   "collections": [
     {
       "name": "users",
@@ -567,6 +567,12 @@
         {
           "name": "atualizacao_vista_pelo_admin",
           "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "termo_ciencia_aceito_em",
+          "type": "date",
           "required": false,
           "system": false
         }

@@ -1,58 +1,42 @@
-// GUARDA (v0.0.86): este arquivo já perdeu exports e quebrou builds 4+ vezes —
-// academy.ts importa isNotFoundError e translateBackendMessage na linha 2.
-// PRESERVE estes exports ao editar.
-
 import { ClientResponseError } from 'pocketbase'
 
 export type FieldErrors = Record<string, string>
 
-/**
- * True quando o erro é um 404 do PocketBase — "não encontrado" costuma ser
- * resultado desejado (ex.: delete tolerante a disparo duplo).
- */
+// Guard: NÃO remover estes exports — src/services/academy.ts importa ambos e
+// builds já quebraram várias vezes por esse sumiço (ver memória do projeto).
+/** Verdadeiro quando o erro do PocketBase é 404 ("recurso não encontrado"). */
 export function isNotFoundError(error: unknown): boolean {
-  if (!(error instanceof ClientResponseError)) return false
-  return error.status === 404
+  return error instanceof ClientResponseError && error.status === 404
 }
 
-const BACKEND_MESSAGE_TRANSLATIONS: Array<{ test: RegExp; message: string }> = [
-  { test: /Failed to authenticate/i, message: 'Sessão expirada. Faça login novamente.' },
-  {
-    test: /The request requires valid authentication token/i,
-    message: 'Sessão expirada. Faça login novamente.',
-  },
-  {
-    test: /Missing or invalid authorization token/i,
-    message: 'Sessão expirada. Faça login novamente.',
-  },
-  {
-    test: /You are not allowed to perform this request/i,
-    message: 'Você não tem permissão para esta ação.',
-  },
-  { test: /The requested resource wasn't found/i, message: 'Registro não encontrado.' },
-  { test: /Validation not less than/i, message: 'Valor menor que o mínimo permitido.' },
-  { test: /Validation not greater than/i, message: 'Valor maior que o máximo permitido.' },
-  { test: /Validation min string constraint/i, message: 'Valor muito curto.' },
-  { test: /Validation max string constraint/i, message: 'Valor muito longo.' },
-  { test: /Validation required/i, message: 'Campo obrigatório não preenchido.' },
-  { test: /Cannot be blank/i, message: 'Campo obrigatório não preenchido.' },
-  { test: /must be a valid email/i, message: 'E-mail inválido.' },
-  { test: /must be a valid URL/i, message: 'URL inválida.' },
-  { test: /value must be unique/i, message: 'Este valor já está cadastrado.' },
-  { test: /Failed to create record/i, message: 'Não foi possível salvar o registro.' },
-  { test: /Failed to update record/i, message: 'Não foi possível atualizar o registro.' },
+const PT_BR_TRANSLATIONS: Array<[RegExp, string]> = [
+  [/The requested resource wasn'?t found/i, 'Registro não encontrado.'],
+  [/Failed to create record/i, 'Não foi possível criar o registro.'],
+  [/Failed to update record/i, 'Não foi possível atualizar o registro.'],
+  [/Failed to delete record/i, 'Não foi possível excluir o registro.'],
+  [/validation not null/i, 'Campo obrigatório não preenchido.'],
+  [/cannot be blank/i, 'Campo obrigatório não preenchido.'],
+  [/value must be a valid email/i, 'E-mail inválido.'],
+  [/missing required context/i, 'Sessão expirada — faça login novamente.'],
+  [
+    /The request requires valid record authorization token/i,
+    'Sessão expirada — faça login novamente.',
+  ],
+  [
+    /Autentication|authentication required|authorization token/i,
+    'Sessão expirada — faça login novamente.',
+  ],
+  [/unique constraint/i, 'Este registro já existe (valor duplicado).'],
 ]
 
-/**
- * Traduz mensagens cruas do backend PocketBase para português, preservando o
- * texto original quando não há tradução conhecida.
- */
+/** Traduz mensagens cruas do backend (inglês) para português legível ao usuário. */
 export function translateBackendMessage(message: string): string {
-  if (!message) return message
-  for (const { test, message: translated } of BACKEND_MESSAGE_TRANSLATIONS) {
-    if (test.test(message)) return translated
+  if (!message) return 'Ocorreu um erro inesperado.'
+  let out = message
+  for (const [pattern, pt] of PT_BR_TRANSLATIONS) {
+    if (pattern.test(out)) return pt
   }
-  return message
+  return out
 }
 
 export function extractFieldErrors(error: unknown): FieldErrors {

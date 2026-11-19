@@ -7,6 +7,8 @@
 //    devolve o aluno com SOMENTE os campos editáveis/exibíveis permitidos.
 //  - POST   /backend/v1/update-link/{token}        → salva os campos permitidos, marca
 //    ficha_pendente=true, grava atualizado_pelo_aluno_em e incrementa used_count.
+//    EXIGE term_ciencia_aceito = true no body (termo de ciência obrigatório na página
+//    pública) e grava students.termo_ciencia_aceito_em com a data/hora do aceite.
 //
 // IMPORTANTE (JSVM do PocketBase / goja): funções top-level deste arquivo NÃO são
 // visíveis dentro dos callbacks das rotas — todo o código auxiliar está EMBUTIDO
@@ -189,6 +191,16 @@ routerAdd('POST', '/backend/v1/update-link/{token}', (e) => {
   const info = e.requestInfo()
   const body = info.body || {}
 
+  // Termo de ciência OBRIGATÓRIO (mesmos textos da matrícula): o envio só é aceito
+  // com o aceite explícito — servidor é a última barreira contra envio sem a caixa.
+  if (body.term_ciencia_aceito !== true) {
+    return e.json(400, {
+      success: false,
+      message:
+        'Marque a caixa "Li e concordo com o termo de ciência" antes de enviar a atualização.',
+    })
+  }
+
   // INLINE: só é válido se existe, não revogado e expires_at no futuro.
   let found = null
   try {
@@ -319,6 +331,8 @@ routerAdd('POST', '/backend/v1/update-link/{token}', (e) => {
   student.set('atualizacao_vista_pelo_admin', false)
   const nowIso = new Date().toISOString().replace('T', ' ').substring(0, 19) + '.000Z'
   student.set('atualizado_pelo_aluno_em', nowIso)
+  // Aceite do termo de ciência (migration 0033): data/hora gravada no cadastro do aluno.
+  student.set('termo_ciencia_aceito_em', nowIso)
 
   try {
     e.app.save(student)

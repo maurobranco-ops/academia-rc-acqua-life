@@ -11,6 +11,7 @@ import { useParams } from 'react-router-dom'
 import { Loader2, Lock, ShieldCheck, Send, XCircle, Clock, Pencil } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
+import { Checkbox } from '@/components/ui/checkbox'
 import { LogoMark } from '@/components/Logo'
 import {
   ParqSection,
@@ -35,6 +36,7 @@ import {
   type ParqKey,
   type AnamneseKey,
   type ParqDetailKey,
+  FICHA_LEGAL,
 } from '@/lib/matricula'
 import type { StudentRecord } from '@/types/database'
 
@@ -65,6 +67,7 @@ export default function PublicUpdate() {
   const [parqDetails, setParqDetails] = useState({ ...EMPTY_PARQ_DETAILS })
   const [anamnese, setAnamnese] = useState({ ...EMPTY_ANAMNESE })
   const [usoImagem, setUsoImagem] = useState<'sim' | 'nao' | ''>('')
+  const [termoCiencia, setTermoCiencia] = useState(false)
   const [address, setAddress] = useState<EnrollAddressValue>({ ...EMPTY_ADDRESS })
   const [cardioDate, setCardioDate] = useState('')
   const [cardioCrm, setCardioCrm] = useState('')
@@ -131,6 +134,9 @@ export default function PublicUpdate() {
     }
     if (!isFilled(anamnese.anamnese_objetivo)) errs.anamnese_objetivo = 'Informe o objetivo.'
     if (!usoImagem) errs.uso_imagem_autorizado = 'Autorize ou não o uso da imagem.'
+    if (!termoCiencia) {
+      errs.termo_ciencia = 'Marque a caixa "Li e concordo com o termo de ciência" — é obrigatória.'
+    }
     setErrors(errs)
     return Object.keys(errs).length === 0
   }
@@ -158,6 +164,7 @@ export default function PublicUpdate() {
             aptidao_status: cardioStatus,
             dermato_date: dermatoDate,
             dermato_status: dermatoStatus,
+            term_ciencia_aceito: termoCiencia,
             cep: address.cep,
             street: address.street,
             street_number: address.street_number,
@@ -308,6 +315,56 @@ export default function PublicUpdate() {
             {errors.uso_imagem_autorizado && (
               <p className="text-[10px] text-red-600 font-medium">{errors.uso_imagem_autorizado}</p>
             )}
+          </div>
+
+          {/* Termo de riscos + termo de ciência (professora Carmem Rachel) — mesmos
+             textos da matrícula (FICHA_LEGAL), logo após a seção de uso de imagem. */}
+          <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-2 shadow-sm">
+            <h2 className="text-sm font-bold text-[#0F1B3D]">
+              Termo de ciência — {FICHA_LEGAL.law}
+            </h2>
+            <div className="space-y-1.5">
+              <p className="text-xs font-bold text-[#1E2A3A]">Termo de ciência de riscos</p>
+              <p className="text-xs text-slate-600 leading-relaxed">{FICHA_LEGAL.riskTerm}</p>
+            </div>
+            <div className="space-y-1.5">
+              <p className="text-xs font-bold text-[#1E2A3A]">Termo de ciência</p>
+              <p className="text-xs text-slate-600 leading-relaxed">{FICHA_LEGAL.scienceTerm}</p>
+            </div>
+            <div
+              className={`flex items-start gap-2 rounded-lg p-2.5 border ${
+                errors.termo_ciencia ? 'border-red-300 bg-red-50' : 'bg-slate-50 border-slate-200'
+              }`}
+            >
+              <Checkbox
+                id="termo-ciencia-aceito"
+                checked={termoCiencia}
+                onCheckedChange={(v) => {
+                  setTermoCiencia(v === true)
+                  if (v === true) {
+                    setErrors((prev) => {
+                      const clean = { ...prev }
+                      delete clean.termo_ciencia
+                      return clean
+                    })
+                  }
+                }}
+              />
+              <div className="space-y-0.5">
+                <Label
+                  htmlFor="termo-ciencia-aceito"
+                  className="text-xs font-semibold text-[#1E2A3A]"
+                >
+                  Li e concordo com o termo de ciência acima <span className="text-red-600">*</span>
+                </Label>
+                <p className="text-[10px] text-slate-500">
+                  Concordância obrigatória para enviar a atualização — {FICHA_LEGAL.law}.
+                </p>
+                {errors.termo_ciencia && (
+                  <p className="text-[10px] text-red-600 font-medium">{errors.termo_ciencia}</p>
+                )}
+              </div>
+            </div>
           </div>
 
           <MatriculaExamsSection
