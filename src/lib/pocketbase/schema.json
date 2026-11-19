@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-19T00:50:28.269Z",
+  "generatedAt": "2026-11-19T01:33:55.610Z",
   "collections": [
     {
       "name": "users",
@@ -555,6 +555,12 @@
         {
           "name": "ficha_pendente",
           "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "atualizado_pelo_aluno_em",
+          "type": "date",
           "required": false,
           "system": false
         }
@@ -1532,6 +1538,54 @@
         }
       ],
       "indexes": []
+    },
+    {
+      "name": "student_update_tokens",
+      "type": "base",
+      "apiRules": {
+        "list": null,
+        "view": null,
+        "create": null,
+        "update": null,
+        "delete": null
+      },
+      "fields": [
+        {
+          "name": "student_id",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "students"
+        },
+        {
+          "name": "token",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "expires_at",
+          "type": "date",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "revoked",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "used_count",
+          "type": "number",
+          "required": false,
+          "system": false
+        }
+      ],
+      "indexes": [
+        "CREATE UNIQUE INDEX idx_token_unique ON student_update_tokens (token)",
+        "CREATE INDEX idx_token_student ON student_update_tokens (student_id)"
+      ]
     }
   ]
 }
