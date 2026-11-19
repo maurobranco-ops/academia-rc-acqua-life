@@ -213,6 +213,8 @@ interface ParqSectionProps {
   onDetailChange?: (key: ParqDetailKey, v: string) => void
   /** Avisos de validação por chave de detalhe (ex.: "SIM" sem descrição). */
   detailErrors?: Partial<Record<ParqDetailKey, string>>
+  /** Erros de obrigatoriedade por chave de pergunta (ex.: parq_1 sem Sim/Não). */
+  errors?: Record<string, string>
 }
 
 /** Perguntas do PAR-Q que aceitam resposta escrita quando a resposta é "SIM". */
@@ -228,6 +230,7 @@ export function ParqSection({
   details,
   onDetailChange,
   detailErrors,
+  errors,
 }: ParqSectionProps) {
   return (
     <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2.5">
@@ -248,7 +251,7 @@ export function ParqSection({
             >
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
                 <span className="text-[11px] text-[#1E2A3A] sm:pr-3">
-                  <strong>{i + 1}.</strong> {q.text}
+                  <strong>{i + 1}.</strong> {q.text} <span className="text-red-600">*</span>
                 </span>
                 <div className="shrink-0">
                   <YesNoPicker
@@ -258,6 +261,9 @@ export function ParqSection({
                   />
                 </div>
               </div>
+              {errors?.[q.key] && (
+                <p className="text-[10px] text-red-600 font-medium">{errors[q.key]}</p>
+              )}
               {detailKey && values[q.key] === PARQ_YES && onDetailChange && details && (
                 <div className="space-y-1 pt-0.5">
                   <Label
@@ -296,9 +302,11 @@ export function ParqSection({
 interface AnamneseSectionProps {
   values: Partial<Record<AnamneseKey, string>>
   onChange: (key: AnamneseKey, v: string) => void
+  /** Erros de obrigatoriedade por chave da anamnese. */
+  errors?: Record<string, string>
 }
 
-export function AnamneseSection({ values, onChange }: AnamneseSectionProps) {
+export function AnamneseSection({ values, onChange, errors }: AnamneseSectionProps) {
   return (
     <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2.5">
       <div className="text-xs font-bold text-[#0F1B3D]">Anamnese Aquática</div>
@@ -308,7 +316,9 @@ export function AnamneseSection({ values, onChange }: AnamneseSectionProps) {
             key={q.key}
             className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 bg-white border border-slate-200 rounded-lg px-2.5 py-2"
           >
-            <span className="text-[11px] text-[#1E2A3A] sm:pr-3">{q.text}</span>
+            <span className="text-[11px] text-[#1E2A3A] sm:pr-3">
+              {q.text} <span className="text-red-600">*</span>
+            </span>
             <div className="shrink-0">
               <YesNoPicker
                 name={q.key}
@@ -316,27 +326,46 @@ export function AnamneseSection({ values, onChange }: AnamneseSectionProps) {
                 onChange={(v) => onChange(q.key, v)}
               />
             </div>
+            {errors?.[q.key] && (
+              <p className="text-[10px] text-red-600 font-medium">{errors[q.key]}</p>
+            )}
           </div>
         ))}
         <div className="bg-white border border-slate-200 rounded-lg px-2.5 py-2 space-y-1">
-          <Label className="text-[11px] font-semibold text-[#1E2A3A]">Medicamentos em uso</Label>
+          <Label className="text-[11px] font-semibold text-[#1E2A3A]">
+            Medicamentos em uso <span className="text-red-600">*</span>
+          </Label>
           <Input
-            placeholder="Ex: Losartana 50mg (ou deixe em branco)"
+            placeholder="Ex: Losartana 50mg (Nenhum, caso não utilize)"
             value={values.anamnese_medicamentos || ''}
             onChange={(e) => onChange('anamnese_medicamentos', e.target.value)}
-            className="h-8 text-xs focus-visible:ring-[#D4AF37]"
+            className={`h-8 text-xs ${
+              errors?.anamnese_medicamentos
+                ? 'border-red-500 focus-visible:ring-red-500'
+                : 'focus-visible:ring-[#D4AF37]'
+            }`}
           />
+          {errors?.anamnese_medicamentos && (
+            <p className="text-[10px] text-red-600 font-medium">{errors.anamnese_medicamentos}</p>
+          )}
         </div>
         <div className="bg-white border border-slate-200 rounded-lg px-2.5 py-2 space-y-1">
           <Label className="text-[11px] font-semibold text-[#1E2A3A]">
-            Objetivo com a atividade escolhida
+            Objetivo com a atividade escolhida <span className="text-red-600">*</span>
           </Label>
           <Input
             placeholder="Ex: saúde, recreação, performance..."
             value={values.anamnese_objetivo || ''}
             onChange={(e) => onChange('anamnese_objetivo', e.target.value)}
-            className="h-8 text-xs focus-visible:ring-[#D4AF37]"
+            className={`h-8 text-xs ${
+              errors?.anamnese_objetivo
+                ? 'border-red-500 focus-visible:ring-red-500'
+                : 'focus-visible:ring-[#D4AF37]'
+            }`}
           />
+          {errors?.anamnese_objetivo && (
+            <p className="text-[10px] text-red-600 font-medium">{errors.anamnese_objetivo}</p>
+          )}
         </div>
       </div>
     </div>

@@ -315,11 +315,13 @@ export default function PublicEnroll() {
       next.student_photo = 'A foto do aluno deve ser uma imagem (JPG, PNG etc.).'
     if (photoFile && photoFile.size > MAX_FILE_MB * 1024 * 1024)
       next.student_photo = `A foto do aluno é muito grande (máximo ${MAX_FILE_MB} MB).`
-    if (studentCpf && onlyDigits(studentCpf).length !== 11)
+    // CPF e telefone do aluno agora são OBRIGATÓRIOS (e-mail continua opcional).
+    if (!studentCpf.trim()) next.student_cpf = 'Informe o CPF do aluno.'
+    else if (onlyDigits(studentCpf).length !== 11)
       next.student_cpf = 'CPF do aluno incompleto (11 dígitos).'
-    else if (studentCpf && isCpfInvalid(studentCpf)) next.student_cpf = CPF_INVALID_MESSAGE
-    if (studentPhone && onlyDigits(studentPhone).length < 10)
-      next.student_phone = 'Telefone incompleto.'
+    else if (isCpfInvalid(studentCpf)) next.student_cpf = CPF_INVALID_MESSAGE
+    if (!studentPhone.trim()) next.student_phone = 'Informe o telefone do aluno.'
+    else if (onlyDigits(studentPhone).length < 10) next.student_phone = 'Telefone incompleto.'
     if (studentEmail && !/^\S+@\S+\.\S+$/.test(studentEmail))
       next.student_email = 'E-mail inválido.'
 
@@ -360,6 +362,16 @@ export default function PublicEnroll() {
         next.guardian_cpf = CPF_INVALID_MESSAGE
       }
     }
+
+    // Endereço: CEP, rua, número, bairro, cidade e UF OBRIGATÓRIOS
+    // (somente o complemento fica opcional).
+    if (!address.cep.trim()) next.cep = 'Informe o CEP.'
+    else if (onlyDigits(address.cep).length !== 8) next.cep = 'CEP incompleto (8 dígitos).'
+    if (!address.street.trim()) next.street = 'Informe a rua / logradouro.'
+    if (!address.street_number.trim()) next.street_number = 'Informe o número.'
+    if (!address.neighborhood.trim()) next.neighborhood = 'Informe o bairro.'
+    if (!address.city.trim()) next.city = 'Informe a cidade.'
+    if (!address.uf.trim()) next.uf = 'Informe a UF.'
 
     if (activities.length === 0)
       next.activities = 'Marque ao menos uma atividade pretendida (Natação e/ou Hidroginástica).'
@@ -446,6 +458,7 @@ export default function PublicEnroll() {
         payload[k] = anamnese[k]
       })
       if (usoImagem) payload.uso_imagem_autorizado = usoImagem
+      else payload.uso_imagem_autorizado = ''
 
       // FOTO do aluno (photo_file) + RG do responsável (guardian_rg_file) no MESMO
       // POST de criação — com a foto no create, o backend valida tudo de uma vez
