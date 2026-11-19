@@ -10,7 +10,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { academyService } from '@/services/academy'
 import { formatDateBR } from '@/lib/matricula'
@@ -29,10 +28,12 @@ interface StudentUpdatesDialogProps {
 }
 
 /**
- * Painel "Atualizações" de /alunos: lista os alunos que se atualizaram pelo
- * próprio link seguro (/atualizar/TOKEN), ordenados do mais recente para o mais
- * antigo — mesmo padrão visual do painel de solicitações de /matriculas.
- * Abrir a lista marca as atualizações como vistas pelo admin (zera o badge).
+ * FILA DE PENDÊNCIAS do painel "Atualizações" de /alunos: somente alunos cuja
+ * atualização ainda não foi lida pelo admin (atualizacao_vista_pelo_admin =
+ * false — o filtro vem do getStudentUpdates). Quem já foi lido, ou teve a
+ * assinatura da ficha registrada, sai da lista. Mesmo padrão visual do painel
+ * de solicitações de /matriculas. Abrir a lista marca as pendências como
+ * vistas pelo admin (zera o badge da navegação).
  */
 export function StudentUpdatesDialog({
   open,
@@ -77,8 +78,8 @@ export function StudentUpdatesDialog({
             Atualizações de alunos
           </DialogTitle>
           <DialogDescription>
-            Alunos que enviaram atualização do próprio cadastro pelo link seguro, da mais recente
-            para a mais antiga. Ao ler, o aviso da navegação é encerrado.
+            Alunos com atualização pendente de leitura — enviada pelo próprio link seguro, da mais
+            recente para a mais antiga. Ler ou registrar a assinatura da ficha encerra o aviso.
           </DialogDescription>
         </DialogHeader>
 
@@ -88,13 +89,12 @@ export function StudentUpdatesDialog({
           </div>
         ) : updated.length === 0 ? (
           <div className="py-10 text-center text-sm text-slate-500 border border-dashed border-slate-300 rounded-xl">
-            Nenhum aluno se atualizou pelo link seguro até agora.
+            Nenhuma atualização pendente.
           </div>
         ) : (
           <div className="space-y-2 max-h-[55vh] overflow-y-auto pr-1">
             {updated.map((s) => {
               const photoUrl = getStudentPhotoUrl(s)
-              const seen = s.atualizacao_vista_pelo_admin !== false
               return (
                 <button
                   key={s.id}
@@ -116,11 +116,6 @@ export function StudentUpdatesDialog({
                       Atualizado pelo aluno em {formatDateBR(s.atualizado_pelo_aluno_em)}
                     </p>
                   </div>
-                  {!seen && (
-                    <Badge className="bg-sky-100 text-sky-800 border-sky-300 text-[10px] font-bold shrink-0">
-                      Nova
-                    </Badge>
-                  )}
                 </button>
               )
             })}

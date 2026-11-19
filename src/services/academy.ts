@@ -813,14 +813,17 @@ export const academyService = {
   // ============================================================
 
   /**
-   * Lista dos alunos que se atualizaram pelo próprio link seguro
-   * (/atualizar/TOKEN) — o campo atualizado_pelo_aluno_em é gravado pelo hook
-   * de servidor student_update_link.js. Ordenado do mais recente ao mais antigo.
+   * FILA DE PENDÊNCIAS: alunos que se atualizaram pelo próprio link seguro
+   * (/atualizar/TOKEN) e cuja atualização ainda NÃO foi lida pelo admin
+   * (atualizacao_vista_pelo_admin = false — quem já foi lido, ou teve a
+   * assinatura registrada, sai da lista). O campo atualizado_pelo_aluno_em é
+   * gravado pelo hook de servidor student_update_link.js. Ordenado do mais
+   * recente ao mais antigo. Mesmo critério do countUnseenStudentUpdates.
    */
   async getStudentUpdates(): Promise<StudentRecord[]> {
     return pb.collection('students').getFullList<StudentRecord>({
       sort: '-atualizado_pelo_aluno_em',
-      filter: 'atualizado_pelo_aluno_em != ""',
+      filter: 'atualizado_pelo_aluno_em != "" && atualizacao_vista_pelo_admin = false',
     })
   },
 

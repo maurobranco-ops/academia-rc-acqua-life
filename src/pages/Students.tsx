@@ -296,7 +296,8 @@ export default function Students() {
     } catch (err) {
       console.error(err)
     }
-    setUpdatedStudents((prev) => prev.map((s) => ({ ...s, atualizacao_vista_pelo_admin: true })))
+    // A lista é uma FILA de pendências: o que foi lido sai dela imediatamente.
+    setUpdatedStudents([])
   }
 
   useEffect(() => {
