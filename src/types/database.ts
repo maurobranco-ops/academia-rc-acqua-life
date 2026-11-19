@@ -88,6 +88,8 @@ export interface StudentRecord extends RecordModel {
   // ficha_pendente = cadastro editado e ficha precisa ser reimpressa.
   ficha_assinada_em?: string
   ficha_pendente?: boolean
+  /** Data da última atualização enviada pelo próprio aluno (link seguro /atualizar). */
+  atualizado_pelo_aluno_em?: string
   expand?: {
     plan_id?: PlanRecord
   }

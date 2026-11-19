@@ -18,6 +18,7 @@ import {
   Sparkles,
   Edit,
   Ban,
+  Link2,
 } from 'lucide-react'
 import {
   DropdownMenu,
@@ -1217,6 +1218,15 @@ export default function StudentDetail() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Diálogo do link seguro de atualização (autocadastro do aluno sem login) */}
+      {student && (
+        <UpdateLinkDialog
+          student={student}
+          open={updateLinkOpen}
+          onOpenChange={setUpdateLinkOpen}
+        />
+      )}
     </div>
   )
 }

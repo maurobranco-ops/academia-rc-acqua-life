@@ -5,6 +5,7 @@ import { ProtectedRoute } from '@/components/ProtectedRoute'
 import Layout from '@/components/Layout'
 
 // Pages
+import PublicUpdate from '@/pages/PublicUpdate'
 import Index from '@/pages/Index'
 import Classes from '@/pages/Classes'
 import Students from '@/pages/Students'
@@ -41,6 +42,9 @@ export default function App() {
 
           {/* Public enrollment form (Lei 9.863/2012-PB) — sem login */}
           <Route path="/matricula" element={<PublicEnroll />} />
+
+          {/* Autocadastro do aluno por link seguro (sem login) */}
+          <Route path="/atualizar/:token" element={<PublicUpdate />} />
 
           {/* Protected Routes inside Global Layout */}
           <Route
