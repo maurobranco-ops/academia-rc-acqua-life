@@ -26,22 +26,33 @@ export function useRealtime<TRecord extends RecordModel = RecordModel>(
 
     let unsubscribeFn: (() => Promise<void>) | undefined
     let cancelled = false
+    let retryTimer: ReturnType<typeof setTimeout> | undefined
 
-    pb.collection<TRecord>(collectionName)
-      .subscribe('*', (e) => {
-        callbackRef.current(e)
-      })
-      .then((fn) => {
-        if (cancelled) {
-          fn().catch(() => {})
-        } else {
-          unsubscribeFn = fn
-        }
-      })
-      .catch(() => {})
+    const connect = (attempt: number) => {
+      pb.collection<TRecord>(collectionName)
+        .subscribe('*', (e) => {
+          callbackRef.current(e)
+        })
+        .then((fn) => {
+          if (cancelled) {
+            fn().catch(() => {})
+          } else {
+            unsubscribeFn = fn
+          }
+        })
+        .catch(() => {
+          // Falhou (rede, SSE ainda conectando, "Missing or invalid client id"):
+          // tenta de novo com recuo — sem isso a tela fica SEM realtime até
+          // o próximo remount.
+          if (cancelled || attempt >= 5) return
+          retryTimer = setTimeout(() => connect(attempt + 1), 2000 * attempt)
+        })
+    }
+    connect(1)
 
     return () => {
       cancelled = true
+      if (retryTimer) clearTimeout(retryTimer)
       if (unsubscribeFn) {
         unsubscribeFn().catch(() => {})
       }

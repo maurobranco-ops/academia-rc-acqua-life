@@ -2,7 +2,9 @@
 // obrigatórios (Lei Estadual PB 9.863/2012 — atestado cardiológico + exame
 // dermatológico, validade 6 meses com alerta visual vencido/próximo do
 // vencimento), PAR-Q, anamnese e uso de imagem — editáveis ali mesmo — e o
-// botão "Imprimir ficha" (PrintableFichaDialog).
+// botão "Imprimir ficha" (abre o PrintableFichaDialog, que é montado no
+// NÍVEL DA PÁGINA StudentDetail — fora desta aba — para o diálogo não morrer
+// quando a aba é desmontada trocando de seção ou renovando a sessão).
 
 import { useEffect, useState } from 'react'
 import { Loader2, Printer, Save, ShieldAlert, ShieldCheck } from 'lucide-react'
@@ -33,7 +35,6 @@ import {
   AnamneseSection,
   YesNoPicker,
 } from '@/components/MatriculaFormSections'
-import { PrintableFichaDialog, studentToPrintable } from '@/components/PrintableFicha'
 
 type ExamStatus = 'entregue' | 'pendente'
 
@@ -113,9 +114,11 @@ interface StudentHealthTabProps {
   student: StudentRecord
   /** Chamado após salvar com sucesso (para a ficha recarregar os dados do aluno). */
   onSaved?: () => void
+  /** Abre a ficha imprimível — o diálogo vive na PÁGINA, fora desta aba. */
+  onPrintFicha: () => void
 }
 
-export function StudentHealthTab({ student, onSaved }: StudentHealthTabProps) {
+export function StudentHealthTab({ student, onSaved, onPrintFicha }: StudentHealthTabProps) {
   const { toast } = useToast()
 
   const [dermatoDate, setDermatoDate] = useState('')
@@ -128,7 +131,6 @@ export function StudentHealthTab({ student, onSaved }: StudentHealthTabProps) {
   const [anamnese, setAnamnese] = useState<AnamneseValues>(EMPTY_ANAMNESE)
   const [usoImagem, setUsoImagem] = useState<'sim' | 'nao' | ''>('')
   const [saving, setSaving] = useState(false)
-  const [fichaOpen, setFichaOpen] = useState(false)
 
   // Recarrega o formulário sempre que o aluno trocar (ou após salvar/reload da ficha)
   useEffect(() => {
@@ -249,7 +251,7 @@ export function StudentHealthTab({ student, onSaved }: StudentHealthTabProps) {
             variant="outline"
             size="sm"
             className="text-xs border-[#0F1B3D] text-[#0F1B3D] hover:bg-slate-100 font-bold"
-            onClick={() => setFichaOpen(true)}
+            onClick={onPrintFicha}
           >
             <Printer className="w-4 h-4 mr-1" /> Imprimir ficha
           </Button>
@@ -390,14 +392,6 @@ export function StudentHealthTab({ student, onSaved }: StudentHealthTabProps) {
           {saving ? 'Salvando...' : 'Salvar dados de saúde'}
         </Button>
       </div>
-
-      <PrintableFichaDialog
-        open={fichaOpen}
-        onOpenChange={setFichaOpen}
-        data={studentToPrintable(student)}
-        studentId={student.id}
-        onSignatureRegistered={onSaved}
-      />
     </div>
   )
 }

@@ -45,6 +45,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { academyService } from '@/services/academy'
 import { getErrorMessage } from '@/lib/pocketbase/errors'
+import { PrintableFichaDialog, studentToPrintable } from '@/components/PrintableFicha'
 import type {
   StudentRecord,
   PlanRecord,
@@ -100,6 +101,10 @@ export default function StudentDetail() {
 
   // Delete modal state
   // Diálogo "Link de atualização" (autocadastro do aluno sem login)
+  // Ficha imprimível: diálogo montado no NÍVEL DA PÁGINA (fora da TabsContent
+  // "saude" — Radix desmonta conteúdo de aba inativa) para não fechar sozinho
+  // quando a página é remontada (renovação de sessão) ou troca de aba.
+  const [fichaOpen, setFichaOpen] = useState(false)
   const [updateLinkOpen, setUpdateLinkOpen] = useState(false)
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
   const [deleteBlockedReason, setDeleteBlockedReason] = useState<string | null>(null)
@@ -981,9 +986,23 @@ export default function StudentDetail() {
         {/* TAB 4: SAÚDE & EXAMES (Lei PB 9.863/2012)                    */}
         {/* ============================================================ */}
         <TabsContent value="saude" className="space-y-4">
-          <StudentHealthTab student={student} onSaved={loadData} />
+          <StudentHealthTab
+            student={student}
+            onSaved={loadData}
+            onPrintFicha={() => setFichaOpen(true)}
+          />
         </TabsContent>
       </Tabs>
+
+      {/* Ficha imprimível — fora da TabsContent: sobrevive a troca de aba e a
+          remontagens da página (renovação de sessão auth-refresh). */}
+      <PrintableFichaDialog
+        open={fichaOpen}
+        onOpenChange={setFichaOpen}
+        data={student ? studentToPrintable(student) : null}
+        studentId={student.id}
+        onSignatureRegistered={loadData}
+      />
       {/* ============================================================== */}
       {/* Cancel Charge Modal                                            */}
       {/* ============================================================== */}

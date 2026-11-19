@@ -374,14 +374,10 @@ export function FichaSheet({ data, studentId }: { data: PrintableFichaData; stud
         </div>
       </section>
 
-      {/* Assinaturas */}
+      {/* Assinatura — SOMENTE do responsável (pedido da academia): a linha de
+          assinatura do(a) aluno(a) foi removida da ficha impressa. */}
       <section className="pt-3">
-        <div className="grid grid-cols-2 gap-8 pt-10">
-          <div className="border-t border-slate-800 pt-1 text-center">
-            <p className="text-[10px] text-slate-600">
-              Assinatura do(a) aluno(a) {data.name ? `— ${data.name}` : ''}
-            </p>
-          </div>
+        <div className="max-w-[420px] mx-auto pt-10">
           <div className="border-t border-slate-800 pt-1 text-center">
             <p className="text-[10px] text-slate-600">
               Assinatura do responsável{' '}
