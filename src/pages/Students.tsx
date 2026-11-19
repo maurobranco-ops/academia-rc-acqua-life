@@ -14,6 +14,7 @@ import {
   Users,
   List,
   Sparkles,
+  ClipboardCheck,
   Layers,
   GraduationCap,
   Clock,
@@ -83,6 +84,7 @@ import {
 import { MatriculaExamsSection, MatriculaHealthSection } from '@/components/MatriculaFormSections'
 import { PrintableFichaDialog, studentToPrintable } from '@/components/PrintableFicha'
 import { FichaPendenteBadge } from '@/components/FichaPendenteBadge'
+import { StudentUpdatesDialog } from '@/components/StudentUpdatesDialog'
 
 // Rota de retorno à ficha do aluno após a edição aberta a partir do detalhe.
 // O botão "Voltar para Turma" da ficha é derivado dos dados de matrícula do aluno
@@ -149,6 +151,13 @@ export default function Students() {
   const [formAnamnese, setFormAnamnese] = useState<AnamneseValues>(EMPTY_ANAMNESE)
   const [formUsoImagem, setFormUsoImagem] = useState<'sim' | 'nao' | ''>('')
   const [submitting, setSubmitting] = useState(false)
+
+  // Painel "Atualizações" — alunos que se atualizaram pelo link seguro
+  // (/atualizar/TOKEN). O badge da navegação (Layout) conta os não vistos.
+  const [updatesOpen, setUpdatesOpen] = useState(false)
+  const [updatesLoading, setUpdatesLoading] = useState(false)
+  const [updatedStudents, setUpdatedStudents] = useState<StudentRecord[]>([])
+  const [unseenUpdates, setUnseenUpdates] = useState(0)
 
   // Foto individual do aluno (formulário cadastrar/editar)
   const [photoFile, setPhotoFile] = useState<File | null>(null)
@@ -256,6 +265,45 @@ export default function Students() {
 
   useRealtime<StudentRecord>('students', () => loadData())
   useRealtime<PaymentRecord>('payments', () => loadData())
+
+  // Lista de alunos atualizados pelo próprio link (painel "Atualizações").
+  const loadUpdatedStudents = async () => {
+    try {
+      setUpdatesLoading(true)
+      const rows = await academyService.getStudentUpdates()
+      setUpdatedStudents(rows)
+      const unseen = await academyService.countUnseenStudentUpdates()
+      setUnseenUpdates(unseen)
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setUpdatesLoading(false)
+    }
+  }
+
+  // Admin abriu a lista de atualizações: marca todas como vistas e zera o badge.
+  const markUpdatesSeen = async () => {
+    const ids = updatedStudents.map((s) => s.id)
+    if (ids.length === 0) {
+      setUnseenUpdates(0)
+      return
+    }
+    setUnseenUpdates(0)
+    try {
+      await academyService.markStudentUpdatesSeen(ids)
+      // Layout (sidebar/drawer) escuta este evento para zerar o badge na hora.
+      window.dispatchEvent(new CustomEvent('student-updates-seen'))
+    } catch (err) {
+      console.error(err)
+    }
+    setUpdatedStudents((prev) => prev.map((s) => ({ ...s, atualizacao_vista_pelo_admin: true })))
+  }
+
+  useEffect(() => {
+    if (updatesOpen) {
+      loadUpdatedStudents()
+    }
+  }, [updatesOpen])
 
   useEffect(() => {
     if (searchParams.get('novo') === '1') {
@@ -955,6 +1003,18 @@ export default function Students() {
           </div>
 
           <Button
+            onClick={() => setUpdatesOpen(true)}
+            className="relative bg-[#0F1B3D] hover:bg-[#1C2A52] text-white font-bold shadow-md text-xs h-10 px-4 rounded-xl flex items-center gap-2"
+          >
+            <ClipboardCheck className="w-4 h-4" /> Atualizações
+            {unseenUpdates > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 min-w-[20px] h-5 px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center shadow-md">
+                {unseenUpdates}
+              </span>
+            )}
+          </Button>
+
+          <Button
             onClick={handleOpenCreateModal}
             className="bg-[#D4AF37] hover:bg-[#B8953A] text-[#0F1B3D] font-bold shadow-md text-xs h-10 px-4 rounded-xl flex items-center gap-2"
           >
@@ -962,6 +1022,16 @@ export default function Students() {
           </Button>
         </div>
       </div>
+
+      {/* Painel de atualizações enviadas pelo próprio aluno (link seguro) */}
+      <StudentUpdatesDialog
+        open={updatesOpen}
+        onOpenChange={setUpdatesOpen}
+        students={updatedStudents}
+        loading={updatesLoading}
+        onReload={loadUpdatedStudents}
+        onMarkAsSeen={markUpdatesSeen}
+      />
 
       {viewMode === 'familia' && (
         /* ============================================================== */

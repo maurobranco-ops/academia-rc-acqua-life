@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-19T01:36:30.435Z",
+  "generatedAt": "2026-11-19T02:04:03.678Z",
   "collections": [
     {
       "name": "users",
@@ -561,6 +561,12 @@
         {
           "name": "atualizado_pelo_aluno_em",
           "type": "date",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "atualizacao_vista_pelo_admin",
+          "type": "bool",
           "required": false,
           "system": false
         }

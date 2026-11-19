@@ -803,4 +803,69 @@ export const academyService = {
     }
     return data
   },
+
+  // ============================================================
+  // Atualizações do próprio aluno (painel "Atualizações" de /alunos)
+  // ============================================================
+
+  /**
+   * Lista dos alunos que se atualizaram pelo próprio link seguro
+   * (/atualizar/TOKEN) — o campo atualizado_pelo_aluno_em é gravado pelo hook
+   * de servidor student_update_link.js. Ordenado do mais recente ao mais antigo.
+   */
+  async getStudentUpdates(): Promise<StudentRecord[]> {
+    return pb.collection('students').getFullList<StudentRecord>({
+      sort: '-atualizado_pelo_aluno_em',
+      filter: 'atualizado_pelo_aluno_em != ""',
+    })
+  },
+
+  /**
+   * Contagem de atualizações de aluno AINDA NÃO VISTAS pelo admin
+   * (atualizacao_vista_pelo_admin = false — limpo pelo markStudentUpdatesSeen).
+   * Falha silenciosa: badge simplesmente não aparece se a consulta falhar.
+   */
+  async countUnseenStudentUpdates(): Promise<number> {
+    try {
+      const rows = await pb.collection('students').getFullList<StudentRecord>({
+        filter: 'atualizado_pelo_aluno_em != "" && atualizacao_vista_pelo_admin = false',
+        fields: 'id',
+      })
+      return rows.length
+    } catch (_) {
+      return 0
+    }
+  },
+
+  /**
+   * Marca as atualizações indicadas como vistas pelo admin — chamado ao abrir a
+   * lista "Atualizações" de /alunos (ou um detalhe por ela). Falha silenciosa:
+   * o badge simplesmente não zera nesta tentativa.
+   */
+  async markStudentUpdatesSeen(studentIds: string[]): Promise<void> {
+    if (!studentIds || studentIds.length === 0) return
+    try {
+      const requests = studentIds.map((id) => ({
+        method: 'PATCH',
+        url: '/api/collections/students/records/' + id,
+        body: { atualizacao_vista_pelo_admin: true },
+      }))
+      await pb.send('/api/batch', {
+        method: 'POST',
+        body: JSON.stringify({ requests }),
+      })
+      return
+    } catch (_) {
+      // Batch indisponível: marca um a um para não perder a sinalização.
+    }
+    for (let i = 0; i < studentIds.length; i++) {
+      try {
+        await pb.collection('students').update(studentIds[i], {
+          atualizacao_vista_pelo_admin: true,
+        })
+      } catch {
+        /* intentionally ignored */
+      }
+    }
+  },
 }

@@ -66,6 +66,7 @@ export default function Layout() {
   const [overdueCount, setOverdueCount] = useState(0)
   const [overduePayments, setOverduePayments] = useState<PaymentRecord[]>([])
   const [pendingEnrollCount, setPendingEnrollCount] = useState(0)
+  const [unseenStudentUpdates, setUnseenStudentUpdates] = useState(0)
 
   // Load students for quick search & overdue count
   useEffect(() => {
@@ -82,7 +83,19 @@ export default function Layout() {
       .getEnrollmentRequests('pendente')
       .then((reqs) => setPendingEnrollCount(reqs.length))
       .catch(() => setPendingEnrollCount(0))
+    academyService
+      .countUnseenStudentUpdates()
+      .then(setUnseenStudentUpdates)
+      .catch(() => setUnseenStudentUpdates(0))
   }, [location.pathname])
+
+  // O painel "Atualizações" de /alunos avisa (evento) que o admin leu tudo —
+  // o badge do item "Alunos" zera imediatamente, sem esperar a próxima navegação.
+  useEffect(() => {
+    const onSeen = () => setUnseenStudentUpdates(0)
+    window.addEventListener('student-updates-seen', onSeen)
+    return () => window.removeEventListener('student-updates-seen', onSeen)
+  }, [])
 
   // Handle live student search
   useEffect(() => {
@@ -186,7 +199,15 @@ export default function Layout() {
                         {pendingEnrollCount}
                       </Badge>
                     )}
+                    {item.path === '/alunos' && unseenStudentUpdates > 0 && (
+                      <Badge className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0 h-4 min-w-4 justify-center">
+                        {unseenStudentUpdates}
+                      </Badge>
+                    )}
                   </span>
+                )}
+                {collapsed && item.path === '/alunos' && unseenStudentUpdates > 0 && (
+                  <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 rounded-full bg-red-500 ring-2 ring-[#0F1B3D]" />
                 )}
               </NavLink>
             )
@@ -322,6 +343,11 @@ export default function Layout() {
                       {item.path === '/matriculas' && pendingEnrollCount > 0 && (
                         <Badge className="bg-[#D4AF37] text-[#0F1B3D] text-[10px] font-bold px-1.5 py-0 h-4 min-w-4 justify-center">
                           {pendingEnrollCount}
+                        </Badge>
+                      )}
+                      {item.path === '/alunos' && unseenStudentUpdates > 0 && (
+                        <Badge className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0 h-4 min-w-4 justify-center">
+                          {unseenStudentUpdates}
                         </Badge>
                       )}
                     </span>
