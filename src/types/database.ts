@@ -90,6 +90,8 @@ export interface StudentRecord extends RecordModel {
   ficha_pendente?: boolean
   /** Data da última atualização enviada pelo próprio aluno (link seguro /atualizar). */
   atualizado_pelo_aluno_em?: string
+  /** Data/hora do aceite do termo de ciência (migration 0033, link seguro /atualizar). */
+  termo_ciencia_aceito_em?: string
   expand?: {
     plan_id?: PlanRecord
   }

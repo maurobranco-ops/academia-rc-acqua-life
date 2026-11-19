@@ -2,43 +2,6 @@ import { ClientResponseError } from 'pocketbase'
 
 export type FieldErrors = Record<string, string>
 
-// Guard: NÃO remover estes exports — src/services/academy.ts importa ambos e
-// builds já quebraram várias vezes por esse sumiço (ver memória do projeto).
-/** Verdadeiro quando o erro do PocketBase é 404 ("recurso não encontrado"). */
-export function isNotFoundError(error: unknown): boolean {
-  return error instanceof ClientResponseError && error.status === 404
-}
-
-const PT_BR_TRANSLATIONS: Array<[RegExp, string]> = [
-  [/The requested resource wasn'?t found/i, 'Registro não encontrado.'],
-  [/Failed to create record/i, 'Não foi possível criar o registro.'],
-  [/Failed to update record/i, 'Não foi possível atualizar o registro.'],
-  [/Failed to delete record/i, 'Não foi possível excluir o registro.'],
-  [/validation not null/i, 'Campo obrigatório não preenchido.'],
-  [/cannot be blank/i, 'Campo obrigatório não preenchido.'],
-  [/value must be a valid email/i, 'E-mail inválido.'],
-  [/missing required context/i, 'Sessão expirada — faça login novamente.'],
-  [
-    /The request requires valid record authorization token/i,
-    'Sessão expirada — faça login novamente.',
-  ],
-  [
-    /Autentication|authentication required|authorization token/i,
-    'Sessão expirada — faça login novamente.',
-  ],
-  [/unique constraint/i, 'Este registro já existe (valor duplicado).'],
-]
-
-/** Traduz mensagens cruas do backend (inglês) para português legível ao usuário. */
-export function translateBackendMessage(message: string): string {
-  if (!message) return 'Ocorreu um erro inesperado.'
-  let out = message
-  for (const [pattern, pt] of PT_BR_TRANSLATIONS) {
-    if (pattern.test(out)) return pt
-  }
-  return out
-}
-
 export function extractFieldErrors(error: unknown): FieldErrors {
   if (!(error instanceof ClientResponseError)) return {}
   const data = error.response?.data
@@ -55,6 +18,70 @@ export function extractFieldErrors(error: unknown): FieldErrors {
     }
   }
   return errors
+}
+
+/** Erro 404 do PocketBase: o registro já não existe (ex. disparo duplo, aba duplicada). */
+export function isNotFoundError(error: unknown): boolean {
+  return error instanceof ClientResponseError && error.status === 404
+}
+
+/**
+ * Traduz as mensagens cruas do PocketBase/Skip Cloud para português, preservando
+ * erros de validação de campo (que já chegam traduzidos pelo extractFieldErrors).
+ */
+export function translateBackendMessage(message?: string | null): string {
+  const raw = (message || '').trim()
+  if (!raw) return 'Ocorreu um erro inesperado. Tente novamente.'
+  const GENERIC: Record<string, string> = {
+    'Failed to create record.':
+      'Não foi possível salvar o registro. Verifique os dados e tente novamente.',
+    'Failed to update record.':
+      'Não foi possível atualizar o registro. Verifique os dados e tente novamente.',
+    'Failed to delete record.': 'Não foi possível excluir o registro.',
+    "The requested resource wasn't found.": 'Registro não encontrado. Ele pode ter sido excluído.',
+    'An error occurred while processing the request.':
+      'Ocorreu um erro ao processar a solicitação.',
+    'Unauthenticated.': 'Sessão expirada. Faça login novamente.',
+    'Invalid or expired token.': 'Token inválido ou expirado.',
+    'The request requires valid record authorization token to be set as the Authorization header.':
+      'Sessão expirada. Faça login novamente.',
+    'User not found.': 'Usuário não encontrado.',
+    'Bad request.': 'Requisição inválida.',
+    'Missing or invalid request payload.': 'Requisição inválida.',
+  }
+  const generic = GENERIC[raw]
+  if (generic) return generic
+  const RULES: Array<[RegExp, string]> = [
+    [/^validation_(not_null|validation_required)$/i, 'Campo obrigatório não preenchido.'],
+    [/^value must be/i, 'Valor inválido para este campo.'],
+    [/^invalid value at /i, 'Valor inválido em um dos campos enviados.'],
+    [/cannot be blank/i, 'Campo obrigatório não pode ficar em branco.'],
+    [/must be a valid/i, 'Valor em formato inválido.'],
+    [/requires a valid/i, 'É necessário um valor válido.'],
+    [/has already been used/i, 'Este valor já está em uso.'],
+    [/not enough permissions/i, 'Você não tem permissão para executar esta ação.'],
+    [
+      /failed to create record/i,
+      'Não foi possível salvar o registro. Verifique os dados e tente novamente.',
+    ],
+    [
+      /failed to update record/i,
+      'Não foi possível atualizar o registro. Verifique os dados e tente novamente.',
+    ],
+    [/failed to delete record/i, 'Não foi possível excluir o registro.'],
+    [
+      /the requested resource wasn'?t found/i,
+      'Registro não encontrado. Ele pode ter sido excluído.',
+    ],
+    [/unauthenticated/i, 'Sessão expirada. Faça login novamente.'],
+    [/collection "?([\w-]+)"? (?:was not )?not found/i, 'Coleção não encontrada no backend.'],
+    [/record not found/i, 'Registro não encontrado.'],
+    [/token/i, 'Sessão ou token inválido/expirado. Faça login novamente.'],
+  ]
+  for (const [re, msg] of RULES) {
+    if (re.test(raw)) return msg
+  }
+  return raw
 }
 
 export function getErrorMessage(error: unknown): string {

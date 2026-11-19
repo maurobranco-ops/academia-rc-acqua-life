@@ -40,6 +40,8 @@ export interface PrintableFichaData {
   examsDelivered?: string
   /** Concordância com o termo de ciência (migration 0022). */
   termAgreed?: string
+  /** Data/hora do aceite do termo de ciência gravado no aluno (migration 0033). */
+  termAgreedAt?: string
   /** Endereço do(a) aluno(a) (students 0016 / enrollment_requests 0020). */
   cep?: string
   street?: string
@@ -83,6 +85,7 @@ export function studentToPrintable(st: StudentRecord): PrintableFichaData {
       anamnese_objetivo: st.anamnese_objetivo || '',
     },
     usoImagem: st.uso_imagem_autorizado || '',
+    termAgreedAt: st.termo_ciencia_aceito_em,
     dermatoDate: st.dermato_date,
     cardioDate: st.cardio_date,
     cardioCrm: st.cardio_crm,
@@ -314,7 +317,15 @@ export function FichaSheet({ data, studentId }: { data: PrintableFichaData; stud
         />
         <Row
           label="Concordou com o termo de ciência"
-          value={data.termAgreed === 'sim' ? 'Sim' : data.termAgreed === 'nao' ? 'Não' : null}
+          value={
+            data.termAgreed === 'sim'
+              ? 'Sim'
+              : data.termAgreed === 'nao'
+                ? 'Não'
+                : data.termAgreedAt
+                  ? `Sim (aceito em ${formatDateBR(data.termAgreedAt)})`
+                  : null
+          }
         />
         <Row
           label="Atestado Cardiológico — emissão"
