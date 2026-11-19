@@ -38,6 +38,9 @@ export const PARQ_QUESTIONS: ParqQuestion[] = [
 
 export type ParqKey = ParqQuestion['key']
 export type ParqValues = Partial<Record<ParqKey, string>>
+
+/** As 7 chaves do PAR-Q (para iteração de validação de obrigatoriedade). */
+export const PARQ_ALL_KEYS = PARQ_QUESTIONS.map((q) => q.key) as ParqKey[]
 export type AnamneseValues = Partial<Record<AnamneseKey, string>>
 
 /** Perguntas 5-7 do PAR-Q (problema ósseo/articular, medicamentos, outra razão) aceitam resposta escrita quando a resposta é "SIM". */

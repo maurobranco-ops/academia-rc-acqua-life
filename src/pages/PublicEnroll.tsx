@@ -37,6 +37,10 @@ import {
   EMPTY_PARQ_DETAILS,
   ACTIVITY_OPTIONS,
   DUE_DAY_OPTIONS,
+  PARQ_ALL_KEYS,
+  ANAMNESE_QUESTIONS,
+  PARQ_YES,
+  PARQ_NO,
   type ParqDetailsMap,
   type ParqDetailKey,
 } from '@/lib/matricula'
@@ -322,6 +326,7 @@ export default function PublicEnroll() {
     else if (isCpfInvalid(studentCpf)) next.student_cpf = CPF_INVALID_MESSAGE
     if (!studentPhone.trim()) next.student_phone = 'Informe o telefone do aluno.'
     else if (onlyDigits(studentPhone).length < 10) next.student_phone = 'Telefone incompleto.'
+    // E-mail do ALUNO: opcional — validado apenas quando preenchido.
     if (studentEmail && !/^\S+@\S+\.\S+$/.test(studentEmail))
       next.student_email = 'E-mail inválido.'
 
@@ -339,9 +344,8 @@ export default function PublicEnroll() {
       } else if (onlyDigits(guardian.phone).length < 10) {
         next.guardian_phone = 'Telefone do responsável incompleto.'
       }
-      if (!guardian.email.trim()) {
-        next.guardian_email = 'E-mail do responsável é obrigatório para menor de 18.'
-      } else if (!/^\S+@\S+\.\S+$/.test(guardian.email)) {
+      // E-mail do RESPONSÁVEL: opcional — validado apenas quando preenchido.
+      if (guardian.email.trim() && !/^\S+@\S+\.\S+$/.test(guardian.email)) {
         next.guardian_email = 'E-mail do responsável inválido.'
       }
       if (rgFile) {
@@ -381,13 +385,36 @@ export default function PublicEnroll() {
     if (address.cep && onlyDigits(address.cep).length === 8 && !address.city.trim())
       next.city = 'Informe a cidade.'
 
-      // PAR-Q 5-7: se respondeu "SIM", pede a descrição (aviso suave — não bloqueia sozinho).
+    // PAR-Q: TODAS as 7 perguntas obrigatórias (Sim/Não). Perguntas 5-7: quando a
+    // resposta é "SIM", a descrição escrita também é obrigatória.
+    PARQ_ALL_KEYS.forEach((qk) => {
+      if (parq[qk] !== PARQ_YES && parq[qk] !== PARQ_NO) {
+        next[qk] = 'Responda Sim ou Não.'
+      }
+    })
     ;(['parq_5', 'parq_6', 'parq_7'] as const).forEach((qk, idx) => {
       const dk = `parq_${idx + 5}_detail` as ParqDetailKey
-      if (parq[qk] === 'sim' && !parqDetails[dk]?.trim()) {
+      if (parq[qk] === PARQ_YES && !parqDetails[dk]?.trim()) {
         next[dk] = 'Respondeu "SIM": descreva a situação no campo de texto abaixo da pergunta.'
       }
     })
+
+    // Anamnese aquática: as 3 perguntas Sim/Não + medicamentos + objetivo obrigatórios.
+    ANAMNESE_QUESTIONS.forEach((q) => {
+      const v = anamnese[q.key]
+      if (v !== PARQ_YES && v !== PARQ_NO) {
+        next[q.key] = 'Responda Sim ou Não.'
+      }
+    })
+    if (!anamnese.anamnese_medicamentos?.trim())
+      next.anamnese_medicamentos = 'Informe os medicamentos em uso — ou "Nenhum", caso não utilize.'
+    if (!anamnese.anamnese_objetivo?.trim())
+      next.anamnese_objetivo = 'Informe o objetivo com a atividade escolhida.'
+
+    // Uso de imagem (LGPD): obrigatório escolher Sim ou Não.
+    if (usoImagem !== 'sim' && usoImagem !== 'nao') {
+      next.uso_imagem = 'Selecione se autoriza o uso de imagem.'
+    }
 
     // Termo de ciência: leitura e concordância OBRIGATÓRIAS.
     if (!termAgreed)
@@ -995,6 +1022,7 @@ export default function PublicEnroll() {
           <ParqSection
             values={parq}
             details={parqDetails}
+            errors={errors}
             detailErrors={errors as Partial<Record<ParqDetailKey, string>>}
             onDetailChange={(key: ParqDetailKey, v: string) =>
               setParqDetails((d) => {
@@ -1008,11 +1036,28 @@ export default function PublicEnroll() {
                 return next
               })
             }
-            onChange={(key: ParqKey, v: string) => setParq((q) => ({ ...q, [key]: v }))}
+            onChange={(key: ParqKey, v: string) => {
+              setParq((q) => ({ ...q, [key]: v }))
+              setErrors((e) => {
+                if (!e[key]) return e
+                const clean = { ...e }
+                delete clean[key]
+                return clean
+              })
+            }}
           />
           <AnamneseSection
             values={anamnese}
-            onChange={(key: AnamneseKey, v: string) => setAnamnese((p) => ({ ...p, [key]: v }))}
+            errors={errors}
+            onChange={(key: AnamneseKey, v: string) => {
+              setAnamnese((p) => ({ ...p, [key]: v }))
+              setErrors((e) => {
+                if (!e[key]) return e
+                const clean = { ...e }
+                delete clean[key]
+                return clean
+              })
+            }}
           />
           {/* Uso de imagem */}
           <div className="space-y-1">
@@ -1021,7 +1066,15 @@ export default function PublicEnroll() {
             </Label>
             <select
               value={usoImagem}
-              onChange={(e) => setUsoImagem(e.target.value as 'sim' | 'nao' | '')}
+              onChange={(e) => {
+                setUsoImagem(e.target.value as 'sim' | 'nao' | '')
+                setErrors((er) => {
+                  if (!er.uso_imagem) return er
+                  const clean = { ...er }
+                  delete clean.uso_imagem
+                  return clean
+                })
+              }}
               className={`h-9 w-full text-sm rounded-md border bg-white px-2 outline-none ${
                 errors.uso_imagem ? 'border-red-500' : 'border-slate-200'
               } focus-visible:ring-[#D4AF37]`}
@@ -1030,6 +1083,9 @@ export default function PublicEnroll() {
               <option value="sim">Autorizo o uso de imagem</option>
               <option value="nao">Não autorizo o uso de imagem</option>
             </select>
+            {errors.uso_imagem && (
+              <p className="text-[10px] text-red-600 font-medium">{errors.uso_imagem}</p>
+            )}
           </div>
         </Card>
 
