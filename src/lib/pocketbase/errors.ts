@@ -1,45 +1,57 @@
-// GUARD: NÃO remover os exports isNotFoundError e translateBackendMessage —
-// academy.ts importa ambos na linha 2 e builds já quebraram várias vezes por
-// esse sumiço (ver memória do projeto). Quem editar este arquivo deve manter
-// TODOS os exports abaixo.
+// GUARDA (v0.0.86): este arquivo já perdeu exports e quebrou builds 4+ vezes —
+// academy.ts importa isNotFoundError e translateBackendMessage na linha 2.
+// PRESERVE estes exports ao editar.
+
 import { ClientResponseError } from 'pocketbase'
 
 export type FieldErrors = Record<string, string>
 
-/** 404 do PocketBase: o registro que se tentou alterar já não existe. */
+/**
+ * True quando o erro é um 404 do PocketBase — "não encontrado" costuma ser
+ * resultado desejado (ex.: delete tolerante a disparo duplo).
+ */
 export function isNotFoundError(error: unknown): boolean {
-  return error instanceof ClientResponseError && error.status === 404
+  if (!(error instanceof ClientResponseError)) return false
+  return error.status === 404
 }
 
-const BACKEND_MESSAGES_PT: Record<string, string> = {
-  "The requested resource wasn't found.": 'O recurso solicitado não foi encontrado.',
-  'An error occurred while processing the request.':
-    'Ocorreu um erro ao processar a solicitação. Tente novamente.',
-  'Something went wrong while processing the request.':
-    'Algo deu errado ao processar a solicitação. Tente novamente.',
-  'Failed to authenticate.': 'Falha na autenticação. Faça login novamente.',
-  'The request requires valid record authorization token to be set.':
-    'A solicitação exige um token de autenticação válido.',
-  'Only admins can perform this action.': 'Apenas administradores podem executar esta ação.',
-}
+const BACKEND_MESSAGE_TRANSLATIONS: Array<{ test: RegExp; message: string }> = [
+  { test: /Failed to authenticate/i, message: 'Sessão expirada. Faça login novamente.' },
+  {
+    test: /The request requires valid authentication token/i,
+    message: 'Sessão expirada. Faça login novamente.',
+  },
+  {
+    test: /Missing or invalid authorization token/i,
+    message: 'Sessão expirada. Faça login novamente.',
+  },
+  {
+    test: /You are not allowed to perform this request/i,
+    message: 'Você não tem permissão para esta ação.',
+  },
+  { test: /The requested resource wasn't found/i, message: 'Registro não encontrado.' },
+  { test: /Validation not less than/i, message: 'Valor menor que o mínimo permitido.' },
+  { test: /Validation not greater than/i, message: 'Valor maior que o máximo permitido.' },
+  { test: /Validation min string constraint/i, message: 'Valor muito curto.' },
+  { test: /Validation max string constraint/i, message: 'Valor muito longo.' },
+  { test: /Validation required/i, message: 'Campo obrigatório não preenchido.' },
+  { test: /Cannot be blank/i, message: 'Campo obrigatório não preenchido.' },
+  { test: /must be a valid email/i, message: 'E-mail inválido.' },
+  { test: /must be a valid URL/i, message: 'URL inválida.' },
+  { test: /value must be unique/i, message: 'Este valor já está cadastrado.' },
+  { test: /Failed to create record/i, message: 'Não foi possível salvar o registro.' },
+  { test: /Failed to update record/i, message: 'Não foi possível atualizar o registro.' },
+]
 
 /**
- * Traduz mensagens cruas do backend (PocketBase/rotas próprias) para português —
- * a interface nunca deve exibir mensagem em inglês para o usuário. Mensagens
- * desconhecidas voltam inalteradas.
+ * Traduz mensagens cruas do backend PocketBase para português, preservando o
+ * texto original quando não há tradução conhecida.
  */
 export function translateBackendMessage(message: string): string {
   if (!message) return message
-  const mapped = BACKEND_MESSAGES_PT[message]
-  if (mapped) return mapped
-  // "The X field is required." / validações de campo do PocketBase.
-  const required = message.match(/^The "?([\w .-]+)"? field (is required\.|must be a valid.*)\.?$/)
-  if (required) {
-    return `O campo ${required[1].toLowerCase()} é obrigatório.`
+  for (const { test, message: translated } of BACKEND_MESSAGE_TRANSLATIONS) {
+    if (test.test(message)) return translated
   }
-  if (/failed to create record/i.test(message)) return 'Falha ao criar o registro.'
-  if (/failed to update record/i.test(message)) return 'Falha ao atualizar o registro.'
-  if (/failed to delete record/i.test(message)) return 'Falha ao excluir o registro.'
   return message
 }
 
