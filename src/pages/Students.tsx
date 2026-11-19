@@ -305,6 +305,23 @@ export default function Students() {
     }
   }, [updatesOpen])
 
+  // Reacende o badge na hora em que o aluno reenvia a atualização pelo link
+  // (/atualizar/TOKEN): o realtime de 'students' acima recarrega a lista e este
+  // efeito reconta as não vistas sem esperar nova navegação ou reabertura.
+  useEffect(() => {
+    if (updatesOpen) return
+    let alive = true
+    academyService
+      .countUnseenStudentUpdates()
+      .then((n) => {
+        if (alive) setUnseenUpdates(n)
+      })
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [students, updatesOpen])
+
   useEffect(() => {
     if (searchParams.get('novo') === '1') {
       handleOpenCreateModal()
