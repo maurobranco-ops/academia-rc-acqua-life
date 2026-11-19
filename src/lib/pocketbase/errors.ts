@@ -28,43 +28,33 @@ export function getErrorMessage(error: unknown): string {
   return msgs.length > 0 ? msgs.join(' ') : error.message || 'An unexpected error occurred.'
 }
 
-/* GUARD CRÍTICO: isNotFoundError e translateBackendMessage são importados por
- * src/services/academy.ts na linha 2 — builds quebraram 4+ vezes quando este
- * arquivo foi reescrito sem eles. NÃO remover ao editar este arquivo. */
-
+// GUARD: estes exports já sumiram 4+ vezes em builds anteriores (academy.ts
+// importa ambos na linha 2 e a build quebra) — NUNCA removê-los deste arquivo.
+/** 404/not found do PocketBase (status 404). */
 export function isNotFoundError(error: unknown): boolean {
-  if (!(error instanceof ClientResponseError)) return false
-  if (error.status !== 404) return false
-  const msg = (error.response?.message || error.message || '').toLowerCase()
   return (
-    msg.includes('wasn') ||
-    msg.includes('not found') ||
-    msg.includes('não encontrado') ||
-    msg.includes('nao encontrado') ||
-    msg.includes('não existe')
+    error instanceof ClientResponseError && (error.status === 404 || error.response?.status === 404)
   )
 }
 
-/** Traduz mensagens cruas do PocketBase/Go para português, quando conhecidas. */
-const TRANSLATIONS: Array<[RegExp, string]> = [
-  [/validation not null constraint/i, 'Há campos obrigatórios não preenchidos.'],
-  [/value must be non-empty string/i, 'Há campos obrigatórios não preenchidos.'],
-  [
-    /the request requires valid record authorization token/i,
-    'Sessão expirada — faça login novamente.',
-  ],
-  [/failed to authenticate/i, 'Falha de autenticação — verifique suas credenciais.'],
-  [/you are not allowed to perform this request/i, 'Você não tem permissão para esta ação.'],
-  [/the requested resource wasn't found/i, 'Registro não encontrado.'],
-  [/validation for (?<field>[\w_]+) requires (?<value>.+)/i, 'Valor inválido para um dos campos.'],
-  [/email or password are invalid/i, 'E-mail ou senha inválidos.'],
-  [/failed to create record/i, 'Falha ao salvar o registro.'],
-  [/failed to update record/i, 'Falha ao atualizar o registro.'],
-]
-
+/** Traduz mensagens cruas do backend para português (fallback: devolve a original). */
 export function translateBackendMessage(message: string): string {
-  for (const [pattern, translation] of TRANSLATIONS) {
-    if (pattern.test(message)) return translation
+  const raw = (message || '').trim()
+  const lower = raw.toLowerCase()
+  const table: Record<string, string> = {
+    'record not found': 'Registro não encontrado.',
+    'student not found': 'Aluno não encontrado.',
+    'confirmation failed': 'Confirmação inválida.',
+    'authentication required': 'Autenticação necessária.',
+    forbidden: 'Acesso negado.',
+    'something went wrong': 'Algo deu errado. Tente novamente.',
+    'internal server error': 'Erro interno do servidor.',
   }
-  return message
+  if (table[lower]) return table[lower]
+  // Mensagens HTTP cruas comuns em inglês.
+  if (/^http (4|5)\d{2}/.test(lower) || lower.startsWith('erro http')) return raw
+  if (/cannot be blank/.test(lower)) return 'Campo obrigatório não preenchido.'
+  if (/not found|missing/.test(lower)) return 'Registro não encontrado.'
+  if (/unauthorized|token|auth/.test(lower)) return 'Sessão expirada. Faça login novamente.'
+  return raw || 'Ocorreu um erro inesperado.'
 }

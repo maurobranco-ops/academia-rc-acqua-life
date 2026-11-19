@@ -130,6 +130,9 @@ export const academyService = {
    * Registro de assinatura da ficha impressa (botão "Registrar assinatura" no
    * diálogo da ficha): grava ficha_assinada_em = data de hoje e limpa
    * ficha_pendente — SEM passar pelo updateStudent (que remarcaria o pendente).
+   * Também marca atualizacao_vista_pelo_admin = true: assinar a ficha quitou o
+   * cadastro, então o aluno deixa de contar no botão "Atualizações" de /alunos
+   * e no badge do menu (dois flags independentes, quitados juntos aqui).
    */
   async registrarAssinaturaFicha(id: string): Promise<StudentRecord> {
     const today = new Date()
@@ -138,6 +141,7 @@ export const academyService = {
     return pb.collection('students').update<StudentRecord>(id, {
       ficha_assinada_em: `${todayStr} 00:00:00.000Z`,
       ficha_pendente: false,
+      atualizacao_vista_pelo_admin: true,
     })
   },
   async uploadStudentPhoto(

@@ -13,6 +13,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { academyService } from '@/services/academy'
+import { LogoMark } from '@/components/Logo'
 import { getErrorMessage } from '@/lib/pocketbase/errors'
 import { useToast } from '@/hooks/use-toast'
 import { formatDateBR } from '@/lib/matricula'
@@ -45,6 +46,10 @@ export function UpdateLinkDialog({ student, open, onOpenChange, onChanged }: Pro
   const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const link = token ? `${window.location.origin}/atualizar/${token.token}` : ''
+
+  // Mensagem pronta para o admin copiar e enviar: logo + título + link.
+  const MESSAGE_TITLE = 'RC Acqua Life - Atualização de cadastro necessária'
+  const messageText = token ? `${MESSAGE_TITLE}\n${link}` : ''
 
   const handleGenerate = async () => {
     setLoading(true)
@@ -88,11 +93,11 @@ export function UpdateLinkDialog({ student, open, onOpenChange, onChanged }: Pro
   const handleCopy = async () => {
     if (!link) return
     try {
-      await navigator.clipboard.writeText(link)
+      await navigator.clipboard.writeText(messageText)
     } catch (_) {
       // Fallback para ambientes sem clipboard API (http, webview antigo).
       const el = document.createElement('textarea')
-      el.value = link
+      el.value = messageText
       document.body.appendChild(el)
       el.select()
       document.execCommand('copy')
@@ -145,10 +150,21 @@ export function UpdateLinkDialog({ student, open, onOpenChange, onChanged }: Pro
           <div className="space-y-3 py-2">
             <div className="space-y-1.5">
               <Label className="text-[11px] font-semibold text-[#1E2A3A]">
-                Link seguro (copie e envie ao aluno)
+                Mensagem do link (copie e envie ao aluno)
               </Label>
+              <div className="rounded-lg border border-slate-200 bg-white px-3 py-2.5">
+                <div className="flex items-start gap-2.5">
+                  <LogoMark size={28} />
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold text-[#0F1B3D] leading-snug">
+                      RC Acqua Life - Atualização de cadastro necessária
+                    </p>
+                    <p className="text-[11px] text-slate-500 font-mono break-all mt-1">{link}</p>
+                  </div>
+                </div>
+              </div>
               <div className="flex items-center gap-2">
-                <Input readOnly value={link} className="h-9 text-[11px] font-mono" />
+                <Input readOnly value={link} className="hidden h-9 text-[11px] font-mono" />
                 <Button
                   size="sm"
                   onClick={handleCopy}
