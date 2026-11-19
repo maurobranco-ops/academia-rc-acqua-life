@@ -314,6 +314,9 @@ routerAdd('POST', '/backend/v1/update-link/{token}', (e) => {
   // Marca a ficha como desatualizada (tarja âmbar já existente no app) e
   // registra quando o aluno atualizou — mostrado no detalhe do aluno.
   student.set('ficha_pendente', true)
+  // Reacende o badge "Atualizações" no /alunos: toda reenviada pelo link volta
+  // a contar como NÃO vista pelo admin.
+  student.set('atualizacao_vista_pelo_admin', false)
   const nowIso = new Date().toISOString().replace('T', ' ').substring(0, 19) + '.000Z'
   student.set('atualizado_pelo_aluno_em', nowIso)
 
