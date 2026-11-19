@@ -1,8 +1,8 @@
 import { ClientResponseError } from 'pocketbase'
 
-// GUARD (não remover): academy.ts importa isNotFoundError e translateBackendMessage
-// na linha 2. Este arquivo já perdeu esses exports várias vezes e derrubou o build.
-// Ao editar, preserve TODOS os exports abaixo.
+// GUARD: os exports isNotFoundError e translateBackendMessage deste arquivo são
+// importados por src/services/academy.ts (linha 2) e por várias páginas. Builds
+// já quebraram 4+ vezes por esse arquivo perder esses exports — NUNCA removê-los.
 
 export type FieldErrors = Record<string, string>
 
@@ -24,42 +24,46 @@ export function extractFieldErrors(error: unknown): FieldErrors {
   return errors
 }
 
-/** 404 = "não encontrado" (registro já excluído / inexistente) — não é erro fatal. */
+/**
+ * Erros de aluno/registro não encontrado (404) são tratados como SUCESSO em
+ * fluxos tolerantes (ex.: exclusão dupla, disparo em abas duplicadas).
+ */
 export function isNotFoundError(error: unknown): boolean {
   return error instanceof ClientResponseError && error.status === 404
 }
 
 /**
- * Traduz mensagens cruas do PocketBase para pt-BR amigável.
- * Mensagens desconhecidas passam inalteradas.
+ * Traduz as mensagens cruas do PocketBase para pt-BR. Mensagens desconhecidas
+ * passam inalteradas (nunca inventamos significado).
  */
 export function translateBackendMessage(message: string): string {
-  const msg = String(message || '')
-  if (/failed to create record/i.test(msg)) return 'Não foi possível criar o registro.'
-  if (/failed to update record/i.test(msg)) return 'Não foi possível salvar o registro.'
-  if (/failed to delete record/i.test(msg)) return 'Não foi possível excluir o registro.'
-  if (/requested resource wasn't found|resource wasn't found|not found/i.test(msg))
-    return 'Registro não encontrado.'
-  if (/requires valid record authorization token|authorization token/i.test(msg))
-    return 'Sessão expirada — faça login novamente.'
-  if (/only the superuser can perform this action/i.test(msg))
-    return 'Ação permitida apenas ao administrador.'
-  if (/not allowed to perform this request|insufficient permissions/i.test(msg))
-    return 'Você não tem permissão para executar esta ação.'
-  if (/cannot be blank|must not be blank|non-empty value/i.test(msg))
-    return 'Há campos obrigatórios que não foram preenchidos.'
-  if (/value must be|must be a valid|invalid value/i.test(msg))
-    return 'Há campos com valores inválidos — confira o preenchimento.'
-  if (/something went wrong/i.test(msg)) return 'Algo deu errado. Tente novamente.'
-  if (/timeout/i.test(msg)) return 'Tempo esgotado — verifique sua conexão e tente novamente.'
-  return msg
+  const m = (message || '').trim()
+  const table: Array<[RegExp, string]> = [
+    [/cannot be blank|required/i, 'Campo obrigatório não preenchido.'],
+    [/the requested resource wasn'?t found/i, 'Registro não encontrado.'],
+    [/not found/i, 'Registro não encontrado.'],
+    [/value must be unique/i, 'Este valor já está cadastrado para outro registro.'],
+    [/validation (not )?null|not a valid/i, 'Valor inválido para um dos campos.'],
+    [/failed to authenticate|authorization token/i, 'Sessão expirada — entre novamente.'],
+    [/insufficient permissions|you are not allowed/i, 'Você não tem permissão para esta ação.'],
+    [/record\s*(create|update|delete)/i, 'Não foi possível salvar o registro.'],
+  ]
+  for (const [re, translated] of table) {
+    if (re.test(m)) return translated
+  }
+  return m
 }
 
 export function getErrorMessage(error: unknown): string {
   if (!(error instanceof ClientResponseError)) {
     return error instanceof Error ? error.message : 'An unexpected error occurred.'
   }
-  const msgs = Object.values(extractFieldErrors(error)).map((m) => translateBackendMessage(m))
-  if (msgs.length > 0) return msgs.join(' ')
+  const msgs = Object.values(extractFieldErrors(error))
+  if (msgs.length > 0) return translateBackendMessage(msgs.join(' '))
+  // Mensagem crua do topo da resposta (ex.: "The request is invalid...").
+  if (error.response && typeof error.response === 'object') {
+    const top = (error.response as { message?: unknown }).message
+    if (typeof top === 'string' && top) return translateBackendMessage(top)
+  }
   return translateBackendMessage(error.message || 'An unexpected error occurred.')
 }

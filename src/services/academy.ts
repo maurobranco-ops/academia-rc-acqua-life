@@ -758,4 +758,49 @@ export const academyService = {
       await pb.collection('settings').create({ key, value })
     }
   },
+
+  // ============================================================
+  // Autocadastro do aluno por link seguro (sem login)
+  // Rotas servidas pelo hook pocketbase/hooks/student_update_link.js
+  // ============================================================
+
+  /**
+   * POST /backend/v1/students/{id}/update-link
+   * Gera (ou regenera) o token de atualização do aluno com validade de 5 dias.
+   * Gerar um novo INVALIDA o anterior (servidor mantém 1 token ativo por aluno).
+   */
+  async generateUpdateLink(studentId: string): Promise<{
+    token: string
+    expires_at: string
+  }> {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+    if (pb.authStore.token) headers.Authorization = `Bearer ${pb.authStore.token}`
+    const response = await fetch(
+      `${pb.baseUrl}/backend/v1/students/${encodeURIComponent(studentId)}/update-link`,
+      { method: 'POST', headers },
+    )
+    const data = await response.json().catch(() => ({}))
+    if (!response.ok) {
+      throw new Error(data.message || `Erro HTTP ${response.status} ao gerar o link de atualização`)
+    }
+    return data
+  },
+
+  /**
+   * DELETE /backend/v1/students/{id}/update-link
+   * Revoga os tokens ativos do aluno — o link para de funcionar imediatamente.
+   */
+  async revokeUpdateLink(studentId: string): Promise<{ success: boolean; revoked: number }> {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+    if (pb.authStore.token) headers.Authorization = `Bearer ${pb.authStore.token}`
+    const response = await fetch(
+      `${pb.baseUrl}/backend/v1/students/${encodeURIComponent(studentId)}/update-link`,
+      { method: 'DELETE', headers },
+    )
+    const data = await response.json().catch(() => ({}))
+    if (!response.ok) {
+      throw new Error(data.message || `Erro HTTP ${response.status} ao revogar o link`)
+    }
+    return data
+  },
 }

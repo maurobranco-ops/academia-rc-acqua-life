@@ -59,6 +59,7 @@ import { getStudentPhotoUrl } from '@/lib/studentPhoto'
 import { formatPhoneDisplay } from '@/lib/formatters'
 import { getStudentStatusDisplay } from '@/lib/studentStatus'
 import { StudentHealthTab } from '@/components/StudentHealthTab'
+import { UpdateLinkDialog } from '@/components/UpdateLinkDialog'
 import { FichaPendenteBadge } from '@/components/FichaPendenteBadge'
 
 export default function StudentDetail() {
@@ -97,6 +98,8 @@ export default function StudentDetail() {
   const [cancelling, setCancelling] = useState(false)
 
   // Delete modal state
+  // Diálogo "Link de atualização" (autocadastro do aluno sem login)
+  const [updateLinkOpen, setUpdateLinkOpen] = useState(false)
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
   const [deleteBlockedReason, setDeleteBlockedReason] = useState<string | null>(null)
   const [pendingPaymentsCount, setPendingPaymentsCount] = useState<number>(0)
@@ -470,6 +473,16 @@ export default function StudentDetail() {
           </Button>
 
           <Button
+            onClick={() => setUpdateLinkOpen(true)}
+            className="border-[#17A2B8] text-[#17A2B8] hover:bg-cyan-50 font-bold text-xs h-9 rounded-xl flex items-center justify-center gap-1.5 shadow-xs w-full sm:w-auto"
+            variant="outline"
+            size="sm"
+            title="Gera um link seguro (sem senha) para o aluno atualizar os próprios dados de saúde"
+          >
+            <Link2 className="w-4 h-4" /> Link de atualização
+          </Button>
+
+          <Button
             onClick={() =>
               navigate(`/cobrancas?novo=1&aluno=${student.id}&valor=${plan?.monthly_price || 0}`)
             }
@@ -529,6 +542,15 @@ export default function StudentDetail() {
                   return <Badge className={st.badgeClass}>{st.label}</Badge>
                 })()}
                 {student.ficha_pendente && <FichaPendenteBadge />}
+                {student.atualizado_pelo_aluno_em && (
+                  <Badge
+                    variant="outline"
+                    className="text-[10px] bg-sky-50 text-sky-700 border-sky-200"
+                    title="Última atualização enviada pelo próprio aluno pelo link seguro"
+                  >
+                    Atualizado pelo aluno em {formatDateBR(student.atualizado_pelo_aluno_em)}
+                  </Badge>
+                )}
                 {student.situation === 'atestado' && (
                   <Badge
                     variant="outline"
