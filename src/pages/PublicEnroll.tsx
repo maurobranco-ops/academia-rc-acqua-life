@@ -1,7 +1,9 @@
 // Formulário público de matrícula (/matricula) da RC Acqua Life.
 // Envia a inscrição para a collection enrollment_requests, conferida em /matriculas.
-// Melhorias: checkbox "aluno é o próprio responsável", responsável obrigatório para
-// menor de 18, endereço com busca ViaCEP + edição manual e a declaração de entrega
+// Melhorias: checkbox "aluno é o próprio responsável" (só para maior de 18 — a caixa
+// é desmarcada e bloqueada em tempo real quando a data de nascimento indica menor),
+// dados do responsável OBRIGATÓRIOS (nome, CPF, telefone e endereço — só o e-mail é
+// opcional), endereço com busca ViaCEP + edição manual e a declaração de entrega
 // dos DOIS exames (cardiológico + dermatológico — Lei Estadual nº 9.863/2012-PB).
 // Os dados técnicos dos exames (datas, CRM, status) são lançados pelo administrador
 // na aprovação da matrícula em /matriculas — o formulário público não os coleta.
@@ -196,6 +198,16 @@ export default function PublicEnroll() {
   const age = useMemo(() => calcAge(birthDate), [birthDate])
   const isMinor = age !== null && age < 18
 
+  // REGRA EM TEMPO REAL: a caixa "O aluno é o próprio responsável" só vale para
+  // maior de 18. Se a data de nascimento digitada indicar menor, a caixa é
+  // DESMARCADA e BLOQUEADA imediatamente (reage à digitação/alteração da data) —
+  // e os dados do responsável voltam a ser exigidos.
+  useEffect(() => {
+    if (isMinor) {
+      setIsSelf(false)
+    }
+  }, [isMinor])
+
   // Checkbox "aluno é o próprio responsável": preenche o responsável com os dados do
   // aluno e oculta apenas os DADOS de contato — o upload do documento de identificação
   // do responsável continua disponível (com a caixa marcada, é o documento do próprio
@@ -330,17 +342,21 @@ export default function PublicEnroll() {
     if (studentEmail && !/^\S+@\S+\.\S+$/.test(studentEmail))
       next.student_email = 'E-mail inválido.'
 
-    if (isMinor) {
-      if (!guardian.name.trim()) next.guardian_name = 'Responsável é obrigatório para menor de 18.'
+    // DADOS DO RESPONSÁVEL: obrigatórios SEMPRE que a caixa "O aluno é o próprio
+    // responsável" NÃO estiver marcada — nome, CPF, telefone (e o endereço, na
+    // seção abaixo). Apenas o E-MAIL do responsável é opcional. Com a caixa
+    // marcada (só possível para maior de 18), os campos ficam dispensados.
+    if (!isSelf) {
+      if (!guardian.name.trim()) next.guardian_name = 'Informe o nome do responsável.'
       if (!guardian.cpf.trim()) {
-        next.guardian_cpf = 'CPF do responsável é obrigatório para menor de 18.'
+        next.guardian_cpf = 'Informe o CPF do responsável.'
       } else if (onlyDigits(guardian.cpf).length !== 11) {
         next.guardian_cpf = 'CPF do responsável incompleto (11 dígitos).'
       } else if (isCpfInvalid(guardian.cpf)) {
         next.guardian_cpf = CPF_INVALID_MESSAGE
       }
       if (!guardian.phone.trim()) {
-        next.guardian_phone = 'Telefone do responsável é obrigatório para menor de 18.'
+        next.guardian_phone = 'Informe o telefone do responsável.'
       } else if (onlyDigits(guardian.phone).length < 10) {
         next.guardian_phone = 'Telefone do responsável incompleto.'
       }
@@ -348,27 +364,23 @@ export default function PublicEnroll() {
       if (guardian.email.trim() && !/^\S+@\S+\.\S+$/.test(guardian.email)) {
         next.guardian_email = 'E-mail do responsável inválido.'
       }
-      if (rgFile) {
-        // Documento do responsável: foto (JPG/PNG/WEBP) ou PDF, até 10 MB.
-        // (A escolha do arquivo já valida — aqui é a segunda barreira, antes do POST.)
-        if (!ACCEPTED_DOC_MIMES.includes(rgFile.type)) {
-          next.guardian_rg = DOC_FORMAT_HINT
-        } else if (rgFile.size > MAX_FILE_MB * 1024 * 1024) {
-          next.guardian_rg = `O documento do responsável é muito grande (máximo ${MAX_FILE_MB} MB). Tire a foto novamente ou envie um PDF menor.`
-        }
-      }
-      if (!rgFile)
-        next.guardian_rg = 'Anexe a foto/scan do RG do responsável (obrigatório p/ menor).'
-    } else if (!isSelf && guardian.name.trim() && guardian.cpf.trim()) {
-      if (onlyDigits(guardian.cpf).length !== 11) {
-        next.guardian_cpf = 'CPF do responsável incompleto (11 dígitos).'
-      } else if (isCpfInvalid(guardian.cpf)) {
-        next.guardian_cpf = CPF_INVALID_MESSAGE
+    }
+    // Documento do responsável: foto (JPG/PNG/WEBP) ou PDF, até 10 MB.
+    // (A escolha do arquivo já valida — aqui é a segunda barreira, antes do POST.)
+    if (rgFile) {
+      if (!ACCEPTED_DOC_MIMES.includes(rgFile.type)) {
+        next.guardian_rg = DOC_FORMAT_HINT
+      } else if (rgFile.size > MAX_FILE_MB * 1024 * 1024) {
+        next.guardian_rg = `O documento do responsável é muito grande (máximo ${MAX_FILE_MB} MB). Tire a foto novamente ou envie um PDF menor.`
       }
     }
+    // O documento de identificação continua obrigatório apenas para MENOR de 18
+    // (para maior de 18 respondendo por si, é opcional).
+    if (isMinor && !rgFile)
+      next.guardian_rg = 'Anexe a foto/scan do RG do responsável (obrigatório p/ menor).'
 
     // Endereço: CEP, rua, número, bairro, cidade e UF OBRIGATÓRIOS
-    // (somente o complemento fica opcional).
+    // (somente o complemento fica opcional) — é o endereço do aluno/responsável.
     if (!address.cep.trim()) next.cep = 'Informe o CEP.'
     else if (onlyDigits(address.cep).length !== 8) next.cep = 'CEP incompleto (8 dígitos).'
     if (!address.street.trim()) next.street = 'Informe a rua / logradouro.'
@@ -431,11 +443,13 @@ export default function PublicEnroll() {
 
     // CPF com dígitos verificadores inválidos BLOQUEIA o envio (valida antes de
     // ligar o submitting, para o botão não ficar travado com o formulário sujo).
-    if (isCpfInvalid(studentCpf) || isCpfInvalid(guardian.cpf)) {
+    // Com "aluno é o próprio responsável" marcado, o CPF exigido é o do ALUNO —
+    // o campo do responsável está oculto e não pode bloquear por valor antigo.
+    if (isCpfInvalid(studentCpf) || (!isSelf && isCpfInvalid(guardian.cpf))) {
       setErrors((er) => ({
         ...er,
         ...(isCpfInvalid(studentCpf) ? { student_cpf: CPF_INVALID_MESSAGE } : {}),
-        ...(isCpfInvalid(guardian.cpf) ? { guardian_cpf: CPF_INVALID_MESSAGE } : {}),
+        ...(!isSelf && isCpfInvalid(guardian.cpf) ? { guardian_cpf: CPF_INVALID_MESSAGE } : {}),
       }))
       window.scrollTo({ top: 0, behavior: 'smooth' })
       return
@@ -896,6 +910,7 @@ export default function PublicEnroll() {
               <p className="text-[10px] text-slate-500">
                 Marque se o aluno é maior de 18 anos e responde pela própria matrícula — os dados
                 serão copiados da seção 1.
+                {isMinor && ' Bloqueada: a data de nascimento indica aluno(a) menor de 18 anos.'}
               </p>
             </div>
           </div>
@@ -904,11 +919,21 @@ export default function PublicEnroll() {
             <div className="space-y-3">
               <div className="space-y-1">
                 <Label className="text-xs font-semibold text-[#1E2A3A]">
-                  Nome do responsável {isMinor && <span className="text-red-600">*</span>}
+                  Nome do responsável <span className="text-red-600">*</span>
                 </Label>
                 <Input
                   value={guardian.name}
-                  onChange={(e) => setGuardian((g) => ({ ...g, name: e.target.value }))}
+                  onChange={(e) => {
+                    const v = e.target.value
+                    setGuardian((g) => ({ ...g, name: v }))
+                    // Erro some em tempo real assim que o campo é preenchido.
+                    setErrors((er) => {
+                      if (!er.guardian_name || !v.trim()) return er
+                      const clean = { ...er }
+                      delete clean.guardian_name
+                      return clean
+                    })
+                  }}
                   placeholder="Nome completo do responsável"
                   className={`h-9 text-sm ${errCls('guardian_name')}`}
                 />
@@ -917,7 +942,7 @@ export default function PublicEnroll() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <Label className="text-xs font-semibold text-[#1E2A3A]">
-                    CPF {isMinor && <span className="text-red-600">*</span>}
+                    CPF <span className="text-red-600">*</span>
                   </Label>
                   <Input
                     value={maskCpf(guardian.cpf)}
@@ -940,11 +965,21 @@ export default function PublicEnroll() {
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs font-semibold text-[#1E2A3A]">
-                    Telefone / WhatsApp {isMinor && <span className="text-red-600">*</span>}
+                    Telefone / WhatsApp <span className="text-red-600">*</span>
                   </Label>
                   <Input
                     value={maskPhone(guardian.phone)}
-                    onChange={(e) => setGuardian((g) => ({ ...g, phone: e.target.value }))}
+                    onChange={(e) => {
+                      const v = e.target.value
+                      setGuardian((g) => ({ ...g, phone: v }))
+                      // Erro some em tempo real quando o telefone completa 10+ dígitos.
+                      setErrors((er) => {
+                        if (!er.guardian_phone || onlyDigits(v).length < 10) return er
+                        const clean = { ...er }
+                        delete clean.guardian_phone
+                        return clean
+                      })
+                    }}
                     placeholder="(83) 90000-0000"
                     className={`h-9 text-sm ${errCls('guardian_phone')}`}
                   />
@@ -952,13 +987,21 @@ export default function PublicEnroll() {
                 </div>
               </div>
               <div className="space-y-1">
-                <Label className="text-xs font-semibold text-[#1E2A3A]">
-                  E-mail {isMinor && <span className="text-red-600">*</span>}
-                </Label>
+                <Label className="text-xs font-semibold text-[#1E2A3A]">E-mail (opcional)</Label>
                 <Input
                   type="email"
                   value={guardian.email}
-                  onChange={(e) => setGuardian((g) => ({ ...g, email: e.target.value }))}
+                  onChange={(e) => {
+                    const v = e.target.value
+                    setGuardian((g) => ({ ...g, email: v }))
+                    // Erro de formato some em tempo real quando o e-mail fica válido.
+                    setErrors((er) => {
+                      if (!er.guardian_email || !/^\S+@\S+\.\S+$/.test(v.trim())) return er
+                      const clean = { ...er }
+                      delete clean.guardian_email
+                      return clean
+                    })
+                  }}
                   placeholder="email@exemplo.com"
                   className={`h-9 text-sm ${errCls('guardian_email')}`}
                 />
