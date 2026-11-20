@@ -24,8 +24,6 @@ interface StudentUpdatesDialogProps {
   students: StudentRecord[]
   loading: boolean
   onReload: () => void
-  /** Chamado quando o admin CLICA em um aluno da fila — marca SOMENTE aquele aluno como visto. */
-  onMarkStudentSeen: (student: StudentRecord) => void
 }
 
 /**
@@ -33,9 +31,10 @@ interface StudentUpdatesDialogProps {
  * atualização ainda não foi lida pelo admin (atualizacao_vista_pelo_admin =
  * false — o filtro vem do getStudentUpdates). Quem já foi lido, ou teve a
  * assinatura da ficha registrada, sai da lista. Mesmo padrão visual do painel
- * de solicitações de /matriculas. Abrir e fechar a lista NÃO altera a fila nem
- * o badge: o card só sai quando o admin clica no aluno (ou registra a assinatura
- * da ficha — registrarAssinaturaFicha também quita o flag).
+ * de solicitações de /matriculas. Abrir, fechar e CLICAR em um card NÃO altera
+ * a fila nem o badge: clicar apenas navega ao detalhe do aluno. O card só sai
+ * da fila quando o admin registra a assinatura da ficha
+ * (registrarAssinaturaFicha quita atualizacao_vista_pelo_admin).
  */
 export function StudentUpdatesDialog({
   open,
@@ -43,7 +42,6 @@ export function StudentUpdatesDialog({
   students,
   loading,
   onReload,
-  onMarkStudentSeen,
 }: StudentUpdatesDialogProps) {
   const navigate = useNavigate()
 
@@ -59,9 +57,10 @@ export function StudentUpdatesDialog({
     [students],
   )
 
-  // A fila NÃO é limpa ao abrir/fechar: só o clique no aluno o marca como visto.
-  const markSeenAndOpen = (student: StudentRecord) => {
-    onMarkStudentSeen(student)
+  // Clicar em um card APENAS navega ao detalhe do aluno: nada é marcado como
+  // visto e o card permanece na fila. A saída da fila acontece somente quando
+  // o admin registra a assinatura da ficha do aluno.
+  const openStudent = (student: StudentRecord) => {
     onOpenChange(false)
     navigate(`/alunos/${student.id}`)
   }
@@ -76,7 +75,7 @@ export function StudentUpdatesDialog({
           </DialogTitle>
           <DialogDescription>
             Alunos com atualização pendente de leitura — enviada pelo próprio link seguro, da mais
-            recente para a mais antiga. Ler ou registrar a assinatura da ficha encerra o aviso.
+            recente para a mais antiga. Registrar a assinatura da ficha do aluno encerra o aviso.
           </DialogDescription>
         </DialogHeader>
 
@@ -96,7 +95,7 @@ export function StudentUpdatesDialog({
                 <button
                   key={s.id}
                   type="button"
-                  onClick={() => markSeenAndOpen(s)}
+                  onClick={() => openStudent(s)}
                   className="w-full text-left rounded-xl border border-slate-200 bg-white hover:border-[#17A2B8]/60 hover:bg-sky-50/40 transition p-3 flex items-center gap-3"
                 >
                   <Avatar className="w-10 h-10 border-2 border-slate-200 bg-slate-100">

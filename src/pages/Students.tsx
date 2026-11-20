@@ -281,18 +281,11 @@ export default function Students() {
     }
   }
 
-  // Admin CLICOU em um aluno na fila de atualizações: marca SOMENTE aquele aluno
-  // como visto (atualizacao_vista_pelo_admin = true) e navega ao detalhe.
-  // Abrir/fechar o diálogo NÃO marca nada — a fila sobrevive ao fechamento.
-  const markStudentSeenAndOpen = async (student: StudentRecord) => {
-    setUpdatedStudents((prev) => prev.filter((s) => s.id !== student.id))
-    setUnseenUpdates((prev) => Math.max(0, prev - 1))
-    try {
-      await academyService.markStudentUpdatesSeen([student.id])
-    } catch (err) {
-      console.error(err)
-    }
-  }
+  // NÃO há mais markStudentUpdatesSeen no clique: abrir/fechar o diálogo e
+  // clicar em um card NÃO marca nada como visto — o card sai da fila (e o
+  // contador baixa) SOMENTE quando o admin registra a assinatura da ficha do
+  // aluno (registrarAssinaturaFicha quita atualizacao_vista_pelo_admin) e o
+  // realtime de students recarrega a lista.
 
   useEffect(() => {
     if (updatesOpen) {
@@ -1042,7 +1035,6 @@ export default function Students() {
         students={updatedStudents}
         loading={updatesLoading}
         onReload={loadUpdatedStudents}
-        onMarkStudentSeen={markStudentSeenAndOpen}
       />
 
       {viewMode === 'familia' && (
