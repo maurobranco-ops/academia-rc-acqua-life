@@ -281,23 +281,17 @@ export default function Students() {
     }
   }
 
-  // Admin abriu a lista de atualizações: marca todas como vistas e zera o badge.
-  const markUpdatesSeen = async () => {
-    const ids = updatedStudents.map((s) => s.id)
-    if (ids.length === 0) {
-      setUnseenUpdates(0)
-      return
-    }
-    setUnseenUpdates(0)
+  // Admin CLICOU em um aluno na fila de atualizações: marca SOMENTE aquele aluno
+  // como visto (atualizacao_vista_pelo_admin = true) e navega ao detalhe.
+  // Abrir/fechar o diálogo NÃO marca nada — a fila sobrevive ao fechamento.
+  const markStudentSeenAndOpen = async (student: StudentRecord) => {
+    setUpdatedStudents((prev) => prev.filter((s) => s.id !== student.id))
+    setUnseenUpdates((prev) => Math.max(0, prev - 1))
     try {
-      await academyService.markStudentUpdatesSeen(ids)
-      // Layout (sidebar/drawer) escuta este evento para zerar o badge na hora.
-      window.dispatchEvent(new CustomEvent('student-updates-seen'))
+      await academyService.markStudentUpdatesSeen([student.id])
     } catch (err) {
       console.error(err)
     }
-    // A lista é uma FILA de pendências: o que foi lido sai dela imediatamente.
-    setUpdatedStudents([])
   }
 
   useEffect(() => {
@@ -1048,7 +1042,7 @@ export default function Students() {
         students={updatedStudents}
         loading={updatesLoading}
         onReload={loadUpdatedStudents}
-        onMarkAsSeen={markUpdatesSeen}
+        onMarkStudentSeen={markStudentSeenAndOpen}
       />
 
       {viewMode === 'familia' && (

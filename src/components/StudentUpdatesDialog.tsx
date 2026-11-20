@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { RefreshCw, Loader2, UserCheck } from 'lucide-react'
 import {
@@ -9,6 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { academyService } from '@/services/academy'
@@ -23,8 +24,8 @@ interface StudentUpdatesDialogProps {
   students: StudentRecord[]
   loading: boolean
   onReload: () => void
-  /** Chamado quando o admin abriu a lista — marca como vistas e zera o badge. */
-  onMarkAsSeen: () => void
+  /** Chamado quando o admin CLICA em um aluno da fila — marca SOMENTE aquele aluno como visto. */
+  onMarkStudentSeen: (student: StudentRecord) => void
 }
 
 /**
@@ -32,8 +33,9 @@ interface StudentUpdatesDialogProps {
  * atualização ainda não foi lida pelo admin (atualizacao_vista_pelo_admin =
  * false — o filtro vem do getStudentUpdates). Quem já foi lido, ou teve a
  * assinatura da ficha registrada, sai da lista. Mesmo padrão visual do painel
- * de solicitações de /matriculas. Abrir a lista marca as pendências como
- * vistas pelo admin (zera o badge da navegação).
+ * de solicitações de /matriculas. Abrir e fechar a lista NÃO altera a fila nem
+ * o badge: o card só sai quando o admin clica no aluno (ou registra a assinatura
+ * da ficha — registrarAssinaturaFicha também quita o flag).
  */
 export function StudentUpdatesDialog({
   open,
@@ -41,7 +43,7 @@ export function StudentUpdatesDialog({
   students,
   loading,
   onReload,
-  onMarkAsSeen,
+  onMarkStudentSeen,
 }: StudentUpdatesDialogProps) {
   const navigate = useNavigate()
 
@@ -57,14 +59,9 @@ export function StudentUpdatesDialog({
     [students],
   )
 
-  // Toda abertura da lista marca como vista: o badge da navegação zera.
-  useEffect(() => {
-    if (open) onMarkAsSeen()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open])
-
+  // A fila NÃO é limpa ao abrir/fechar: só o clique no aluno o marca como visto.
   const markSeenAndOpen = (student: StudentRecord) => {
-    onMarkAsSeen()
+    onMarkStudentSeen(student)
     onOpenChange(false)
     navigate(`/alunos/${student.id}`)
   }
@@ -111,7 +108,12 @@ export function StudentUpdatesDialog({
                     </AvatarFallback>
                   </Avatar>
                   <div className="flex-1 min-w-0">
-                    <p className="font-bold text-[#0F1B3D] text-sm truncate">{s.name}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="font-bold text-[#0F1B3D] text-sm truncate">{s.name}</p>
+                      <Badge className="bg-[#17A2B8]/10 text-[#0F7C8A] border-[#17A2B8]/30 text-[10px] font-bold">
+                        Nova
+                      </Badge>
+                    </div>
                     <p className="text-[11px] text-slate-500">
                       Atualizado pelo aluno em {formatDateBR(s.atualizado_pelo_aluno_em)}
                     </p>

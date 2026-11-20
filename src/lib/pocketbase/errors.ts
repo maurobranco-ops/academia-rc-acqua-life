@@ -2,6 +2,42 @@ import { ClientResponseError } from 'pocketbase'
 
 export type FieldErrors = Record<string, string>
 
+/**
+ * true somente para 404 do PocketBase ("The requested resource wasn't found.") —
+ * usado pelo delete tolerante de academy.ts: 404 significa que o registro JÁ foi
+ * excluído (disparo duplo, aba duplicada), então o resultado desejado aconteceu.
+ */
+export function isNotFoundError(error: unknown): boolean {
+  return error instanceof ClientResponseError && error.status === 404
+}
+
+const GENERIC_TRANSLATIONS: Record<string, string> = {
+  'Failed to authenticate.': 'Falha na autenticação. Faça login novamente.',
+  'The request requires valid admin authorization token.': 'Sessão expirada. Faça login novamente.',
+  "The requested resource wasn't found.": 'Registro não encontrado.',
+}
+
+const RULE_TRANSLATIONS: Array<{ pattern: RegExp; replacement: string }> = [
+  {
+    pattern: /validation not satisfied/i,
+    replacement: 'Verifique os campos destacados do formulário.',
+  },
+]
+
+/**
+ * Traduz mensagens cruas do PocketBase para português (usado principalmente nas
+ * rotas de servidor de exclusão de aluno com histórico, em academy.ts).
+ */
+export function translateBackendMessage(message: string): string {
+  if (!message) return message
+  const generic = GENERIC_TRANSLATIONS[message]
+  if (generic) return generic
+  for (const rule of RULE_TRANSLATIONS) {
+    if (rule.pattern.test(message)) return rule.replacement
+  }
+  return message
+}
+
 export function extractFieldErrors(error: unknown): FieldErrors {
   if (!(error instanceof ClientResponseError)) return {}
   const data = error.response?.data
@@ -26,44 +62,4 @@ export function getErrorMessage(error: unknown): string {
   }
   const msgs = Object.values(extractFieldErrors(error))
   return msgs.length > 0 ? msgs.join(' ') : error.message || 'An unexpected error occurred.'
-}
-
-/** TRUE apenas para 404 real — o recurso já não existe (exclusão dupla, aba duplicada). */
-export function isNotFoundError(error: unknown): boolean {
-  return error instanceof ClientResponseError && error.status === 404
-}
-
-// ---------------------------------------------------------------------------
-// Tradução de mensagens do backend para português (academy.ts consome direto).
-// ---------------------------------------------------------------------------
-
-const GENERIC: Record<string, string> = {
-  "The requested resource wasn't found.": 'Registro não encontrado.',
-  'Fail to authenticate.': 'Falha na autenticação.',
-  'An error occurred while processing your request. Please try again later.':
-    'Ocorreu um erro ao processar sua solicitação. Tente novamente mais tarde.',
-}
-
-const RULES: { pattern: RegExp; message: string }[] = [
-  {
-    pattern: /You can only delete/i,
-    message: 'Não foi possível excluir: existem registros vinculados a este item.',
-  },
-  {
-    pattern: /values must be unique|UNIQUE constraint/i,
-    message: 'Já existe um registro com esse valor (duplicado).',
-  },
-]
-
-/**
- * Converte a mensagem crua do PocketBase/servidor em português legível para o
- * usuário; devolve a original quando não há tradução conhecida.
- */
-export function translateBackendMessage(message: string): string {
-  if (!message) return message
-  if (GENERIC[message]) return GENERIC[message]
-  for (const rule of RULES) {
-    if (rule.pattern.test(message)) return rule.message
-  }
-  return message
 }
