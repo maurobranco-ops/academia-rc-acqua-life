@@ -1,6 +1,6 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { RefreshCw, Loader2, UserCheck } from 'lucide-react'
+import { RefreshCw, Loader2, UserCheck, PenLine } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { academyService } from '@/services/academy'
 import { formatDateBR } from '@/lib/matricula'
+import { useToast } from '@/hooks/use-toast'
 import { getStudentPhotoUrl } from '@/lib/studentPhoto'
 import type { StudentRecord } from '@/types/database'
 
@@ -35,6 +36,15 @@ interface StudentUpdatesDialogProps {
  * a fila nem o badge: clicar apenas navega ao detalhe do aluno. O card só sai
  * da fila quando o admin registra a assinatura da ficha
  * (registrarAssinaturaFicha quita atualizacao_vista_pelo_admin).
+ *
+ * ATALHO NO CARD (0.0.93): cada card tem o botão "Registrar assinatura" com a
+ * MESMA semântica da ficha imprimível — grava ficha_assinada_em, limpa
+ * ficha_pendente E quita atualizacao_vista_pelo_admin — sem abrir telas.
+ * O clique no botão não navega (stopPropagation); o restante do card continua
+ * apenas navegando ao detalhe do aluno.
+ *
+ * signedIds (saída otimista da fila) é limpo para ids que não voltam na lista:
+ * se o mesmo aluno reenviar a atualização pelo link, ele volta a aparecer.
  */
 export function StudentUpdatesDialog({
   open,
@@ -44,25 +54,74 @@ export function StudentUpdatesDialog({
   onReload,
 }: StudentUpdatesDialogProps) {
   const navigate = useNavigate()
+  const { toast } = useToast()
+  const [signingId, setSigningId] = useState<string | null>(null)
+  const [signedIds, setSignedIds] = useState<Set<string>>(() => new Set())
 
   const updated = useMemo(
     () =>
       students
-        .filter((s) => !!s.atualizado_pelo_aluno_em)
+        .filter((s) => !!s.atualizado_pelo_aluno_em && !signedIds.has(s.id))
         .sort(
           (a, b) =>
             new Date(b.atualizado_pelo_aluno_em || 0).getTime() -
             new Date(a.atualizado_pelo_aluno_em || 0).getTime(),
         ),
-    [students],
+    [students, signedIds],
   )
 
+  // signedIds (saída otimista da fila) é limpo para ids que não voltam na
+  // lista do backend: se o mesmo aluno reenviar a atualização pelo link
+  // (flag atualizacao_vista_pelo_admin volta a false), ele reaparece na fila.
+  useEffect(() => {
+    setSignedIds((prev) => {
+      if (prev.size === 0) return prev
+      const alive = new Set(students.map((s) => s.id))
+      const next = new Set([...prev].filter((id) => alive.has(id)))
+      return next.size === prev.size ? prev : next
+    })
+  }, [students])
+
   // Clicar em um card APENAS navega ao detalhe do aluno: nada é marcado como
-  // visto e o card permanece na fila. A saída da fila acontece somente quando
-  // o admin registra a assinatura da ficha do aluno.
+  // visto e o card permanece na fila. A saída da fila acontece quando o admin
+  // registra a assinatura da ficha do aluno — pelo atalho no próprio card ou
+  // pelo botão da ficha imprimível.
   const openStudent = (student: StudentRecord) => {
     onOpenChange(false)
     navigate(`/alunos/${student.id}`)
+  }
+
+  // Atalho do card: mesma chamada da ficha imprimível — quita os DOIS flags
+  // (atualizacao_vista_pelo_admin = true e ficha_pendente = false) e grava
+  // ficha_assinada_em. O realtime de students recarrega a lista na página
+  // (/alunos) e o card sai da fila; a recontagem do badge é refeita no efeito.
+  const handleRegisterSignature = async (student: StudentRecord) => {
+    if (signingId || signedIds.has(student.id)) return
+    setSigningId(student.id)
+    try {
+      await academyService.registrarAssinaturaFicha(student.id)
+      setSignedIds((prev) => {
+        const next = new Set(prev)
+        next.add(student.id)
+        return next
+      })
+      toast({
+        title: 'Assinatura registrada!',
+        description: `Ficha de ${student.name} assinada em ${new Date().toLocaleDateString('pt-BR')} — atualização encerrada.`,
+      })
+      // Recontagem imediata da fila e do contador do botão "Atualizações":
+      // o aluno não entra mais no filtro atualizacao_vista_pelo_admin = false.
+      onReload()
+    } catch (err) {
+      console.error(err)
+      toast({
+        title: 'Erro ao registrar assinatura',
+        description: err instanceof Error ? err.message : 'Tente novamente.',
+        variant: 'destructive',
+      })
+    } finally {
+      setSigningId(null)
+    }
   }
 
   return (
@@ -92,13 +151,20 @@ export function StudentUpdatesDialog({
             {updated.map((s) => {
               const photoUrl = getStudentPhotoUrl(s)
               return (
-                <button
+                <div
                   key={s.id}
-                  type="button"
+                  role="button"
+                  tabIndex={0}
                   onClick={() => openStudent(s)}
-                  className="w-full text-left rounded-xl border border-slate-200 bg-white hover:border-[#17A2B8]/60 hover:bg-sky-50/40 transition p-3 flex items-center gap-3"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      openStudent(s)
+                    }
+                  }}
+                  className="w-full cursor-pointer rounded-xl border border-slate-200 bg-white hover:border-[#17A2B8]/60 hover:bg-sky-50/40 transition p-3 flex items-center gap-3"
                 >
-                  <Avatar className="w-10 h-10 border-2 border-slate-200 bg-slate-100">
+                  <Avatar className="w-10 h-10 shrink-0 border-2 border-slate-200 bg-slate-100">
                     {photoUrl ? (
                       <AvatarImage src={photoUrl} alt={s.name} className="object-cover" />
                     ) : null}
@@ -109,7 +175,7 @@ export function StudentUpdatesDialog({
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <p className="font-bold text-[#0F1B3D] text-sm truncate">{s.name}</p>
-                      <Badge className="bg-[#17A2B8]/10 text-[#0F7C8A] border-[#17A2B8]/30 text-[10px] font-bold">
+                      <Badge className="bg-[#17A2B8]/10 text-[#0F7C8A] border-[#17A2B8]/30 text-[10px] font-bold shrink-0">
                         Nova
                       </Badge>
                     </div>
@@ -117,7 +183,24 @@ export function StudentUpdatesDialog({
                       Atualizado pelo aluno em {formatDateBR(s.atualizado_pelo_aluno_em)}
                     </p>
                   </div>
-                </button>
+                  <Button
+                    size="sm"
+                    className="border-emerald-300 text-emerald-700 hover:bg-emerald-50 bg-white font-bold text-[11px] h-8 px-2.5 shrink-0"
+                    variant="outline"
+                    disabled={signingId !== null}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleRegisterSignature(s)
+                    }}
+                  >
+                    {signingId === s.id ? (
+                      <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
+                    ) : (
+                      <PenLine className="w-3.5 h-3.5 mr-1" />
+                    )}
+                    {signingId === s.id ? 'Registrando...' : 'Registrar assinatura'}
+                  </Button>
+                </div>
               )
             })}
           </div>
