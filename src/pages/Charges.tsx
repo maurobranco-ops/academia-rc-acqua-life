@@ -4,13 +4,10 @@ import {
   CreditCard,
   Plus,
   Send,
-  Copy,
-  Check,
   RotateCcw,
   CheckCircle2,
   Share2,
   Loader2,
-  ExternalLink,
   Users,
   Sparkles,
   Calendar,
@@ -91,9 +88,7 @@ export default function Charges() {
   })
   const [formMethod, setFormMethod] = useState<'pix' | 'cartao' | 'boleto'>('pix')
   const [isFamilyCharge, setIsFamilyCharge] = useState(false)
-  const [generateInfinitepayLink, setGenerateInfinitepayLink] = useState(true)
   const [submitting, setSubmitting] = useState(false)
-  const [copiedId, setCopiedId] = useState<string | null>(null)
 
   // Liquidate modal state (para escolher data de pagamento e checar desconto em dia)
   const [payModalOpen, setPayModalOpen] = useState(false)
@@ -145,7 +140,7 @@ export default function Charges() {
     if (data.action === 'update' && data.record.status === 'paga') {
       triggerConfetti()
       toast({
-        title: 'Pagamento Infinitepay Confirmado!',
+        title: 'Pagamento Confirmado!',
         description: `A cobrança "${data.record.description}" foi liquidada com sucesso.`,
       })
     }
@@ -238,16 +233,13 @@ export default function Charges() {
         due_date: `${formDueDate} 00:00:00.000Z`,
         status: 'em_aberto',
         payment_method: formMethod,
-        generateInfinitepay: generateInfinitepayLink,
       })
 
       const waSent = (created as { whatsapp_sent?: boolean }).whatsapp_sent
       const waStatus = (created as { whatsapp_status?: string }).whatsapp_status
       const waError = (created as { whatsapp_error?: string }).whatsapp_error
 
-      let feedbackMsg = generateInfinitepayLink
-        ? `Link InfinitePay pronto para pagamento (${created.infinipay_payment_id || 'ativo'}).`
-        : 'Cobrança cadastrada com sucesso.'
+      let feedbackMsg = 'Cobrança cadastrada com sucesso.'
 
       if (waSent) {
         feedbackMsg += ' Notificação enviada automaticamente pelo WhatsApp do proprietário!'
@@ -337,7 +329,7 @@ export default function Charges() {
       const res = await academyService.cancelCharge(selectedChargeToCancel.id)
       toast({
         title: 'Cobrança cancelada!',
-        description: res.message || 'O link de pagamento foi desativado e o status atualizado.',
+        description: res.message || 'O status da cobrança e do pagamento vinculado foi atualizado.',
       })
       setCancelModalOpen(false)
       setSelectedChargeToCancel(null)
@@ -358,7 +350,7 @@ export default function Charges() {
     try {
       await academyService.refundCharge(chargeId)
       toast({
-        title: 'Estorno Infinitepay Solicitado',
+        title: 'Estorno Registrado',
         description: 'A cobrança foi estornada com sucesso.',
       })
       loadData()
@@ -366,16 +358,6 @@ export default function Charges() {
       console.error(err)
       toast({ title: 'Falha ao solicitar estorno', variant: 'destructive' })
     }
-  }
-
-  const handleCopyLink = (link?: string, id?: string) => {
-    if (!link) return
-    navigator.clipboard.writeText(link)
-    if (id) {
-      setCopiedId(id)
-      setTimeout(() => setCopiedId(null), 2000)
-    }
-    toast({ title: 'Link de pagamento copiado para a área de transferência!' })
   }
 
   const handleSendWhatsAppOwner = async (charge: ChargeRecord) => {
@@ -408,8 +390,6 @@ export default function Charges() {
     const guardianName = student?.guardian_name || ''
     const greeting = guardianName ? guardianName : studentName
     const dueFormatted = new Date(charge.due_date).toLocaleDateString('pt-BR')
-    const link =
-      charge.payment_link || `https://pay.infinitepay.io/link/${charge.infinipay_payment_id}`
 
     let discountText = ''
     if (charge.discount_amount && charge.discount_amount > 0) {
@@ -432,7 +412,6 @@ export default function Charges() {
         `Olá, *${greeting}*!\n\n` +
         `A fatura de *${studentName}* referente a "${charge.description}" no valor de *R$ ${charge.amount.toFixed(2)}* com vencimento em *${dueFormatted}* já está disponível para pagamento.\n` +
         discountText +
-        `\n💳 *Link de Pagamento (PIX e Cartão):*\n${link}\n\n` +
         `O comprovante é compensado automaticamente e você não precisa nos enviar o recibo.\n` +
         `Em caso de dúvidas, basta responder esta mensagem.\n\n` +
         `_Atenciosamente,_\n*RC Acqua Life*`,
@@ -478,7 +457,7 @@ export default function Charges() {
         <div>
           <h2 className="text-2xl font-bold text-[#0F1B3D]">Gestão de Cobranças</h2>
           <p className="text-xs text-[#6C757D]">
-            Emissão de faturas, links de pagamento Infinitepay e notificações por WhatsApp
+            Emissão de faturas, cobranças e notificações por WhatsApp
           </p>
         </div>
 
@@ -492,40 +471,6 @@ export default function Charges() {
         >
           <Plus className="w-4 h-4" /> Nova Cobrança
         </Button>
-      </div>
-
-      {/* Infinitepay Integration Banner */}
-      <div className="bg-gradient-to-r from-[#0F1B3D] via-[#1B2A5B] to-[#17A2B8] rounded-2xl p-5 text-white flex flex-col sm:flex-row items-center justify-between gap-4 shadow-md">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-white/10 border border-white/20 flex items-center justify-center">
-            <CreditCard className="w-6 h-6 text-[#D4AF37]" />
-          </div>
-          <div>
-            <h3 className="text-base font-bold text-white flex items-center gap-2">
-              Cobranças Infinitepay Conectadas
-              <Badge className="bg-emerald-500 text-white text-[10px] uppercase font-bold">
-                Online
-              </Badge>
-            </h3>
-            <p className="text-xs text-slate-200 mt-0.5">
-              Receba via PIX com liquidação instantânea ou Cartão de Crédito com taxas reduzidas.
-            </p>
-          </div>
-        </div>
-
-        <div className="text-right flex items-center gap-3">
-          <div className="bg-white/10 px-3 py-1.5 rounded-xl border border-white/20 text-xs">
-            <span className="text-slate-300 block text-[10px]">WhatsApp Conectado</span>
-            <span className="font-bold text-xs flex items-center gap-1 text-emerald-300">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block animate-pulse" />
-              Disparo Automático Ativo
-            </span>
-          </div>
-          <div className="bg-white/10 px-3 py-1.5 rounded-xl border border-white/20 text-xs">
-            <span className="text-slate-300 block text-[10px]">Total de Cobranças</span>
-            <span className="font-bold font-mono text-sm">{charges.length} emitidas</span>
-          </div>
-        </div>
       </div>
 
       {/* Status Tabs Navigation */}
@@ -593,9 +538,6 @@ export default function Charges() {
           filteredCharges.map((charge) => {
             const student = students.find((s) => s.id === charge.student_id)
             const dueDate = new Date(charge.due_date)
-            const link =
-              charge.payment_link ||
-              `https://pay.infinitepay.io/link/${charge.infinipay_payment_id}`
 
             return (
               <Card
@@ -637,13 +579,16 @@ export default function Charges() {
 
                     <p className="text-xs text-[#1E2A3A] font-medium">{charge.description}</p>
                     <p className="text-[11px] text-[#6C757D]">
-                      Vencimento: <strong>{dueDate.toLocaleDateString('pt-BR')}</strong> • ID
-                      Infinitepay:{' '}
-                      <code className="bg-slate-100 px-1 py-0.5 rounded text-[10px]">
-                        {charge.order_nsu
-                          ? `NSU: ${charge.order_nsu}`
-                          : charge.infinipay_payment_id || 'inf_demo'}
-                      </code>
+                      Vencimento: <strong>{dueDate.toLocaleDateString('pt-BR')}</strong>
+                      {charge.order_nsu ? (
+                        <>
+                          {' '}
+                          •{' '}
+                          <code className="bg-slate-100 px-1 py-0.5 rounded text-[10px]">
+                            NSU: {charge.order_nsu}
+                          </code>
+                        </>
+                      ) : null}
                       {student?.guardian_name && (
                         <span className="ml-2 inline-flex items-center gap-1 text-slate-600">
                           <Users className="w-3 h-3 text-[#17A2B8]" /> Resp: {student.guardian_name}
@@ -745,23 +690,6 @@ export default function Charges() {
                       {charge.whatsapp_sent ? 'Reenviar WhatsApp' : 'Enviar WhatsApp'}
                     </Button>
 
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => handleCopyLink(link, charge.id)}
-                      className="h-8 text-xs font-semibold border-[#E0E4EA] text-[#0F1B3D] hover:bg-slate-100 rounded-lg flex items-center gap-1.5"
-                    >
-                      {copiedId === charge.id ? (
-                        <>
-                          <Check className="w-3.5 h-3.5 text-emerald-600" /> Copiado
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="w-3.5 h-3.5" /> Copiar Link
-                        </>
-                      )}
-                    </Button>
-
                     {charge.status !== 'paga' && charge.status !== 'cancelada' && (
                       <Button
                         size="sm"
@@ -792,10 +720,6 @@ export default function Charges() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="text-xs">
-                        <DropdownMenuItem onClick={() => window.open(link, '_blank')}>
-                          <ExternalLink className="w-3.5 h-3.5 mr-2" /> Abrir Checkout Infinitepay
-                        </DropdownMenuItem>
-
                         <DropdownMenuItem onClick={() => handleSendWhatsAppManual(charge)}>
                           <Share2 className="w-3.5 h-3.5 mr-2 text-emerald-600" /> Abrir no WhatsApp
                           Web (manual)
@@ -806,7 +730,7 @@ export default function Charges() {
                             onClick={() => handleRefund(charge.id)}
                             className="text-amber-600"
                           >
-                            <RotateCcw className="w-3.5 h-3.5 mr-2" /> Estornar via Infinitepay
+                            <RotateCcw className="w-3.5 h-3.5 mr-2" /> Estornar cobrança
                           </DropdownMenuItem>
                         )}
 
@@ -845,7 +769,7 @@ export default function Charges() {
                 Emitir Nova Cobrança
               </DialogTitle>
               <DialogDescription className="text-xs text-[#6C757D]">
-                Gere um link de pagamento Instantâneo com tecnologia Infinitepay.
+                Preencha os dados da cobrança para registrá-la no sistema.
               </DialogDescription>
             </DialogHeader>
 
@@ -1003,9 +927,7 @@ export default function Charges() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <Label className="font-semibold text-[#1E2A3A]">
-                    Valor a Cobrar no Link (R$)
-                  </Label>
+                  <Label className="font-semibold text-[#1E2A3A]">Valor a Cobrar (R$)</Label>
                   <Input
                     required
                     type="number"
@@ -1014,10 +936,6 @@ export default function Charges() {
                     onChange={(e) => setFormAmount(e.target.value)}
                     className="focus-visible:ring-[#D4AF37] font-mono font-bold text-emerald-800"
                   />
-                  <p className="text-[10px] text-slate-500">
-                    Valor exato enviado ao checkout InfinitePay (líquido com desconto
-                    pontualidade/família se aplicável).
-                  </p>
                 </div>
 
                 <div className="space-y-1">
@@ -1057,7 +975,7 @@ export default function Charges() {
                     />
                   </div>
                   <div className="flex flex-col justify-end text-xs">
-                    <span className="text-[10px] text-slate-500">Total enviado à InfinitePay:</span>
+                    <span className="text-[10px] text-slate-500">Total da cobrança:</span>
                     <span className="font-bold font-mono text-emerald-700 text-sm">
                       R$ {Number(formAmount || 0).toFixed(2)}
                     </span>
@@ -1083,22 +1001,6 @@ export default function Charges() {
                   </SelectContent>
                 </Select>
               </div>
-
-              <div className="flex items-center gap-2 p-3 bg-blue-50/70 border border-blue-200 rounded-xl mt-2">
-                <input
-                  type="checkbox"
-                  id="chkInfinitepay"
-                  checked={generateInfinitepayLink}
-                  onChange={(e) => setGenerateInfinitepayLink(e.target.checked)}
-                  className="rounded text-[#0F1B3D] focus:ring-[#D4AF37]"
-                />
-                <label
-                  htmlFor="chkInfinitepay"
-                  className="text-xs text-[#0F1B3D] font-semibold cursor-pointer"
-                >
-                  Gerar Link de Pagamento Infinitepay para envio direto
-                </label>
-              </div>
             </div>
 
             <DialogFooter className="gap-2">
@@ -1110,7 +1012,7 @@ export default function Charges() {
                 disabled={submitting}
                 className="bg-[#D4AF37] hover:bg-[#B8953A] text-[#0F1B3D] font-bold"
               >
-                {submitting ? 'Gerando Link...' : 'Emitir Cobrança'}
+                {submitting ? 'Emitindo...' : 'Emitir Cobrança'}
               </Button>
             </DialogFooter>
           </form>
@@ -1173,10 +1075,6 @@ export default function Charges() {
                   Aviso importante:
                 </p>
                 <ul className="list-disc list-inside space-y-1 text-[11px] text-rose-800 leading-relaxed">
-                  <li>
-                    O link de pagamento da InfinitePay será <strong>desativado</strong> para que o
-                    aluno não consiga mais efetuar o pagamento.
-                  </li>
                   <li>O status da cobrança e do pagamento vinculado mudará para "Cancelada".</li>
                   <li>
                     <strong>Esta ação não pode ser desfeita.</strong>

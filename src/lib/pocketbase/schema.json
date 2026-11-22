@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-22T10:19:11.900Z",
+  "generatedAt": "2026-11-22T11:27:35.626Z",
   "collections": [
     {
       "name": "users",
@@ -769,18 +769,6 @@
           "selectValues": ["pix", "cartao", "boleto", "dinheiro", "transferencia"]
         },
         {
-          "name": "infinipay_payment_id",
-          "type": "text",
-          "required": false,
-          "system": false
-        },
-        {
-          "name": "payment_link",
-          "type": "text",
-          "required": false,
-          "system": false
-        },
-        {
           "name": "created",
           "type": "autodate",
           "required": false,
@@ -841,39 +829,12 @@
           "type": "text",
           "required": false,
           "system": false
-        },
-        {
-          "name": "infinipay_order_nsu",
-          "type": "text",
-          "required": false,
-          "system": false
-        },
-        {
-          "name": "infinipay_slug",
-          "type": "text",
-          "required": false,
-          "system": false
-        },
-        {
-          "name": "infinipay_receipt_url",
-          "type": "text",
-          "required": false,
-          "system": false
-        },
-        {
-          "name": "infinipay_paid_amount",
-          "type": "number",
-          "required": false,
-          "system": false
         }
       ],
       "indexes": [
         "CREATE INDEX idx_charges_student_id ON charges (student_id)",
         "CREATE INDEX idx_charges_status ON charges (status)",
-        "CREATE INDEX `idx_charges_order_nsu` ON `charges` (order_nsu)",
-        "CREATE INDEX `idx_charges_infinipay_payment_id` ON `charges` (infinipay_payment_id)",
-        "CREATE INDEX `idx_charges_infinipay_order_nsu` ON `charges` (infinipay_order_nsu)",
-        "CREATE INDEX `idx_charges_infinipay_slug` ON `charges` (infinipay_slug)"
+        "CREATE INDEX `idx_charges_order_nsu` ON `charges` (order_nsu)"
       ]
     },
     {
@@ -941,18 +902,6 @@
           "selectValues": ["pix", "cartao", "boleto", "dinheiro", "transferencia"]
         },
         {
-          "name": "payment_link",
-          "type": "text",
-          "required": false,
-          "system": false
-        },
-        {
-          "name": "infinipay_transaction_id",
-          "type": "text",
-          "required": false,
-          "system": false
-        },
-        {
           "name": "created",
           "type": "autodate",
           "required": false,
@@ -985,18 +934,6 @@
           "system": false
         },
         {
-          "name": "infinipay_order_nsu",
-          "type": "text",
-          "required": false,
-          "system": false
-        },
-        {
-          "name": "infinipay_slug",
-          "type": "text",
-          "required": false,
-          "system": false
-        },
-        {
           "name": "receipt_url",
           "type": "text",
           "required": false,
@@ -1007,9 +944,7 @@
         "CREATE INDEX idx_payments_student_id ON payments (student_id)",
         "CREATE INDEX idx_payments_charge_id ON payments (charge_id)",
         "CREATE INDEX idx_payments_status ON payments (status)",
-        "CREATE INDEX `idx_payments_order_nsu` ON `payments` (order_nsu)",
-        "CREATE INDEX `idx_payments_infinipay_trans` ON `payments` (infinipay_transaction_id)",
-        "CREATE INDEX `idx_payments_infinipay_order_nsu` ON `payments` (infinipay_order_nsu)"
+        "CREATE INDEX `idx_payments_order_nsu` ON `payments` (order_nsu)"
       ]
     },
     {
@@ -1141,85 +1076,6 @@
         }
       ],
       "indexes": ["CREATE UNIQUE INDEX idx_settings_key ON settings (key)"]
-    },
-    {
-      "name": "webhook_events",
-      "type": "base",
-      "apiRules": {
-        "list": "@request.auth.id != ''",
-        "view": "@request.auth.id != ''",
-        "create": "@request.auth.id != ''",
-        "update": "@request.auth.id != ''",
-        "delete": "@request.auth.id != ''"
-      },
-      "fields": [
-        {
-          "name": "event_key",
-          "type": "text",
-          "required": true,
-          "system": false
-        },
-        {
-          "name": "event_type",
-          "type": "text",
-          "required": true,
-          "system": false
-        },
-        {
-          "name": "order_nsu",
-          "type": "text",
-          "required": false,
-          "system": false
-        },
-        {
-          "name": "transaction_nsu",
-          "type": "text",
-          "required": false,
-          "system": false
-        },
-        {
-          "name": "invoice_slug",
-          "type": "text",
-          "required": false,
-          "system": false
-        },
-        {
-          "name": "charge_id",
-          "type": "text",
-          "required": false,
-          "system": false
-        },
-        {
-          "name": "status",
-          "type": "text",
-          "required": false,
-          "system": false
-        },
-        {
-          "name": "payload",
-          "type": "json",
-          "required": false,
-          "system": false
-        },
-        {
-          "name": "created",
-          "type": "autodate",
-          "required": false,
-          "system": false,
-          "autodateTriggers": ["onCreate"]
-        },
-        {
-          "name": "updated",
-          "type": "autodate",
-          "required": false,
-          "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
-        }
-      ],
-      "indexes": [
-        "CREATE UNIQUE INDEX idx_webhook_events_key ON webhook_events (event_key)",
-        "CREATE INDEX idx_webhook_events_order_nsu ON webhook_events (order_nsu)"
-      ]
     },
     {
       "name": "enrollment_requests",

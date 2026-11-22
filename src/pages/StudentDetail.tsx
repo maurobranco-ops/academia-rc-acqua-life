@@ -233,7 +233,7 @@ export default function StudentDetail() {
       const res = await academyService.cancelCharge(selectedChargeToCancel.id)
       toast({
         title: 'Cobrança cancelada!',
-        description: res.message || 'O link de pagamento foi desativado e o status atualizado.',
+        description: res.message || 'A cobrança foi cancelada e o status atualizado.',
       })
       setCancelModalOpen(false)
       setSelectedChargeToCancel(null)
@@ -494,7 +494,7 @@ export default function StudentDetail() {
             }
             className="bg-[#D4AF37] hover:bg-[#B8953A] text-[#0F1B3D] font-bold text-xs h-9 rounded-xl flex items-center justify-center gap-1.5 shadow-sm w-full sm:w-auto"
           >
-            <CreditCard className="w-4 h-4" /> Emitir Cobrança Infinitepay
+            <CreditCard className="w-4 h-4" /> Emitir Cobrança
           </Button>
 
           <Button
@@ -794,7 +794,7 @@ export default function StudentDetail() {
                     <th className="px-4 py-3">Descrição / Ref</th>
                     <th className="px-4 py-3">Valor</th>
                     <th className="px-4 py-3">Status</th>
-                    <th className="px-4 py-3">Pagamento / Link</th>
+                    <th className="px-4 py-3">Pagamento</th>
                     <th className="px-4 py-3 text-right">Ações</th>
                   </tr>
                 </thead>
@@ -811,7 +811,6 @@ export default function StudentDetail() {
                       const isEmAberto = c.status === 'em_aberto'
                       const isPaga = c.status === 'paga'
                       const isCancelada = c.status === 'cancelada'
-                      const payLink = c.payment_link || linkedPmt?.payment_link
 
                       return (
                         <tr key={c.id} className="hover:bg-slate-50 transition">
@@ -859,19 +858,8 @@ export default function StudentDetail() {
                               <span className="text-emerald-700 font-medium">
                                 Pago em {new Date(linkedPmt.paid_date).toLocaleDateString('pt-BR')}
                               </span>
-                            ) : payLink && !isCancelada ? (
-                              <a
-                                href={payLink}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="text-xs font-semibold text-[#17A2B8] hover:underline inline-flex items-center gap-1"
-                              >
-                                Abrir Link InfinitePay
-                              </a>
                             ) : isCancelada ? (
-                              <span className="text-rose-600/70 text-[11px] italic">
-                                Link cancelado
-                              </span>
+                              <span className="text-rose-600/70 text-[11px] italic">Cancelada</span>
                             ) : (
                               <span className="text-slate-400">—</span>
                             )}
@@ -1055,10 +1043,6 @@ export default function StudentDetail() {
                   Aviso importante:
                 </p>
                 <ul className="list-disc list-inside space-y-1 text-[11px] text-rose-800 leading-relaxed">
-                  <li>
-                    O link de pagamento da InfinitePay será <strong>desativado</strong> para que o
-                    aluno não consiga mais efetuar o pagamento.
-                  </li>
                   <li>O status da cobrança e do pagamento vinculado mudará para "Cancelada".</li>
                   <li>
                     <strong>Esta ação não pode ser desfeita.</strong>

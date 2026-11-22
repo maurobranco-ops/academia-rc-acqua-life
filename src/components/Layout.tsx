@@ -539,8 +539,7 @@ export default function Layout() {
               os direitos reservados.
             </span>
             <span className="text-slate-400">
-              Desenvolvido com <strong className="text-slate-600">Skip Cloud</strong> &amp;
-              Infinitepay
+              Desenvolvido com <strong className="text-slate-600">Skip Cloud</strong>
             </span>
           </div>
         </footer>

@@ -296,7 +296,6 @@ export const academyService = {
       amount: number
       due_date: string
       status: string
-      payment_link: string
       student_id: string
     }>
     payments: Array<{
@@ -413,25 +412,6 @@ export const academyService = {
       expand: 'student_id',
     })
   },
-  async testInfinitepayConnection(credentials?: {
-    apiKey?: string
-    handle?: string
-  }): Promise<{ success: boolean; message: string }> {
-    const response = await fetch(`${pb.baseUrl}/backend/v1/infinitepay/test-connection`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(credentials || {}),
-    })
-
-    const data = await response.json().catch(() => ({}))
-    if (!response.ok) {
-      throw new Error(data.message || `Erro HTTP ${response.status} ao testar conexão`)
-    }
-    return data
-  },
-
   async runRecurringBillingNow(force = false): Promise<{
     success: boolean
     summary?: string
@@ -466,46 +446,7 @@ export const academyService = {
     due_date: string
     status?: 'em_aberto' | 'paga' | 'vencida' | 'cancelada'
     payment_method?: 'pix' | 'cartao' | 'boleto' | 'dinheiro' | 'transferencia'
-    generateInfinitepay?: boolean
   }): Promise<ChargeRecord> {
-    // Quando solicitado checkout InfinitePay, chama o hook seguro no backend PocketBase
-    if (data.generateInfinitepay) {
-      const response = await fetch(`${pb.baseUrl}/backend/v1/infinitepay/create-charge`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(data),
-      })
-
-      const resJson = await response.json().catch(() => ({}))
-      if (!response.ok) {
-        throw new Error(
-          resJson.message || `Falha ao emitir cobrança via backend (HTTP ${response.status})`,
-        )
-      }
-
-      if (resJson.charge && resJson.charge.id) {
-        // Retorna o registro completo atualizado com dados de envio de whatsapp
-        const record = await pb.collection('charges').getOne<ChargeRecord>(resJson.charge.id, {
-          expand: 'student_id',
-        })
-        const enhanced = record as ChargeRecord
-        if (resJson.whatsapp_sent !== undefined) enhanced.whatsapp_sent = resJson.whatsapp_sent
-        if (resJson.whatsapp_status !== undefined)
-          enhanced.whatsapp_status = resJson.whatsapp_status
-        if (resJson.whatsapp_error !== undefined) enhanced.whatsapp_error = resJson.whatsapp_error
-        if (resJson.whatsapp_sent_at !== undefined)
-          enhanced.whatsapp_sent_at = resJson.whatsapp_sent_at
-        if (resJson.whatsapp_phone !== undefined) enhanced.whatsapp_phone = resJson.whatsapp_phone
-        return enhanced
-      }
-    }
-
-    // Fluxo manual tradicional (sem API externa ou gerado diretamente)
-    const infinipayId = 'inf_' + Math.random().toString(36).substring(2, 10)
-    const paymentLink = `https://pay.infinitepay.io/link/${infinipayId}`
-
     const record = await pb.collection('charges').create<ChargeRecord>({
       student_id: data.student_id,
       description: data.description,
@@ -514,8 +455,6 @@ export const academyService = {
       due_date: data.due_date,
       status: data.status || 'em_aberto',
       payment_method: data.payment_method || 'pix',
-      infinipay_payment_id: infinipayId,
-      payment_link: paymentLink,
     })
 
     // Also create matching payment entry
@@ -527,8 +466,6 @@ export const academyService = {
       due_date: data.due_date,
       status: data.status === 'paga' ? 'pago' : 'pendente',
       payment_method: data.payment_method || 'pix',
-      payment_link: paymentLink,
-      infinipay_transaction_id: infinipayId,
     })
 
     return record

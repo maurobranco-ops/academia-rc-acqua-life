@@ -64,7 +64,6 @@ const SETTINGS_TABS: Array<{
 }> = [
   { value: 'perfil', label: 'Dados da Academia', icon: Building2 },
   { value: 'planos', label: 'Planos e Mensalidades', icon: BookmarkCheck },
-  { value: 'infinitepay', label: 'Integração Infinitepay', icon: CreditCard },
   { value: 'cobranca_automatica', label: 'Cobrança Automática', icon: RotateCw },
   { value: 'instrutores', label: 'Instrutores', icon: UserCheck },
   { value: 'notificacoes', label: 'Notificações', icon: Bell },
@@ -111,7 +110,6 @@ export default function Settings() {
       amount: number
       due_date: string
       status: string
-      payment_link: string
       student_id: string
     }>
     payments: Array<{
@@ -155,10 +153,6 @@ export default function Settings() {
       student_names: string[]
     }
   } | null>(null)
-
-  // Infinitepay Connection Testing State
-  const [testingConnection, setTestingConnection] = useState(false)
-  const [connectionStatus, setConnectionStatus] = useState<'idle' | 'success' | 'failed'>('idle')
 
   // WhatsApp Sender Info State
   const [whatsappSenderInfo, setWhatsappSenderInfo] = useState<{
@@ -256,29 +250,6 @@ export default function Settings() {
     }
   }
 
-  const handleSaveInfinitepay = async () => {
-    try {
-      await academyService.updateSetting('infinitepay_api_key', settings.infinitepay_api_key || '')
-      await academyService.updateSetting('infinitepay_handle', settings.infinitepay_handle || '')
-      await academyService.updateSetting(
-        'infinitepay_api_url',
-        settings.infinitepay_api_url || 'https://api.checkout.infinitepay.io',
-      )
-      await academyService.updateSetting(
-        'infinitepay_webhook_secret',
-        settings.infinitepay_webhook_secret || '',
-      )
-      await academyService.updateSetting(
-        'infinitepay_auto_send_link',
-        settings.infinitepay_auto_send_link || 'false',
-      )
-      toast({ title: 'Configurações da Infinitepay salvas!' })
-    } catch (err) {
-      console.error(err)
-      toast({ title: 'Erro ao salvar', variant: 'destructive' })
-    }
-  }
-
   const handleSaveRecurringBillingSettings = async () => {
     setSavingRecurring(true)
     try {
@@ -323,32 +294,6 @@ export default function Settings() {
       })
     } finally {
       setRunningRecurring(false)
-    }
-  }
-
-  const handleTestInfinitepayConnection = async () => {
-    setTestingConnection(true)
-    setConnectionStatus('idle')
-    try {
-      const res = await academyService.testInfinitepayConnection({
-        apiKey: settings.infinitepay_api_key,
-        handle: settings.infinitepay_handle,
-      })
-      setConnectionStatus('success')
-      toast({
-        title: 'Conexão com InfinitePay validada!',
-        description: res.message || 'Servidor da InfinitePay respondeu com sucesso.',
-      })
-    } catch (err: unknown) {
-      setConnectionStatus('failed')
-      const msg = err instanceof Error ? err.message : 'Falha na conexão com a API da InfinitePay'
-      toast({
-        title: 'Falha na conexão',
-        description: msg,
-        variant: 'destructive',
-      })
-    } finally {
-      setTestingConnection(false)
     }
   }
 
@@ -534,17 +479,12 @@ export default function Settings() {
     )
   }
 
-  const backendBase = import.meta.env.VITE_POCKETBASE_URL || window.location.origin
-  const webhookEndpoint = `${backendBase.replace(/\/+$/, '')}/backend/v1/infinitepay/webhook`
-
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Top Header */}
       <div>
         <h2 className="text-2xl font-bold text-[#0F1B3D]">Configurações do Sistema</h2>
-        <p className="text-xs text-[#6C757D]">
-          Parâmetros da academia, credenciais Infinitepay, planos e equipe
-        </p>
+        <p className="text-xs text-[#6C757D]">Parâmetros da academia, planos e equipe</p>
       </div>
 
       <Tabs defaultValue="perfil" className="w-full">
@@ -711,171 +651,7 @@ export default function Settings() {
         </TabsContent>
 
         {/* ============================================================ */}
-        {/* TAB 3: INFINITEPAY */}
-        {/* ============================================================ */}
-        <TabsContent value="infinitepay">
-          <Card className="bg-white border-[#E0E4EA] rounded-xl shadow-xs">
-            <CardHeader>
-              <div className="flex flex-wrap gap-2 justify-between items-start">
-                <div className="min-w-0">
-                  <CardTitle className="text-base font-bold text-[#0F1B3D]">
-                    Credenciais da API Infinitepay
-                  </CardTitle>
-                  <CardDescription className="text-xs text-[#6C757D]">
-                    Configure chaves de produção para emissão de links de cobrança e PIX.
-                  </CardDescription>
-                </div>
-                {connectionStatus === 'success' && (
-                  <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 flex items-center gap-1">
-                    <CheckCircle2 className="w-3.5 h-3.5" /> Conexão Ativa
-                  </Badge>
-                )}
-                {connectionStatus === 'failed' && (
-                  <Badge className="bg-red-50 text-red-700 border-red-200 flex items-center gap-1">
-                    <XCircle className="w-3.5 h-3.5" /> Erro na Chave
-                  </Badge>
-                )}
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4 text-xs">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <Label className="font-semibold text-[#1E2A3A]">
-                    API Secret Key (Infinitepay)
-                  </Label>
-                  <Input
-                    type="password"
-                    value={settings.infinitepay_api_key || ''}
-                    onChange={(e) => handleUpdateSetting('infinitepay_api_key', e.target.value)}
-                    placeholder="inchk_... ou inf_live_..."
-                    className="font-mono focus-visible:ring-[#D4AF37]"
-                  />
-                  <p className="text-[10px] text-slate-500">
-                    A chave fica armazenada no servidor e é enviada no header <code>X-Api-Key</code>
-                    .
-                  </p>
-                </div>
-
-                <div className="space-y-1">
-                  <Label className="font-semibold text-[#1E2A3A]">
-                    InfiniteTag / Handle (Identificador da Conta)
-                  </Label>
-                  <Input
-                    value={settings.infinitepay_handle || ''}
-                    onChange={(e) => handleUpdateSetting('infinitepay_handle', e.target.value)}
-                    placeholder="sua_infinitetag (sem $)"
-                    className="font-mono focus-visible:ring-[#D4AF37]"
-                  />
-                  <p className="text-[10px] text-slate-500">
-                    Identificador da conta Infinitepay para direcionamento das faturas.
-                  </p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <Label className="font-semibold text-[#1E2A3A]">Endpoint da API (Checkout)</Label>
-                  <Input
-                    value={settings.infinitepay_api_url || 'https://api.checkout.infinitepay.io'}
-                    onChange={(e) => handleUpdateSetting('infinitepay_api_url', e.target.value)}
-                    placeholder="https://api.checkout.infinitepay.io"
-                    className="font-mono text-xs focus-visible:ring-[#D4AF37]"
-                  />
-                  <p className="text-[10px] text-slate-500">
-                    URL base configurável da API de Checkout Integrado InfinitePay.
-                  </p>
-                </div>
-
-                <div className="space-y-1">
-                  <Label className="font-semibold text-[#1E2A3A]">
-                    Segredo / Token do Webhook (Opcional)
-                  </Label>
-                  <Input
-                    type="password"
-                    value={settings.infinitepay_webhook_secret || ''}
-                    onChange={(e) =>
-                      handleUpdateSetting('infinitepay_webhook_secret', e.target.value)
-                    }
-                    placeholder="Token ou assinatura HMAC"
-                    className="font-mono focus-visible:ring-[#D4AF37]"
-                  />
-                  <p className="text-[10px] text-slate-500">
-                    Quando informado, o webhook valida autenticidade via header ou token.
-                  </p>
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <Label className="font-semibold text-[#1E2A3A]">
-                  Webhook URL (Endereço para cadastrar na InfinitePay)
-                </Label>
-                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                  <Input
-                    readOnly
-                    value={webhookEndpoint}
-                    className="bg-slate-50 font-mono text-slate-700 font-semibold min-w-0"
-                  />
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      navigator.clipboard.writeText(webhookEndpoint)
-                      toast({ title: 'Webhook URL copiado!' })
-                    }}
-                  >
-                    Copiar
-                  </Button>
-                </div>
-                <p className="text-[11px] text-[#6C757D]">
-                  Cadastre este endereço HTTPS no painel de desenvolvedor da Infinitepay para
-                  receber baixas automáticas instantâneas com atualização de fluxo de caixa e
-                  respeito ao desconto família.
-                </p>
-              </div>
-
-              <div className="flex items-center gap-2 pt-2">
-                <input
-                  type="checkbox"
-                  id="chkAutoSend"
-                  checked={settings.infinitepay_auto_send_link === 'true'}
-                  onChange={(e) =>
-                    handleUpdateSetting(
-                      'infinitepay_auto_send_link',
-                      e.target.checked ? 'true' : 'false',
-                    )
-                  }
-                  className="rounded text-[#0F1B3D] focus:ring-[#D4AF37]"
-                />
-                <label
-                  htmlFor="chkAutoSend"
-                  className="text-xs text-[#1E2A3A] font-semibold cursor-pointer"
-                >
-                  Disparar automaticamente o link de pagamento após a geração de cobrança
-                </label>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-3 pt-3 border-t border-slate-100">
-                <Button
-                  onClick={handleSaveInfinitepay}
-                  className="bg-[#D4AF37] hover:bg-[#B8953A] text-[#0F1B3D] font-bold text-xs h-9"
-                >
-                  Salvar Configurações
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={handleTestInfinitepayConnection}
-                  disabled={testingConnection}
-                  className="text-xs h-9"
-                >
-                  {testingConnection ? 'Testando...' : 'Testar Conexão'}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* ============================================================ */}
-        {/* TAB 4: COBRANÇA AUTOMÁTICA RECORRENTE */}
+        {/* TAB 3: COBRANÇA AUTOMÁTICA RECORRENTE */}
         {/* ============================================================ */}
         <TabsContent value="cobranca_automatica">
           <div className="space-y-4">
@@ -888,8 +664,8 @@ export default function Settings() {
                       Rotina de Cobrança Recorrente Mensal Automática
                     </CardTitle>
                     <CardDescription className="text-xs text-[#6C757D]">
-                      Geração automatizada de links de checkout InfinitePay avulsos para cada aluno
-                      ativo, respeitando seu dia de vencimento individual.
+                      Geração automatizada de mensalidades para cada aluno ativo, respeitando seu
+                      dia de vencimento individual.
                     </CardDescription>
                   </div>
                   {settings.recurring_billing_active === 'true' ? (
@@ -912,11 +688,10 @@ export default function Settings() {
                   </div>
                   <p className="text-[11px] leading-relaxed text-amber-800">
                     Esta rotina vem <strong>desligada por padrão</strong> para garantir que nenhuma
-                    cobrança duplicada seja enviada a alunos que já possuam faturas ativas na
-                    plataforma da InfinitePay. Ao ligar o interruptor abaixo, a rotina diária no
-                    backend (às 06:00) verificará os alunos ativos e emitirá a mensalidade
-                    exatamente <strong>7 dias antes da data de vencimento</strong> individual de
-                    cada um (definida no cadastro ou importada do Bubble).
+                    cobrança duplicada seja enviada aos alunos. Ao ligar o interruptor abaixo, a
+                    rotina diária no backend (às 06:00) verificará os alunos ativos e emitirá a
+                    mensalidade exatamente <strong>7 dias antes da data de vencimento</strong>{' '}
+                    individual de cada um (definida no cadastro ou importada do Bubble).
                   </p>
                 </div>
 
@@ -1452,8 +1227,7 @@ export default function Settings() {
                   <div>
                     <p className="font-bold text-[#0F1B3D]">Aviso de Confirmação por E-mail</p>
                     <p className="text-[11px] text-[#6C757D]">
-                      Envia comprovante automático para o aluno assim que a cobrança Infinitepay é
-                      aprovada.
+                      Envia comprovante automático para o aluno assim que o pagamento é confirmado.
                     </p>
                   </div>
                   <input

@@ -809,11 +809,9 @@ routerAdd('GET', '/backend/v1/cleanup/sample-data', (e) => {
   //    - CPF genérico como 123.456.789-01, 234.567.890-12, 345.678.901-23, 456.789.012-34
   //    - OU nomes conhecidos das sementes iniciais se tiverem CPF fictício: Rodrigo Almeida, Mariana Silva, Beatriz Oliveira, Lucas Gabriel
   // 2. Cobranças fictícias:
-  //    - infinipay_payment_id ~ 'inf_pay_100' ou payment_link ~ 'inf_pay_100'
-  //    - OU pertencentes aos alunos fictícios identificados
+  //    - pertencentes aos alunos fictícios identificados
   // 3. Pagamentos fictícios:
-  //    - infinipay_transaction_id ~ 'inf_pay_100' ou payment_link ~ 'inf_pay_100'
-  //    - OU pertencentes aos alunos fictícios identificados
+  //    - pertencentes aos alunos fictícios identificados
   // 4. Transações fictícias:
   //    - Transações que citam "Mensalidade Mariana Silva - Janeiro" ou "Mensalidade Lucas Gabriel - Janeiro"
   //    - OU despesas de manutenção da semente inicial criada na mesma época se explicitamente vinculadas
@@ -898,21 +896,17 @@ routerAdd('GET', '/backend/v1/cleanup/sample-data', (e) => {
     const allCharges = $app.findRecordsByFilter('charges', '', '-created', 2000, 0)
     for (let i = 0; i < allCharges.length; i++) {
       const chg = allCharges[i]
-      const payId = chg.getString('infinipay_payment_id') || ''
-      const link = chg.getString('payment_link') || ''
       const stId = chg.getString('student_id') || ''
 
-      const isFakeLink = payId.indexOf('inf_pay_100') !== -1 || link.indexOf('inf_pay_100') !== -1
       const isFakeStudent = !!sampleStudentIds[stId]
 
-      if (isFakeLink || isFakeStudent) {
+      if (isFakeStudent) {
         sampleCharges.push({
           id: chg.id,
           description: chg.getString('description') || '',
           amount: chg.getFloat('amount') || 0,
           due_date: chg.getString('due_date') || '',
           status: chg.getString('status') || '',
-          payment_link: link,
           student_id: stId,
         })
       }
@@ -927,14 +921,11 @@ routerAdd('GET', '/backend/v1/cleanup/sample-data', (e) => {
     const allPayments = $app.findRecordsByFilter('payments', '', '-created', 2000, 0)
     for (let i = 0; i < allPayments.length; i++) {
       const p = allPayments[i]
-      const transId = p.getString('infinipay_transaction_id') || ''
-      const link = p.getString('payment_link') || ''
       const stId = p.getString('student_id') || ''
 
-      const isFakeLink = transId.indexOf('inf_pay_100') !== -1 || link.indexOf('inf_pay_100') !== -1
       const isFakeStudent = !!sampleStudentIds[stId]
 
-      if (isFakeLink || isFakeStudent) {
+      if (isFakeStudent) {
         samplePayments.push({
           id: p.id,
           charge_id: p.getString('charge_id') || '',
@@ -1108,14 +1099,9 @@ routerAdd('POST', '/backend/v1/cleanup/execute', (e) => {
       const allPayments = txApp.findRecordsByFilter('payments', '', '-created', 2000, 0)
       for (let i = 0; i < allPayments.length; i++) {
         const p = allPayments[i]
-        const transId = p.getString('infinipay_transaction_id') || ''
-        const link = p.getString('payment_link') || ''
         const stId = p.getString('student_id') || ''
 
-        const isFake =
-          targetStudentIds[stId] ||
-          transId.indexOf('inf_pay_100') !== -1 ||
-          link.indexOf('inf_pay_100') !== -1
+        const isFake = targetStudentIds[stId]
 
         if (isFake) {
           txApp.delete(p)
@@ -1127,14 +1113,9 @@ routerAdd('POST', '/backend/v1/cleanup/execute', (e) => {
       const allCharges = txApp.findRecordsByFilter('charges', '', '-created', 2000, 0)
       for (let i = 0; i < allCharges.length; i++) {
         const chg = allCharges[i]
-        const payId = chg.getString('infinipay_payment_id') || ''
-        const link = chg.getString('payment_link') || ''
         const stId = chg.getString('student_id') || ''
 
-        const isFake =
-          targetStudentIds[stId] ||
-          payId.indexOf('inf_pay_100') !== -1 ||
-          link.indexOf('inf_pay_100') !== -1
+        const isFake = targetStudentIds[stId]
 
         if (isFake) {
           txApp.delete(chg)

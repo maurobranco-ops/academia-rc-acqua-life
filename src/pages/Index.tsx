@@ -262,7 +262,7 @@ export default function Index() {
             <Send className="w-5 h-5" />
           </div>
           <div className="text-left">
-            <p className="text-xs text-[#6C757D]">Infinitepay</p>
+            <p className="text-xs text-[#6C757D]">Cobrança</p>
             <p className="text-sm font-bold text-[#0F1B3D]">Emitir Cobrança</p>
           </div>
         </Button>

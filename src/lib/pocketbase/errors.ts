@@ -2,74 +2,6 @@ import { ClientResponseError } from 'pocketbase'
 
 export type FieldErrors = Record<string, string>
 
-/**
- * TRUE apenas para 404 ("The requested resource wasn't found."): usado pelo
- * delete tolerante do academyService — 404 significa que o registro já foi
- * excluído e o resultado desejado já aconteceu. Outros erros seguem como erro.
- */
-export function isNotFoundError(error: unknown): boolean {
-  return error instanceof ClientResponseError && error.status === 404
-}
-
-const GENERIC_TRANSLATIONS: Record<string, string> = {
-  'The requested resource was not found.': 'Recurso não encontrado.',
-  "The requested resource wasn't found.": 'Recurso não encontrado.',
-  'An error occurred while processing the request.': 'Ocorreu um erro ao processar a solicitação.',
-  'Something went wrong while handling the request.': 'Algo deu errado ao processar a solicitação.',
-}
-
-// Padrões que a mensagem crua do PocketBase carrega e que precisam ser
-// traduzidos/normalizados para o usuário (regex pela original).
-const RULES: Array<{ pattern: RegExp; replace: string }> = [
-  { pattern: /validation not satisfied/i, replace: 'Validação não satisfeita.' },
-  { pattern: /failed to create record/i, replace: 'Falha ao criar o registro.' },
-  { pattern: /failed to update record/i, replace: 'Falha ao atualizar o registro.' },
-  { pattern: /failed to delete record/i, replace: 'Falha ao excluir o registro.' },
-  {
-    pattern: /value must be a valid email address/i,
-    replace: 'Informe um endereço de e-mail válido.',
-  },
-  { pattern: /cannot be blank/i, replace: 'Não pode ficar em branco.' },
-  {
-    pattern: /value must be greater than or equal to (\d+)/i,
-    replace: 'O valor deve ser maior ou igual a $1.',
-  },
-  {
-    pattern: /value must be less than or equal to (\d+)/i,
-    replace: 'O valor deve ser menor ou igual a $1.',
-  },
-  {
-    pattern: /the request exceeds the maximum allowed size/i,
-    replace: 'O arquivo excede o tamanho máximo permitido.',
-  },
-  {
-    pattern: /misformatted form data/i,
-    replace: 'Dados do formulário mal formatados.',
-  },
-]
-
-/**
- * Traduz mensagens cruas do PocketBase/servidor para o usuário final,
- * preservando detalhes específicos (ex. nome de campo) quando existirem.
- * Mensagens desconhecidas voltam como vieram — nunca inventa tradução.
- */
-export function translateBackendMessage(message: string): string {
-  if (!message) return message
-
-  // Mensagem puramente genérica: traduz direto pelo mapa.
-  const trimmed = message.trim()
-  if (GENERIC_TRANSLATIONS[trimmed]) {
-    return GENERIC_TRANSLATIONS[trimmed]
-  }
-
-  // Demais casos: aplica as regras, preservando o que não casar.
-  let translated = message
-  for (const rule of RULES) {
-    translated = translated.replace(rule.pattern, rule.replace)
-  }
-  return translated
-}
-
 export function extractFieldErrors(error: unknown): FieldErrors {
   if (!(error instanceof ClientResponseError)) return {}
   const data = error.response?.data
@@ -93,5 +25,50 @@ export function getErrorMessage(error: unknown): string {
     return error instanceof Error ? error.message : 'An unexpected error occurred.'
   }
   const msgs = Object.values(extractFieldErrors(error))
-  return msgs.length > 0 ? msgs.join(' ') : error.message || 'An unexpected error occurred.'
+  return msgs.length > 0 ? msgs.join(' ') : translateBackendMessage(error.message)
+}
+
+/** 404 = registro já não existe (exclusão dupla, aba duplicada): tratado como sucesso. */
+export function isNotFoundError(error: unknown): boolean {
+  return error instanceof ClientResponseError && error.status === 404
+}
+
+// -------------------------------------------------------------
+// Tradução de mensagens cruas do PocketBase para pt-BR
+// -------------------------------------------------------------
+
+const GENERIC: Record<string, string> = {
+  "The requested resource wasn't found.": 'Registro não encontrado.',
+  'Failed to authenticate.': 'Falha na autenticação.',
+  'Failed to create record.': 'Falha ao criar o registro.',
+  'Failed to update record.': 'Falha ao atualizar o registro.',
+  'Failed to delete record. Make sure that the record is not referenced by other records.':
+    'Não foi possível excluir: este registro está vinculado a outros registros.',
+  'An error occurred while uploading the file. Please try again.':
+    'Erro ao enviar o arquivo. Tente novamente.',
+  'You are not allowed to perform this request.': 'Você não tem permissão para esta ação.',
+  'Something went wrong while processing your request.':
+    'Algo deu errado ao processar a solicitação.',
+}
+
+const RULES: Array<{ test: RegExp; replace: string }> = [
+  { test: /^validation not null error:? /i, replace: '' },
+  { test: /cannot be blank\.?$/i, replace: 'não pode ficar em branco.' },
+  { test: /must be a valid email\./i, replace: 'deve ser um e-mail válido.' },
+  { test: /value must be unique\./i, replace: 'já está em uso (valor deve ser único).' },
+  {
+    test: /missing required value\./i,
+    replace: 'campo obrigatório não preenchido.',
+  },
+]
+
+/** Converte uma mensagem crua do PocketBase (inglês) para português, se houver equivalente. */
+export function translateBackendMessage(message: string): string {
+  if (!message) return message
+  if (GENERIC[message]) return GENERIC[message]
+  let out = message
+  for (const rule of RULES) {
+    out = out.replace(rule.test, rule.replace)
+  }
+  return out
 }
