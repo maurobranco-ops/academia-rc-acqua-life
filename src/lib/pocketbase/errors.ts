@@ -3,43 +3,71 @@ import { ClientResponseError } from 'pocketbase'
 export type FieldErrors = Record<string, string>
 
 /**
- * 404 ("The requested resource wasn't found.") não é erro para os fluxos
- * tolerantes do academyService (delete, getOne pós-exclusão): significa que o
- * registro JÁ foi excluído. Qualquer outro status (ou erro não-HTTP) é erro real.
+ * TRUE apenas para 404 ("The requested resource wasn't found."): usado pelo
+ * delete tolerante do academyService — 404 significa que o registro já foi
+ * excluído e o resultado desejado já aconteceu. Outros erros seguem como erro.
  */
 export function isNotFoundError(error: unknown): boolean {
   return error instanceof ClientResponseError && error.status === 404
 }
 
-/** Mapa de traduções de mensagens conhecidas do backend (GENERIC). */
-const GENERIC: Record<string, string> = {
-  "The requested resource wasn't found.": 'Registro não encontrado.',
-  'Something went wrong while handling your request.':
-    'Algo deu errado ao processar sua solicitação.',
-  'An existing collection name was provided.': 'Já existe uma coleção com esse nome.',
+const GENERIC_TRANSLATIONS: Record<string, string> = {
+  'The requested resource was not found.': 'Recurso não encontrado.',
+  "The requested resource wasn't found.": 'Recurso não encontrado.',
+  'An error occurred while processing the request.': 'Ocorreu um erro ao processar a solicitação.',
+  'Something went wrong while handling the request.': 'Algo deu errado ao processar a solicitação.',
 }
 
-/** Regras por regex (RULES), avaliadas na ordem — a primeira que casa vence. */
-const RULES: Array<{ pattern: RegExp; replacement: string }> = [
-  { pattern: /^Failed to convert.*record\.$/, replacement: 'Registro inválido.' },
+// Padrões que a mensagem crua do PocketBase carrega e que precisam ser
+// traduzidos/normalizados para o usuário (regex pela original).
+const RULES: Array<{ pattern: RegExp; replace: string }> = [
+  { pattern: /validation not satisfied/i, replace: 'Validação não satisfeita.' },
+  { pattern: /failed to create record/i, replace: 'Falha ao criar o registro.' },
+  { pattern: /failed to update record/i, replace: 'Falha ao atualizar o registro.' },
+  { pattern: /failed to delete record/i, replace: 'Falha ao excluir o registro.' },
   {
-    pattern: /validation not satisfied/i,
-    replacement: 'Validação não satisfeita — verifique os campos do formulário.',
+    pattern: /value must be a valid email address/i,
+    replace: 'Informe um endereço de e-mail válido.',
+  },
+  { pattern: /cannot be blank/i, replace: 'Não pode ficar em branco.' },
+  {
+    pattern: /value must be greater than or equal to (\d+)/i,
+    replace: 'O valor deve ser maior ou igual a $1.',
+  },
+  {
+    pattern: /value must be less than or equal to (\d+)/i,
+    replace: 'O valor deve ser menor ou igual a $1.',
+  },
+  {
+    pattern: /the request exceeds the maximum allowed size/i,
+    replace: 'O arquivo excede o tamanho máximo permitido.',
+  },
+  {
+    pattern: /misformatted form data/i,
+    replace: 'Dados do formulário mal formatados.',
   },
 ]
 
 /**
- * Traduz mensagens cruas do backend (PocketBase/rotas /backend/v1) para
- * português — a interface nunca mostra mensagem em inglês para o usuário.
- * Mensagem desconhecida volta como veio (sem perder informação).
+ * Traduz mensagens cruas do PocketBase/servidor para o usuário final,
+ * preservando detalhes específicos (ex. nome de campo) quando existirem.
+ * Mensagens desconhecidas voltam como vieram — nunca inventa tradução.
  */
 export function translateBackendMessage(message: string): string {
   if (!message) return message
-  if (GENERIC[message]) return GENERIC[message]
-  for (const rule of RULES) {
-    if (rule.pattern.test(message)) return rule.replacement
+
+  // Mensagem puramente genérica: traduz direto pelo mapa.
+  const trimmed = message.trim()
+  if (GENERIC_TRANSLATIONS[trimmed]) {
+    return GENERIC_TRANSLATIONS[trimmed]
   }
-  return message
+
+  // Demais casos: aplica as regras, preservando o que não casar.
+  let translated = message
+  for (const rule of RULES) {
+    translated = translated.replace(rule.pattern, rule.replace)
+  }
+  return translated
 }
 
 export function extractFieldErrors(error: unknown): FieldErrors {

@@ -263,8 +263,13 @@ routerAdd('POST', '/backend/v1/infinitepay/create-charge', (e) => {
     if (handle) {
       infinitepayPayload.handle = handle
     }
+    // Webhook do Checkout Integrado: formato NOVO — objeto { url, events }, não campo achatado.
+    // (a InfinitePay ignora silenciosamente o webhook_url achatado; ver docs oficiais)
     if (webhookUrl) {
-      infinitepayPayload.webhook_url = webhookUrl
+      infinitepayPayload.webhook = {
+        url: webhookUrl,
+        events: ['created', 'paid', 'settled', 'canceled', 'refunded', 'payment_failed'],
+      }
     }
 
     try {
@@ -679,6 +684,7 @@ routerAdd('POST', '/backend/v1/infinitepay/webhook', (e) => {
       innerData.id ||
       body.uuid ||
       innerData.uuid ||
+      (innerTransaction && (innerTransaction.id || innerTransaction.uuid)) ||
       orderNsu ||
       transactionNsu ||
       invoiceSlug ||
@@ -708,11 +714,16 @@ routerAdd('POST', '/backend/v1/infinitepay/webhook', (e) => {
     body.capture_method || innerData.capture_method || innerTransaction.capture_method || '',
   ).toLowerCase()
 
+  // Evento do Checkout Integrado: docs oficiais (paid) mostram payload flat com os dados
+  // da transação; o nome do evento chega em event/event_type/type (coberto abaixo) ou,
+  // na ausência dele, o payload é tratado como evento 'paid' (formato do webhook simples).
   const rawEventType = String(
     body.event_type ||
       body.event ||
+      body.type ||
       innerData.event_type ||
       innerData.event ||
+      innerData.type ||
       body.status ||
       innerData.status ||
       '',
@@ -1313,6 +1324,33 @@ routerAdd('POST', '/backend/v1/infinitepay/webhook', (e) => {
         console.log(
           `[Webhook] Tentativa de pagamento falhou para cobrança #${matchedCharge.id}. Mantida em aberto.`,
         )
+      } else if (normalizedEvent === 'refunded' || normalizedEvent === 'canceled') {
+        // Estorno: a movimentação financeira de receita criada na baixa precisa sair do caixa.
+        // transactions.status só aceita confirmado/pendente — marcamos 'pendente' (não conta
+        // como recebida) e anotamos o estorno nas notas, sem criar lançamento novo.
+        try {
+          const revTrans = $app.findRecordsByFilter(
+            'transactions',
+            `notes ~ '${matchedCharge.id}'`,
+            '-created',
+            1,
+            0,
+          )
+          if (revTrans && revTrans.length > 0) {
+            const tRec = revTrans[0]
+            const prevNotes = tRec.getString('notes') || ''
+            if (!prevNotes.includes('Estorno')) {
+              tRec.set(
+                'notes',
+                `${prevNotes} | Estorno via InfinitePay (evento: ${normalizedEvent})`.trim(),
+              )
+              tRec.set('status', 'pendente')
+              $app.save(tRec)
+            }
+          }
+        } catch (revErr) {
+          console.log('[Webhook] Erro ao estornar movimentação financeira:', revErr)
+        }
       }
     } catch (updErr) {
       console.log('[Webhook] Erro ao atualizar status não-pago:', updErr)
@@ -1329,7 +1367,10 @@ routerAdd('POST', '/backend/v1/infinitepay/webhook', (e) => {
     evtRecord.set('transaction_nsu', transactionNsu)
     evtRecord.set('invoice_slug', invoiceSlug)
     evtRecord.set('charge_id', matchedCharge.id)
-    evtRecord.set('status', targetChargeStatus || 'processado')
+    evtRecord.set(
+      'status',
+      normalizedEvent === 'payment_failed' ? 'tentativa_falha' : targetChargeStatus || 'processado',
+    )
     evtRecord.set('payload', body)
     $app.save(evtRecord)
   } catch (auditErr) {
@@ -1610,7 +1651,13 @@ routerAdd('POST', '/backend/v1/recurring-billing/run-now', (e) => {
         customer: customerPayload,
       }
       if (handle) payload.handle = handle
-      if (webhookUrl) payload.webhook_url = webhookUrl
+      // Webhook do Checkout Integrado: formato NOVO — objeto { url, events }, não campo achatado.
+      if (webhookUrl) {
+        payload.webhook = {
+          url: webhookUrl,
+          events: ['created', 'paid', 'settled', 'canceled', 'refunded', 'payment_failed'],
+        }
+      }
 
       try {
         const res = $http.send({
@@ -2049,7 +2096,13 @@ cronAdd('daily_recurring_billing', '0 6 * * *', () => {
         customer: customerPayload,
       }
       if (handle) payload.handle = handle
-      if (webhookUrl) payload.webhook_url = webhookUrl
+      // Webhook do Checkout Integrado: formato NOVO — objeto { url, events }, não campo achatado.
+      if (webhook_url) {
+        payload.webhook = {
+          url: webhook_url,
+          events: ['created', 'paid', 'settled', 'canceled', 'refunded', 'payment_failed'],
+        }
+      }
 
       try {
         const res = $http.send({
