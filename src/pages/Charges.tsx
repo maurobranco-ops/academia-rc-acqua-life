@@ -1,24 +1,17 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import {
-  CreditCard,
   Plus,
-  Send,
   RotateCcw,
   CheckCircle2,
-  Share2,
   Loader2,
   Users,
   Sparkles,
-  Calendar,
   Search,
   X,
-  UserCheck,
   Ban,
   AlertTriangle,
-  Phone,
   PhoneOff,
-  AlertCircle,
   MessageCircle,
 } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -56,6 +49,7 @@ import { useRealtime } from '@/hooks/use-realtime'
 import type { ChargeRecord, StudentRecord, PlanRecord } from '@/types/database'
 import { useToast } from '@/hooks/use-toast'
 import { calculateStudentCharge, getFamilyStudents } from '@/lib/familyRules'
+import { sendChargeWhatsApp, formatWhatsAppSentStamp } from '@/lib/whatsappCharge'
 
 export default function Charges() {
   const [searchParams] = useSearchParams()
@@ -101,28 +95,22 @@ export default function Charges() {
   const [selectedChargeToCancel, setSelectedChargeToCancel] = useState<ChargeRecord | null>(null)
   const [cancelling, setCancelling] = useState(false)
 
-  // Reenviar WhatsApp do proprietário
+  // Envio da cobrança via click-to-chat do WhatsApp (registro do envio no clique)
   const [sendingWaId, setSendingWaId] = useState<string | null>(null)
+  const [settingsMap, setSettingsMap] = useState<Record<string, string>>({})
 
   const loadData = async () => {
     try {
-      const [cData, sData, pData] = await Promise.all([
+      const [cData, sData, pData, stData] = await Promise.all([
         academyService.getCharges(),
         academyService.getStudents(),
         academyService.getPlans(),
+        academyService.getSettings(),
       ])
       setCharges(cData)
       setStudents(sData)
       setPlans(pData)
-      // Detalhe técnico da falha de envio fica APENAS no console — nunca no DOM.
-      cData.forEach((c) => {
-        if (c.whatsapp_error) {
-          console.warn(
-            `[WhatsApp] Falha no envio da cobrança ${c.id} (${c.description}):`,
-            c.whatsapp_error,
-          )
-        }
-      })
+      setSettingsMap(stData)
     } catch (err) {
       console.error(err)
     } finally {
@@ -235,25 +223,10 @@ export default function Charges() {
         payment_method: formMethod,
       })
 
-      const waSent = (created as { whatsapp_sent?: boolean }).whatsapp_sent
-      const waStatus = (created as { whatsapp_status?: string }).whatsapp_status
-      const waError = (created as { whatsapp_error?: string }).whatsapp_error
-
-      let feedbackMsg = 'Cobrança cadastrada com sucesso.'
-
-      if (waSent) {
-        feedbackMsg += ' Notificação enviada automaticamente pelo WhatsApp do proprietário!'
-      } else if (waStatus === 'sem_telefone') {
-        feedbackMsg +=
-          ' Aviso: aluno/responsável sem telefone cadastrado — cadastre para envio automático.'
-      } else if (waError) {
-        console.warn('[WhatsApp] Falha no envio automático da nova cobrança:', waError)
-        feedbackMsg += ' Aviso: envio automático do WhatsApp indisponível no momento.'
-      }
-
       toast({
-        title: waSent ? 'Cobrança Gerada e Enviada via WhatsApp!' : 'Cobrança Gerada com Sucesso!',
-        description: feedbackMsg,
+        title: 'Cobrança Gerada com Sucesso!',
+        description:
+          'Cobrança cadastrada. Use o botão "Cobrar no WhatsApp" para abrir a conversa com o responsável.',
       })
       setNewModalOpen(false)
       loadData()
@@ -360,68 +333,38 @@ export default function Charges() {
     }
   }
 
-  const handleSendWhatsAppOwner = async (charge: ChargeRecord) => {
+  // "Cobrar no WhatsApp": abre a conversa com o responsável (click-to-chat,
+  // mensagem pronta com nome do aluno, valor, vencimento e PIX da academia)
+  // e registra a data/hora do envio na cobrança. Baixa é manual (Pagar Agora).
+  const handleCobrarNoWhatsApp = async (charge: ChargeRecord) => {
+    const student = students.find((s) => s.id === charge.student_id)
     setSendingWaId(charge.id)
     try {
-      const res = await academyService.sendChargeWhatsApp(charge.id)
-      toast({
-        title: 'Mensagem WhatsApp Enviada!',
-        description: res.message || 'Notificação enviada pela conta conectada do proprietário.',
-      })
-      loadData()
+      const res = await sendChargeWhatsApp(charge, student, settingsMap)
+      if (!res.sent) {
+        toast({
+          title: 'Sem telefone cadastrado',
+          description:
+            'Este aluno não tem telefone de responsável no cadastro. Atualize o cadastro para cobrar pelo WhatsApp.',
+          variant: 'destructive',
+        })
+      } else {
+        toast({
+          title: 'Conversa aberta no WhatsApp',
+          description: 'Envio da cobrança registrado. A baixa é feita manualmente após o PIX.',
+        })
+        loadData()
+      }
     } catch (err: unknown) {
       const msg = getErrorMessage(err)
       toast({
-        title: 'Erro ao enviar WhatsApp',
+        title: 'Erro ao registrar o envio',
         description: msg,
         variant: 'destructive',
       })
-      loadData()
     } finally {
       setSendingWaId(null)
     }
-  }
-
-  const handleSendWhatsAppManual = (charge: ChargeRecord) => {
-    const student = students.find((s) => s.id === charge.student_id)
-    const rawPhone = student?.guardian_phone || student?.whatsapp || student?.phone || ''
-    const phone = rawPhone ? rawPhone.replace(/\D/g, '') : ''
-    const studentName = student?.name || 'Prezado(a)'
-    const guardianName = student?.guardian_name || ''
-    const greeting = guardianName ? guardianName : studentName
-    const dueFormatted = new Date(charge.due_date).toLocaleDateString('pt-BR')
-
-    let discountText = ''
-    if (charge.discount_amount && charge.discount_amount > 0) {
-      const studentBaseFee = student?.monthly_fee || 0
-      const alreadyDiscounted =
-        studentBaseFee > 0 &&
-        Math.abs(charge.amount - (studentBaseFee - charge.discount_amount)) < 0.01
-
-      const promptPaymentValue = alreadyDiscounted
-        ? charge.amount
-        : Math.max(0, charge.amount - charge.discount_amount)
-
-      discountText = `\n💡 Desconto pontualidade: Ganhe R$ 10,00 de desconto (pagando R$ ${promptPaymentValue.toFixed(2)}) se pago até o vencimento (${dueFormatted})!\n`
-    } else {
-      discountText = `\n💡 Desconto pontualidade: Ganhe R$ 10,00 de desconto por aluno da família se pago até o vencimento!\n`
-    }
-
-    const message = encodeURIComponent(
-      `🏊‍♂️ *RC Acqua Life — Mensalidade Escolar*\n\n` +
-        `Olá, *${greeting}*!\n\n` +
-        `A fatura de *${studentName}* referente a "${charge.description}" no valor de *R$ ${charge.amount.toFixed(2)}* com vencimento em *${dueFormatted}* já está disponível para pagamento.\n` +
-        discountText +
-        `O comprovante é compensado automaticamente e você não precisa nos enviar o recibo.\n` +
-        `Em caso de dúvidas, basta responder esta mensagem.\n\n` +
-        `_Atenciosamente,_\n*RC Acqua Life*`,
-    )
-
-    const whatsappUrl = phone
-      ? `https://api.whatsapp.com/send?phone=55${phone}&text=${message}`
-      : `https://api.whatsapp.com/send?text=${message}`
-
-    window.open(whatsappUrl, '_blank')
   }
 
   const filteredCharges = useMemo(() => {
@@ -634,30 +577,20 @@ export default function Charges() {
                     {charge.whatsapp_sent ? (
                       <div className="flex items-center gap-1.5 text-xs text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200 shadow-2xs">
                         <MessageCircle className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                        <span className="font-semibold">Enviado por WhatsApp</span>
+                        <span className="font-semibold">Cobrança enviada</span>
                         {charge.whatsapp_sent_at && (
                           <span className="text-[10px] text-emerald-600 ml-1 font-medium">
-                            ({new Date(charge.whatsapp_sent_at).toLocaleDateString('pt-BR')})
+                            em {formatWhatsAppSentStamp(charge.whatsapp_sent_at)}
                           </span>
                         )}
                       </div>
                     ) : charge.whatsapp_status === 'sem_telefone' ? (
                       <div
                         className="flex items-center gap-1.5 text-xs text-amber-700 bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-200"
-                        title="Aluno ou responsável sem telefone cadastrado. Atualize o cadastro para envio automático."
+                        title="Aluno ou responsável sem telefone cadastrado. Atualize o cadastro para cobrar pelo WhatsApp."
                       >
                         <PhoneOff className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                         <span className="font-semibold">Sem telefone</span>
-                      </div>
-                    ) : charge.whatsapp_status === 'falha' ? (
-                      // Mensagem amigável — o erro técnico (ex.: "connectors are not enabled
-                      // for this app") fica registrado apenas no console (ver loadData).
-                      <div
-                        className="flex items-center gap-1.5 text-xs text-rose-700 bg-rose-50 px-2.5 py-1 rounded-lg border border-rose-200"
-                        title="Envio automático do WhatsApp indisponível no momento. Use Copiar Link ou o envio manual."
-                      >
-                        <AlertCircle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
-                        <span className="font-semibold">Falha WhatsApp</span>
                       </div>
                     ) : (
                       <div className="flex items-center gap-1.5 text-xs text-slate-500 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200">
@@ -678,8 +611,8 @@ export default function Charges() {
                       size="sm"
                       variant="outline"
                       disabled={sendingWaId === charge.id}
-                      onClick={() => handleSendWhatsAppOwner(charge)}
-                      title="Disparar mensagem pelo WhatsApp conectado do proprietário"
+                      onClick={() => handleCobrarNoWhatsApp(charge)}
+                      title="Abrir a conversa do WhatsApp com o responsável, com a mensagem pronta (valor, vencimento e PIX)"
                       className="h-8 text-xs font-semibold text-emerald-700 border-emerald-200 hover:bg-emerald-50 rounded-lg flex items-center gap-1.5"
                     >
                       {sendingWaId === charge.id ? (
@@ -687,7 +620,7 @@ export default function Charges() {
                       ) : (
                         <MessageCircle className="w-3.5 h-3.5" />
                       )}
-                      {charge.whatsapp_sent ? 'Reenviar WhatsApp' : 'Enviar WhatsApp'}
+                      Cobrar no WhatsApp
                     </Button>
 
                     {charge.status !== 'paga' && charge.status !== 'cancelada' && (
@@ -720,11 +653,6 @@ export default function Charges() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="text-xs">
-                        <DropdownMenuItem onClick={() => handleSendWhatsAppManual(charge)}>
-                          <Share2 className="w-3.5 h-3.5 mr-2 text-emerald-600" /> Abrir no WhatsApp
-                          Web (manual)
-                        </DropdownMenuItem>
-
                         {charge.status === 'paga' && (
                           <DropdownMenuItem
                             onClick={() => handleRefund(charge.id)}

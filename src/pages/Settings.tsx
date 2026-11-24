@@ -20,8 +20,6 @@ import {
   ShieldAlert,
   Search,
   Check,
-  MessageCircle,
-  Phone,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -154,20 +152,6 @@ export default function Settings() {
     }
   } | null>(null)
 
-  // WhatsApp Sender Info State
-  const [whatsappSenderInfo, setWhatsappSenderInfo] = useState<{
-    success: boolean
-    connected: boolean
-    display_phone_number?: string | null
-    phone_number_id?: string | null
-    verified_name?: string | null
-    quality_rating?: string | null
-    total_numbers?: number
-    error?: string
-    message?: string
-  } | null>(null)
-  const [loadingWaSender, setLoadingWaSender] = useState(false)
-
   // Recurring Billing Automation State
   const [runningRecurring, setRunningRecurring] = useState(false)
   const [savingRecurring, setSavingRecurring] = useState(false)
@@ -188,18 +172,6 @@ export default function Settings() {
     'ambos',
   )
 
-  const loadWhatsAppSender = async () => {
-    setLoadingWaSender(true)
-    try {
-      const info = await academyService.getWhatsAppSenderInfo()
-      setWhatsappSenderInfo(info)
-    } catch (err) {
-      console.error('Erro ao buscar remetente WhatsApp', err)
-    } finally {
-      setLoadingWaSender(false)
-    }
-  }
-
   const loadData = async () => {
     try {
       const [sData, pData, iData] = await Promise.all([
@@ -210,7 +182,6 @@ export default function Settings() {
       setSettings(sData)
       setPlans(pData)
       setInstructors(iData)
-      loadWhatsAppSender()
     } catch (err) {
       console.error(err)
     } finally {
@@ -763,9 +734,8 @@ export default function Settings() {
                           calculados automaticamente.
                         </li>
                         <li>
-                          <strong>Envio automático por WhatsApp incluído:</strong> as cobranças
-                          geradas são enviadas diretamente ao WhatsApp do responsável através da
-                          conta conectada do proprietário.
+                          <strong>Baixa manual:</strong> após o PIX, marque a cobrança como paga em
+                          Cobranças ou no detalhe do aluno.
                         </li>
                         <li>
                           <strong>Anti-duplicação:</strong> não repete cobrança já emitida para o
@@ -773,86 +743,6 @@ export default function Settings() {
                         </li>
                       </ul>
                     </div>
-                  </div>
-                </div>
-
-                {/* Remetente WhatsApp Conectado */}
-                <div className="p-4 rounded-xl border border-emerald-200 bg-emerald-50/60 space-y-2">
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <MessageCircle className="w-4 h-4 text-emerald-700 shrink-0" />
-                      <div>
-                        <h4 className="font-bold text-xs text-emerald-950">
-                          Número de WhatsApp para Envio Automático
-                        </h4>
-                        <p className="text-[11px] text-emerald-800">
-                          Lido em tempo real da conta conectada do proprietário (conector WhatsApp)
-                        </p>
-                      </div>
-                    </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={loadWhatsAppSender}
-                      disabled={loadingWaSender}
-                      className="h-7 text-[11px] bg-white border-emerald-300 text-emerald-800 hover:bg-emerald-100 flex items-center gap-1.5 w-fit"
-                    >
-                      <RotateCw className={`w-3 h-3 ${loadingWaSender ? 'animate-spin' : ''}`} />
-                      Atualizar remetente
-                    </Button>
-                  </div>
-
-                  <div className="pt-1">
-                    {loadingWaSender ? (
-                      <div className="flex items-center gap-2 text-xs text-emerald-800 py-2">
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        <span>Consultando conta do WhatsApp conectada...</span>
-                      </div>
-                    ) : whatsappSenderInfo?.connected && whatsappSenderInfo.display_phone_number ? (
-                      <div className="bg-white p-3 rounded-lg border border-emerald-200 space-y-1.5">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-[11px] text-slate-500 font-medium">
-                            Número remetente ativo:
-                          </span>
-                          <Badge className="bg-emerald-100 text-emerald-900 border-emerald-300 font-mono text-xs px-2.5 py-0.5 flex items-center gap-1.5">
-                            <Phone className="w-3 h-3 text-emerald-700" />
-                            {whatsappSenderInfo.display_phone_number}
-                          </Badge>
-                          <Badge className="bg-slate-100 text-slate-700 border-slate-300 text-[10px]">
-                            Conta Oficial Conectada
-                          </Badge>
-                        </div>
-                        {whatsappSenderInfo.verified_name && (
-                          <p className="text-[11px] text-slate-600">
-                            <strong>Nome verificado na Meta:</strong>{' '}
-                            {whatsappSenderInfo.verified_name}
-                          </p>
-                        )}
-                        {whatsappSenderInfo.phone_number_id && (
-                          <p className="text-[10px] text-slate-400 font-mono">
-                            ID do Número: {whatsappSenderInfo.phone_number_id}
-                          </p>
-                        )}
-                        <p className="text-[11px] text-emerald-900 font-medium pt-1">
-                          ✓ Todas as cobranças emitidas manual ou automaticamente serão enviadas
-                          através deste número.
-                        </p>
-                      </div>
-                    ) : (
-                      <div className="bg-white p-3 rounded-lg border border-amber-200 space-y-1">
-                        <div className="flex items-center gap-2">
-                          <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-                          <span className="text-xs font-bold text-amber-900">
-                            Conta do WhatsApp conectada, aguardando sincronização de número
-                          </span>
-                        </div>
-                        <p className="text-[11px] text-slate-600">
-                          {whatsappSenderInfo?.error ||
-                            whatsappSenderInfo?.message ||
-                            'O conector WhatsApp do proprietário está ativado. Caso o número ainda não apareça acima, clique em "Atualizar remetente" ou verifique se há um número de telefone configurado na sua conta Meta Business.'}
-                        </p>
-                      </div>
-                    )}
                   </div>
                 </div>
 

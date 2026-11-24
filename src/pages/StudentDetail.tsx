@@ -19,6 +19,7 @@ import {
   Edit,
   Ban,
   Link2,
+  MessageCircle,
 } from 'lucide-react'
 import {
   DropdownMenu,
@@ -63,6 +64,7 @@ import { getStudentStatusDisplay } from '@/lib/studentStatus'
 import { StudentHealthTab } from '@/components/StudentHealthTab'
 import { UpdateLinkDialog } from '@/components/UpdateLinkDialog'
 import { FichaPendenteBadge } from '@/components/FichaPendenteBadge'
+import { sendChargeWhatsApp, formatWhatsAppSentStamp } from '@/lib/whatsappCharge'
 
 export default function StudentDetail() {
   const { id } = useParams<{ id: string }>()
@@ -99,6 +101,10 @@ export default function StudentDetail() {
   const [selectedChargeToCancel, setSelectedChargeToCancel] = useState<ChargeRecord | null>(null)
   const [cancelling, setCancelling] = useState(false)
 
+  // "Cobrar no WhatsApp" — click-to-chat com o responsável + registro do envio
+  const [sendingWaId, setSendingWaId] = useState<string | null>(null)
+  const [settingsMap, setSettingsMap] = useState<Record<string, string>>({})
+
   // Delete modal state
   // Diálogo "Link de atualização" (autocadastro do aluno sem login)
   // Ficha imprimível: diálogo montado no NÍVEL DA PÁGINA (fora da TabsContent
@@ -116,13 +122,14 @@ export default function StudentDetail() {
   const loadData = async () => {
     if (!id) return
     try {
-      const [sData, pList, payList, chgList, enrList, clsList] = await Promise.all([
+      const [sData, pList, payList, chgList, enrList, clsList, stMap] = await Promise.all([
         academyService.getStudent(id),
         academyService.getPlans(),
         academyService.getPayments(),
         academyService.getCharges(),
         academyService.getEnrollments(),
         academyService.getClasses(),
+        academyService.getSettings(),
       ])
       setStudent(sData)
       setPlan(pList.find((p) => p.id === sData.plan_id) || null)
@@ -130,6 +137,7 @@ export default function StudentDetail() {
       setCharges(chgList.filter((c) => c.student_id === id))
       setEnrollments(enrList.filter((e) => e.student_id === id))
       setClasses(clsList)
+      setSettingsMap(stMap)
     } catch (err) {
       console.error(err)
       toast({
@@ -224,6 +232,38 @@ export default function StudentDetail() {
   const handleOpenCancelModal = (charge: ChargeRecord) => {
     setSelectedChargeToCancel(charge)
     setCancelModalOpen(true)
+  }
+
+  // "Cobrar no WhatsApp": abre a conversa com o responsável (click-to-chat,
+  // mensagem pronta) e registra a data/hora do envio na cobrança. A baixa
+  // continua manual (marcar como paga após o PIX).
+  const handleCobrarNoWhatsApp = async (charge: ChargeRecord) => {
+    setSendingWaId(charge.id)
+    try {
+      const res = await sendChargeWhatsApp(charge, student, settingsMap)
+      if (!res.sent) {
+        toast({
+          title: 'Sem telefone cadastrado',
+          description:
+            'Este aluno não tem telefone de responsável no cadastro. Atualize o cadastro para cobrar pelo WhatsApp.',
+          variant: 'destructive',
+        })
+      } else {
+        toast({
+          title: 'Conversa aberta no WhatsApp',
+          description: 'Envio da cobrança registrado. A baixa é feita manualmente após o PIX.',
+        })
+        loadData()
+      }
+    } catch (err: unknown) {
+      toast({
+        title: 'Erro ao registrar o envio',
+        description: getErrorMessage(err),
+        variant: 'destructive',
+      })
+    } finally {
+      setSendingWaId(null)
+    }
   }
 
   const handleConfirmCancel = async () => {
@@ -860,23 +900,47 @@ export default function StudentDetail() {
                               </span>
                             ) : isCancelada ? (
                               <span className="text-rose-600/70 text-[11px] italic">Cancelada</span>
+                            ) : c.whatsapp_sent && c.whatsapp_sent_at ? (
+                              <span className="text-emerald-700 text-[11px] font-medium inline-flex items-center gap-1">
+                                <MessageCircle className="w-3 h-3 shrink-0" />
+                                Cobrança enviada em {formatWhatsAppSentStamp(c.whatsapp_sent_at)}
+                              </span>
                             ) : (
                               <span className="text-slate-400">—</span>
                             )}
                           </td>
                           <td className="px-4 py-3.5 text-right">
-                            {isEmAberto ? (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleOpenCancelModal(c)}
-                                className="h-7 text-xs font-semibold text-rose-700 border-rose-200 hover:bg-rose-50 rounded-lg inline-flex items-center gap-1.5"
-                              >
-                                <Ban className="w-3 h-3 text-rose-600" /> Cancelar
-                              </Button>
-                            ) : (
-                              <span className="text-[11px] text-slate-400">—</span>
-                            )}
+                            <div className="inline-flex items-center gap-1.5">
+                              {isEmAberto && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={sendingWaId === c.id}
+                                  onClick={() => handleCobrarNoWhatsApp(c)}
+                                  title="Abrir a conversa do WhatsApp com o responsável, com a mensagem pronta (valor, vencimento e PIX)"
+                                  className="h-7 text-xs font-semibold text-emerald-700 border-emerald-200 hover:bg-emerald-50 rounded-lg inline-flex items-center gap-1.5"
+                                >
+                                  {sendingWaId === c.id ? (
+                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                  ) : (
+                                    <MessageCircle className="w-3 h-3" />
+                                  )}
+                                  Cobrar no WhatsApp
+                                </Button>
+                              )}
+                              {isEmAberto ? (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleOpenCancelModal(c)}
+                                  className="h-7 text-xs font-semibold text-rose-700 border-rose-200 hover:bg-rose-50 rounded-lg inline-flex items-center gap-1.5"
+                                >
+                                  <Ban className="w-3 h-3 text-rose-600" /> Cancelar
+                                </Button>
+                              ) : (
+                                <span className="text-[11px] text-slate-400">—</span>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       )

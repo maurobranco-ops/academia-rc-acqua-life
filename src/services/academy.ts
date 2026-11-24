@@ -554,65 +554,19 @@ export const academyService = {
     }
     return updated
   },
-  async getWhatsAppSenderInfo(): Promise<{
-    success: boolean
-    connected: boolean
-    display_phone_number?: string | null
-    phone_number_id?: string | null
-    verified_name?: string | null
-    quality_rating?: string | null
-    total_numbers?: number
-    error?: string
-    message?: string
-  }> {
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    }
-    if (pb.authStore.token) {
-      headers.Authorization = `Bearer ${pb.authStore.token}`
-    }
-
-    try {
-      const response = await fetch(`${pb.baseUrl}/backend/v1/whatsapp/sender-info`, {
-        method: 'GET',
-        headers,
-      })
-      const data = await response.json().catch(() => ({}))
-      return data
-    } catch (err: unknown) {
-      return {
-        success: false,
-        connected: false,
-        error: err instanceof Error ? err.message : String(err),
-      }
-    }
-  },
-
-  async sendChargeWhatsApp(chargeId: string): Promise<{
-    success: boolean
-    message: string
-    charge_id?: string
-    whatsapp_status?: string
-    whatsapp_sent_at?: string
-    whatsapp_phone?: string
-  }> {
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    }
-    if (pb.authStore.token) {
-      headers.Authorization = `Bearer ${pb.authStore.token}`
-    }
-
-    const response = await fetch(`${pb.baseUrl}/backend/v1/charges/${chargeId}/send-whatsapp`, {
-      method: 'POST',
-      headers,
+  /**
+   * Registra na cobrança a data/hora do envio da mensagem de cobrança via
+   * click-to-chat (o admin abriu a conversa do WhatsApp com o responsável).
+   * Campos já existentes desde a migration 0012 — nenhuma alteração de schema.
+   * A baixa do pagamento continua MANUAL ("Pagar Agora" marca como paga).
+   */
+  async registerChargeWhatsAppSent(chargeId: string, phone?: string): Promise<ChargeRecord> {
+    return pb.collection('charges').update<ChargeRecord>(chargeId, {
+      whatsapp_sent: true,
+      whatsapp_status: 'enviado',
+      whatsapp_sent_at: new Date().toISOString(),
+      whatsapp_phone: phone || '',
     })
-
-    const data = await response.json().catch(() => ({}))
-    if (!response.ok) {
-      throw new Error(data.message || `Erro HTTP ${response.status} ao enviar WhatsApp`)
-    }
-    return data
   },
 
   async cancelCharge(chargeId: string): Promise<{
