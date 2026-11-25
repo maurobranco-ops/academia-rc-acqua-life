@@ -24,6 +24,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { academyService } from '@/services/academy'
 import type { PaymentRecord, StudentRecord } from '@/types/database'
 import { getStudentPhotoUrl } from '@/lib/studentPhoto'
+import { formatDateBR } from '@/lib/dates'
 import { cn } from '@/lib/utils'
 import { Input } from '@/components/ui/input'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -503,8 +504,7 @@ export default function Layout() {
                             {p.expand?.student_id?.name || 'Aluno'}
                           </p>
                           <p className="text-[11px] text-red-700">
-                            R$ {p.amount.toFixed(2)} • Vencido em{' '}
-                            {new Date(p.due_date).toLocaleDateString('pt-BR')}
+                            R$ {p.amount.toFixed(2)} • Vencido em {formatDateBR(p.due_date)}
                           </p>
                         </div>
                       </div>

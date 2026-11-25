@@ -1,5 +1,6 @@
 import pb from '@/lib/pocketbase/client'
 import { isNotFoundError, translateBackendMessage } from '@/lib/pocketbase/errors'
+import { readDateParts } from '@/lib/dates'
 import type {
   PlanRecord,
   InstructorRecord,
@@ -486,9 +487,16 @@ export const academyService = {
     const paymentDateIso = paidDate || new Date().toISOString()
 
     if (status === 'paga') {
-      const paidDay = new Date(paymentDateIso).setHours(0, 0, 0, 0)
-      const dueDay = new Date(existingCharge.due_date).setHours(23, 59, 59, 999)
-      const isOnTime = paidDay <= dueDay
+      // Datas puras: comparar pelo calendário (sem fuso) — meia-noite UTC em
+      // UTC−3 cairia no dia anterior e negaria o desconto pago em dia.
+      const paidParts = readDateParts(paymentDateIso)
+      const dueParts = readDateParts(existingCharge.due_date)
+      const isOnTime =
+        paidParts && dueParts
+          ? new Date(paidParts.year, paidParts.month - 1, paidParts.day).setHours(0, 0, 0, 0) <=
+            new Date(dueParts.year, dueParts.month - 1, dueParts.day).setHours(23, 59, 59, 999)
+          : new Date(paymentDateIso).setHours(0, 0, 0, 0) <=
+            new Date(existingCharge.due_date).setHours(23, 59, 59, 999)
 
       // Se pago em dia e houver desconto família registrado ou aplicável
       if (isOnTime && appliedDiscount > 0) {

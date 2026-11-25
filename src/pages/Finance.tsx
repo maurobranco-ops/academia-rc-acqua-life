@@ -36,6 +36,7 @@ import { useRealtime } from '@/hooks/use-realtime'
 import type { TransactionRecord, PaymentRecord } from '@/types/database'
 import { useToast } from '@/hooks/use-toast'
 import { getErrorMessage } from '@/lib/pocketbase/errors'
+import { formatDateBR, readDateParts } from '@/lib/dates'
 import {
   BarChart,
   Bar,
@@ -110,12 +111,14 @@ export default function Finance() {
   const monthRevenue = useMemo(() => {
     return transactions
       .filter((t) => {
-        const d = new Date(t.date)
+        // Data pura: ler direto da string ISO — sem fuso.
+        const d = readDateParts(t.date)
         return (
           t.type === 'receita' &&
           t.status === 'confirmado' &&
-          d.getMonth() === currentMonth &&
-          d.getFullYear() === currentYear
+          d !== null &&
+          d.month - 1 === currentMonth &&
+          d.year === currentYear
         )
       })
       .reduce((acc, t) => acc + t.amount, 0)
@@ -124,12 +127,13 @@ export default function Finance() {
   const monthExpenses = useMemo(() => {
     return transactions
       .filter((t) => {
-        const d = new Date(t.date)
+        const d = readDateParts(t.date)
         return (
           t.type === 'despesa' &&
           t.status === 'confirmado' &&
-          d.getMonth() === currentMonth &&
-          d.getFullYear() === currentYear
+          d !== null &&
+          d.month - 1 === currentMonth &&
+          d.year === currentYear
         )
       })
       .reduce((acc, t) => acc + t.amount, 0)
@@ -169,24 +173,26 @@ export default function Finance() {
 
       const rec = transactions
         .filter((t) => {
-          const td = new Date(t.date)
+          const td = readDateParts(t.date)
           return (
             t.type === 'receita' &&
             t.status === 'confirmado' &&
-            td.getMonth() === m &&
-            td.getFullYear() === y
+            td !== null &&
+            td.month - 1 === m &&
+            td.year === y
           )
         })
         .reduce((sum, t) => sum + t.amount, 0)
 
       const desp = transactions
         .filter((t) => {
-          const td = new Date(t.date)
+          const td = readDateParts(t.date)
           return (
             t.type === 'despesa' &&
             t.status === 'confirmado' &&
-            td.getMonth() === m &&
-            td.getFullYear() === y
+            td !== null &&
+            td.month - 1 === m &&
+            td.year === y
           )
         })
         .reduce((sum, t) => sum + t.amount, 0)
@@ -207,10 +213,16 @@ export default function Finance() {
       if (categoryFilter !== 'todas' && t.category !== categoryFilter) return false
 
       if (dateRangeFilter !== 'tudo') {
-        const transDate = new Date(t.date).getTime()
-        const daysAgo = dateRangeFilter === '30d' ? 30 : dateRangeFilter === '90d' ? 90 : 365
-        const cutoff = Date.now() - daysAgo * 24 * 3600 * 1000
-        if (transDate < cutoff) return false
+        // Data pura: comparar pelo calendário (sem fuso) — meia-noite UTC em
+        // UTC−3 cairia no dia anterior.
+        const parts = readDateParts(t.date)
+        if (parts) {
+          const daysAgo = dateRangeFilter === '30d' ? 30 : dateRangeFilter === '90d' ? 90 : 365
+          const transDate = new Date(parts.year, parts.month - 1, parts.day).getTime()
+          const cutoff =
+            new Date(new Date().setHours(0, 0, 0, 0)).getTime() - daysAgo * 24 * 3600 * 1000
+          if (transDate < cutoff) return false
+        }
       }
       return true
     })
@@ -285,7 +297,7 @@ export default function Finance() {
       `"${t.description.replace(/"/g, '""')}"`,
       t.category,
       t.amount.toFixed(2),
-      new Date(t.date).toLocaleDateString('pt-BR'),
+      formatDateBR(t.date),
       t.payment_method || '',
       t.status,
       `"${(t.notes || '').replace(/"/g, '""')}"`,
@@ -583,9 +595,7 @@ export default function Finance() {
                         </Badge>
                       </td>
 
-                      <td className="px-4 py-3.5 text-[#6C757D]">
-                        {new Date(t.date).toLocaleDateString('pt-BR')}
-                      </td>
+                      <td className="px-4 py-3.5 text-[#6C757D]">{formatDateBR(t.date)}</td>
 
                       <td
                         className={`px-4 py-3.5 font-mono font-bold ${

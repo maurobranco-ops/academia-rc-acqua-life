@@ -1,5 +1,6 @@
 import type { ChargeRecord, StudentRecord } from '@/types/database'
 import { formatPhoneDisplay } from '@/lib/formatters'
+import { formatDateBR } from '@/lib/dates'
 import { academyService } from '@/services/academy'
 
 /**
@@ -72,7 +73,7 @@ export function buildChargeMessage(input: {
   const { charge, student, academyName } = input
   const greeting = student.guardian_name?.trim() || student.name
   const value = charge.amount.toFixed(2).replace('.', ',')
-  const dueDate = new Date(charge.due_date).toLocaleDateString('pt-BR')
+  const dueDate = formatDateBR(charge.due_date)
 
   const pix = (input.pixValue || '').trim()
   const paymentInfo = pix

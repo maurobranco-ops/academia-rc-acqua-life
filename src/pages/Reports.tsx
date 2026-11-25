@@ -36,6 +36,7 @@ import type {
   EnrollmentRecord,
 } from '@/types/database'
 import { useToast } from '@/hooks/use-toast'
+import { formatDateBR, readDateParts } from '@/lib/dates'
 import {
   BarChart,
   Bar,
@@ -91,15 +92,18 @@ export default function Reports() {
     const overdue = payments.filter((p) => p.status === 'vencido')
     return overdue.map((p) => {
       const student = students.find((s) => s.id === p.student_id)
-      const due = new Date(p.due_date)
-      const diffDays = Math.max(1, Math.floor((Date.now() - due.getTime()) / (1000 * 3600 * 24)))
+      // Data pura (vencimento): ler direto da string ISO — sem fuso.
+      const due = readDateParts(p.due_date)
+      const dueMidnight = due ? new Date(due.year, due.month - 1, due.day).getTime() : Date.now()
+      const todayMidnight = new Date(new Date().setHours(0, 0, 0, 0)).getTime()
+      const diffDays = Math.max(1, Math.floor((todayMidnight - dueMidnight) / (1000 * 3600 * 24)))
       return {
         id: p.id,
         studentName: student?.name || 'Aluno Cadastrado',
         cpf: student?.cpf || '—',
         phone: student?.phone || '—',
         amount: p.amount,
-        dueDate: due.toLocaleDateString('pt-BR'),
+        dueDate: formatDateBR(p.due_date),
         daysLate: diffDays,
       }
     })
@@ -111,8 +115,9 @@ export default function Reports() {
     transactions
       .filter((t) => t.type === 'receita' && t.status === 'confirmado')
       .forEach((t) => {
-        const d = new Date(t.date)
-        const key = `${d.getMonth() + 1}/${d.getFullYear()}`
+        const d = readDateParts(t.date)
+        if (!d) return
+        const key = `${d.month}/${d.year}`
         monthMap[key] = (monthMap[key] || 0) + t.amount
       })
 

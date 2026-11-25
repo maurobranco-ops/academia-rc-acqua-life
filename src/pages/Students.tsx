@@ -51,6 +51,7 @@ import { MapPin } from 'lucide-react'
 import { getStudentPhotoUrl } from '@/lib/studentPhoto'
 import { getStudentStatusDisplay } from '@/lib/studentStatus'
 import { groupStudentsByGuardian } from '@/lib/familyRules'
+import { formatDateBR } from '@/lib/dates'
 import type {
   StudentRecord,
   PlanRecord,
@@ -870,7 +871,7 @@ export default function Students() {
     const map: Record<string, string> = {}
     payments.forEach((p) => {
       if (p.status === 'pago' && p.paid_date) {
-        if (!map[p.student_id] || new Date(p.paid_date) > new Date(map[p.student_id])) {
+        if (!map[p.student_id] || p.paid_date > map[p.student_id]) {
           map[p.student_id] = p.paid_date
         }
       }
@@ -1204,7 +1205,7 @@ export default function Students() {
                                 Último Pagto
                               </span>
                               <span className="text-[#6C757D]">
-                                {lastPay ? new Date(lastPay).toLocaleDateString('pt-BR') : '—'}
+                                {lastPay ? formatDateBR(lastPay) : '—'}
                               </span>
                             </div>
 
@@ -1368,7 +1369,7 @@ export default function Students() {
                             {validadePagto ? (
                               <div>
                                 <span className="font-semibold text-emerald-800">
-                                  {new Date(validadePagto).toLocaleDateString('pt-BR')}
+                                  {formatDateBR(validadePagto)}
                                 </span>
                                 <span className="block text-[10px] text-slate-400">
                                   Validade Últ. Pagto
@@ -1376,7 +1377,7 @@ export default function Students() {
                               </div>
                             ) : lastPay ? (
                               <div>
-                                <span>{new Date(lastPay).toLocaleDateString('pt-BR')}</span>
+                                <span>{formatDateBR(lastPay)}</span>
                                 <span className="block text-[10px] text-slate-400">
                                   Pago no sistema
                                 </span>
@@ -1624,7 +1625,7 @@ export default function Students() {
                                 Último Pagto
                               </span>
                               <span className="text-[#6C757D]">
-                                {lastPay ? new Date(lastPay).toLocaleDateString('pt-BR') : '—'}
+                                {lastPay ? formatDateBR(lastPay) : '—'}
                               </span>
                             </div>
 
@@ -1746,7 +1747,7 @@ export default function Students() {
                             Último Pagto
                           </span>
                           <span className="text-[#6C757D]">
-                            {lastPay ? new Date(lastPay).toLocaleDateString('pt-BR') : '—'}
+                            {lastPay ? formatDateBR(lastPay) : '—'}
                           </span>
                         </div>
 

@@ -56,7 +56,8 @@ import type {
   ClassRecord,
 } from '@/types/database'
 import { getExamAlert } from '@/types/database'
-import { PARQ_QUESTIONS, getParq, formatDateBR } from '@/lib/matricula'
+import { PARQ_QUESTIONS, getParq } from '@/lib/matricula'
+import { formatDateBR } from '@/lib/dates'
 import { useToast } from '@/hooks/use-toast'
 import { getStudentPhotoUrl } from '@/lib/studentPhoto'
 import { formatPhoneDisplay } from '@/lib/formatters'
@@ -753,9 +754,7 @@ export default function StudentDetail() {
               <div>
                 <span className="text-[#6C757D] block mb-1">Data de Nascimento</span>
                 <p className="font-semibold text-[#1E2A3A]">
-                  {student.birth_date
-                    ? new Date(student.birth_date).toLocaleDateString('pt-BR')
-                    : 'Não informada'}
+                  {student.birth_date ? formatDateBR(student.birth_date) : 'Não informada'}
                 </p>
               </div>
               <div>
@@ -787,7 +786,7 @@ export default function StudentDetail() {
                 <div>
                   <span className="text-[#6C757D] block mb-1">Validade do Atestado</span>
                   <p className="font-semibold text-[#1E2A3A]">
-                    {new Date(student.atestado_validade).toLocaleDateString('pt-BR')}
+                    {formatDateBR(student.atestado_validade)}
                   </p>
                 </div>
               )}
@@ -795,7 +794,7 @@ export default function StudentDetail() {
                 <div>
                   <span className="text-[#6C757D] block mb-1">Validade do Trancamento</span>
                   <p className="font-semibold text-[#1E2A3A]">
-                    {new Date(student.trancamento_validade).toLocaleDateString('pt-BR')}
+                    {formatDateBR(student.trancamento_validade)}
                   </p>
                 </div>
               )}
@@ -805,7 +804,7 @@ export default function StudentDetail() {
                     Validade do Último Pagamento
                   </span>
                   <p className="font-bold text-emerald-950 text-xs">
-                    {new Date(student.validade_do_ultimo_pagamento).toLocaleDateString('pt-BR')}
+                    {formatDateBR(student.validade_do_ultimo_pagamento)}
                   </p>
                 </div>
               )}
@@ -855,7 +854,7 @@ export default function StudentDetail() {
                       return (
                         <tr key={c.id} className="hover:bg-slate-50 transition">
                           <td className="px-5 py-3.5 font-medium text-[#1E2A3A]">
-                            {new Date(c.due_date).toLocaleDateString('pt-BR')}
+                            {formatDateBR(c.due_date)}
                           </td>
                           <td className="px-4 py-3.5">
                             <div className="font-bold text-[#0F1B3D]">{c.description}</div>
@@ -896,7 +895,7 @@ export default function StudentDetail() {
                           <td className="px-4 py-3.5 text-[#6C757D]">
                             {isPaga && linkedPmt?.paid_date ? (
                               <span className="text-emerald-700 font-medium">
-                                Pago em {new Date(linkedPmt.paid_date).toLocaleDateString('pt-BR')}
+                                Pago em {formatDateBR(linkedPmt.paid_date)}
                               </span>
                             ) : isCancelada ? (
                               <span className="text-rose-600/70 text-[11px] italic">Cancelada</span>
@@ -949,7 +948,7 @@ export default function StudentDetail() {
                     payments.map((p) => (
                       <tr key={p.id} className="hover:bg-slate-50 transition">
                         <td className="px-5 py-3.5 font-medium text-[#1E2A3A]">
-                          {new Date(p.due_date).toLocaleDateString('pt-BR')}
+                          {formatDateBR(p.due_date)}
                         </td>
                         <td className="px-4 py-3.5 font-medium text-slate-600">Mensalidade</td>
                         <td className="px-4 py-3.5 font-mono font-bold text-[#0F1B3D]">
@@ -957,7 +956,7 @@ export default function StudentDetail() {
                         </td>
                         <td className="px-4 py-3.5">{getStatusBadge(p.status)}</td>
                         <td className="px-4 py-3.5 text-[#6C757D]">
-                          {p.paid_date ? new Date(p.paid_date).toLocaleDateString('pt-BR') : '—'}
+                          {p.paid_date ? formatDateBR(p.paid_date) : '—'}
                         </td>
                         <td className="px-4 py-3.5 text-right text-slate-400">—</td>
                       </tr>
@@ -1091,10 +1090,7 @@ export default function StudentDetail() {
                   Aluno: <strong>{student.name}</strong>
                 </p>
                 <p className="text-slate-600">
-                  Vencimento:{' '}
-                  <strong>
-                    {new Date(selectedChargeToCancel.due_date).toLocaleDateString('pt-BR')}
-                  </strong>
+                  Vencimento: <strong>{formatDateBR(selectedChargeToCancel.due_date)}</strong>
                 </p>
                 <p className="text-slate-700 font-mono font-bold text-sm">
                   Valor: R$ {selectedChargeToCancel.amount.toFixed(2)}

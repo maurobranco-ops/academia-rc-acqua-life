@@ -3,6 +3,8 @@
 // Compartilhado entre: formulário público /matricula, cadastro/edição do aluno,
 // ficha do aluno e ficha imprimível.
 
+import { formatDateBR as formatDateBRFromIso } from '@/lib/dates'
+
 export interface ParqQuestion {
   key: 'parq_1' | 'parq_2' | 'parq_3' | 'parq_4' | 'parq_5' | 'parq_6' | 'parq_7'
   text: string
@@ -195,10 +197,7 @@ export function buildEnrollmentNotes(
   return parts.join('\n')
 }
 
-/** Formata data ISO (yyyy-mm-dd ou timestamp) como dd/mm/aaaa. */
+/** Formata data "pura" (yyyy-mm-dd ou meia-noite UTC) como dd/mm/aaaa, sem perder dia no fuso UTC−3. */
 export function formatDateBR(iso?: string | null): string {
-  if (!iso) return '—'
-  const d = new Date(iso.length === 10 ? `${iso}T12:00:00` : iso)
-  if (isNaN(d.getTime())) return '—'
-  return d.toLocaleDateString('pt-BR')
+  return formatDateBRFromIso(iso)
 }

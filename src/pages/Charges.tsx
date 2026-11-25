@@ -50,6 +50,7 @@ import type { ChargeRecord, StudentRecord, PlanRecord } from '@/types/database'
 import { useToast } from '@/hooks/use-toast'
 import { calculateStudentCharge, getFamilyStudents } from '@/lib/familyRules'
 import { sendChargeWhatsApp, formatWhatsAppSentStamp } from '@/lib/whatsappCharge'
+import { formatDateBR, readDateParts } from '@/lib/dates'
 
 export default function Charges() {
   const [searchParams] = useSearchParams()
@@ -480,7 +481,7 @@ export default function Charges() {
         ) : (
           filteredCharges.map((charge) => {
             const student = students.find((s) => s.id === charge.student_id)
-            const dueDate = new Date(charge.due_date)
+            const dueDateLabel = formatDateBR(charge.due_date)
 
             return (
               <Card
@@ -522,7 +523,7 @@ export default function Charges() {
 
                     <p className="text-xs text-[#1E2A3A] font-medium">{charge.description}</p>
                     <p className="text-[11px] text-[#6C757D]">
-                      Vencimento: <strong>{dueDate.toLocaleDateString('pt-BR')}</strong>
+                      Vencimento: <strong>{dueDateLabel}</strong>
                       {charge.order_nsu ? (
                         <>
                           {' '}
@@ -987,10 +988,7 @@ export default function Charges() {
                   </strong>
                 </p>
                 <p className="text-slate-600">
-                  Vencimento:{' '}
-                  <strong>
-                    {new Date(selectedChargeToCancel.due_date).toLocaleDateString('pt-BR')}
-                  </strong>
+                  Vencimento: <strong>{formatDateBR(selectedChargeToCancel.due_date)}</strong>
                 </p>
                 <p className="text-slate-700 font-mono font-bold text-sm">
                   Valor: R$ {selectedChargeToCancel.amount.toFixed(2)}
@@ -1064,7 +1062,13 @@ export default function Charges() {
 
           {selectedChargeToPay &&
             (() => {
-              const dueDay = new Date(selectedChargeToPay.due_date).setHours(23, 59, 59, 999)
+              const dueDay = (() => {
+                // Data pura: compara pelo calendário (sem fuso) — pagar no próprio
+                // dia do vencimento conta como em dia.
+                const parts = readDateParts(selectedChargeToPay.due_date)
+                if (!parts) return NaN
+                return new Date(parts.year, parts.month - 1, parts.day, 23, 59, 59, 999).getTime()
+              })()
               const paidDay = new Date(payDate).setHours(0, 0, 0, 0)
               const isOnTime = paidDay <= dueDay
               const discount = selectedChargeToPay.discount_amount || 0
@@ -1096,10 +1100,7 @@ export default function Charges() {
                       {selectedChargeToPay.description}
                     </p>
                     <p className="text-slate-600">
-                      Vencimento:{' '}
-                      <strong>
-                        {new Date(selectedChargeToPay.due_date).toLocaleDateString('pt-BR')}
-                      </strong>
+                      Vencimento: <strong>{formatDateBR(selectedChargeToPay.due_date)}</strong>
                     </p>
                     <p className="text-slate-600 font-mono">
                       Valor nominal: <strong>R$ {selectedChargeToPay.amount.toFixed(2)}</strong>

@@ -1,4 +1,5 @@
 import type { StudentRecord, PlanRecord } from '@/types/database'
+import { readDateParts } from '@/lib/dates'
 
 /**
  * Normaliza o nome do responsável para agrupamento confiável
@@ -215,9 +216,31 @@ export function calculateStudentCharge(
 
   let paidOnTime = true
   if (paidDateOrDueDate?.paidDate && paidDateOrDueDate?.dueDate) {
-    const paid = new Date(paidDateOrDueDate.paidDate).setHours(0, 0, 0, 0)
-    const due = new Date(paidDateOrDueDate.dueDate).setHours(23, 59, 59, 999)
-    paidOnTime = paid <= due
+    // Datas puras: comparar pelo calendário (sem fuso) — meia-noite UTC em
+    // UTC−3 cairia no dia anterior e o desconto seria negado à toa.
+    const paidParts = readDateParts(paidDateOrDueDate.paidDate)
+    const dueParts = readDateParts(paidDateOrDueDate.dueDate)
+    if (paidParts && dueParts) {
+      const paid = new Date(
+        paidParts.year,
+        paidParts.month - 1,
+        paidParts.day,
+        0,
+        0,
+        0,
+        0,
+      ).getTime()
+      const due = new Date(
+        dueParts.year,
+        dueParts.month - 1,
+        dueParts.day,
+        23,
+        59,
+        59,
+        999,
+      ).getTime()
+      paidOnTime = paid <= due
+    }
   }
 
   const finalAmount = paidOnTime ? Math.max(0, baseAmount - discountAmount) : baseAmount

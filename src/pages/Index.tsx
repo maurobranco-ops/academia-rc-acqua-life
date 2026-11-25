@@ -21,6 +21,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { academyService } from '@/services/academy'
 import { useRealtime } from '@/hooks/use-realtime'
 import { getStudentPhotoUrl } from '@/lib/studentPhoto'
+import { formatDateBR, readDateParts } from '@/lib/dates'
 import type { PaymentRecord, StudentRecord, ClassRecord, TransactionRecord } from '@/types/database'
 import {
   AreaChart,
@@ -102,12 +103,14 @@ export default function Index() {
 
     return transactions
       .filter((t) => {
-        const d = new Date(t.date)
+        // Data pura: ler direto da string ISO — sem fuso.
+        const d = readDateParts(t.date)
         return (
           t.type === 'receita' &&
           t.status === 'confirmado' &&
-          d.getMonth() === currentMonth &&
-          d.getFullYear() === currentYear
+          d !== null &&
+          d.month - 1 === currentMonth &&
+          d.year === currentYear
         )
       })
       .reduce((acc, t) => acc + t.amount, 0)
@@ -146,23 +149,26 @@ export default function Index() {
 
       const received = transactions
         .filter((t) => {
-          const td = new Date(t.date)
+          const td = readDateParts(t.date)
           return (
             t.type === 'receita' &&
             t.status === 'confirmado' &&
-            td.getMonth() === m &&
-            td.getFullYear() === y
+            td !== null &&
+            td.month - 1 === m &&
+            td.year === y
           )
         })
         .reduce((sum, t) => sum + t.amount, 0)
 
       const pending = activePayments
         .filter((p) => {
-          const pd = new Date(p.due_date)
+          // Data pura (vencimento): ler direto da string ISO — sem fuso.
+          const pd = readDateParts(p.due_date)
           return (
             (p.status === 'pendente' || p.status === 'vencido') &&
-            pd.getMonth() === m &&
-            pd.getFullYear() === y
+            pd !== null &&
+            pd.month - 1 === m &&
+            pd.year === y
           )
         })
         .reduce((sum, p) => sum + p.amount, 0)
@@ -518,9 +524,7 @@ export default function Index() {
                         <td className="px-3 py-3 font-mono font-bold text-[#0F1B3D]">
                           R$ {p.amount.toFixed(2)}
                         </td>
-                        <td className="px-3 py-3 text-[#6C757D]">
-                          {new Date(p.due_date).toLocaleDateString('pt-BR')}
-                        </td>
+                        <td className="px-3 py-3 text-[#6C757D]">{formatDateBR(p.due_date)}</td>
                         <td className="px-3 py-3">{getStatusBadge(p.status)}</td>
                       </tr>
                     )
@@ -619,11 +623,17 @@ export default function Index() {
               </p>
             ) : (
               overduePayments.map((p) => {
-                const due = new Date(p.due_date)
+                const due = readDateParts(p.due_date)
                 const now = new Date()
                 const diffDays = Math.max(
                   1,
-                  Math.floor((now.getTime() - due.getTime()) / (1000 * 3600 * 24)),
+                  Math.floor(
+                    (now.getTime() -
+                      (due
+                        ? new Date(due.year, due.month - 1, due.day).getTime()
+                        : now.getTime())) /
+                      (1000 * 3600 * 24),
+                  ),
                 )
                 const studentName = p.expand?.student_id?.name || 'Aluno Cadastrado'
 
@@ -635,7 +645,7 @@ export default function Index() {
                     <div>
                       <p className="text-xs font-bold text-[#1E2A3A]">{studentName}</p>
                       <p className="text-[11px] text-[#FF6B6B] font-semibold">
-                        {diffDays} dias em atraso • Venceu em {due.toLocaleDateString('pt-BR')}
+                        {diffDays} dias em atraso • Venceu em {formatDateBR(p.due_date)}
                       </p>
                     </div>
                     <div className="text-right">

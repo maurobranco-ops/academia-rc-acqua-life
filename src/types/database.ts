@@ -1,4 +1,5 @@
 import type { RecordModel } from 'pocketbase'
+import { readDateParts } from '@/lib/dates'
 
 export interface UserRecord extends RecordModel {
   email: string
@@ -241,10 +242,15 @@ export interface EnrollmentRequestRecord extends RecordModel {
 /** Calcula a validade (6 meses) a partir da data de emissão (yyyy-mm-dd). */
 export function addSixMonths(isoDate?: string | null): string | null {
   if (!isoDate) return null
-  const d = new Date(isoDate.length === 10 ? `${isoDate}T12:00:00` : isoDate)
-  if (isNaN(d.getTime())) return null
+  // Data pura: ler direto da string ISO — sem fuso (UTC−3 voltava um dia).
+  const parts = readDateParts(isoDate)
+  if (!parts) return null
+  const d = new Date(parts.year, parts.month - 1, parts.day, 12)
   d.setMonth(d.getMonth() + 6)
-  return d.toISOString().substring(0, 10)
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
 }
 
 export type ExamAlertLevel = 'ok' | 'warn' | 'expired'
@@ -280,11 +286,12 @@ export function getExamAlert(
 /** Idade em anos completos na data de hoje. */
 export function calcAge(birthDate?: string | null): number | null {
   if (!birthDate) return null
-  const b = new Date(birthDate.length === 10 ? `${birthDate}T12:00:00` : birthDate)
-  if (isNaN(b.getTime())) return null
+  // Data pura: ler direto da string ISO — sem fuso.
+  const parts = readDateParts(birthDate)
+  if (!parts) return null
   const today = new Date()
-  let age = today.getFullYear() - b.getFullYear()
-  const m = today.getMonth() - b.getMonth()
-  if (m < 0 || (m === 0 && today.getDate() < b.getDate())) age--
+  let age = today.getFullYear() - parts.year
+  const m = today.getMonth() + 1 - parts.month
+  if (m < 0 || (m === 0 && today.getDate() < parts.day)) age--
   return age
 }
